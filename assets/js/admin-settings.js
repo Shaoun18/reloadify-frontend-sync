@@ -120,8 +120,74 @@
         return el(
             'label',
             { className: 'reloadify-switch' + (props.large ? ' reloadify-switch--lg' : '') },
-            el('input', { type: 'checkbox', checked: !!props.checked, onChange: props.onChange }),
+            el('input', { type: 'checkbox', checked: !!props.checked, onChange: props.onChange, disabled: !!props.disabled }),
             el('span', { className: 'reloadify-switch-slider' })
+        );
+    }
+
+    function formatCountdown(totalSeconds) {
+        totalSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        var h = Math.floor(totalSeconds / 3600);
+        var m = Math.floor((totalSeconds % 3600) / 60);
+        var s = totalSeconds % 60;
+        return h + ' ' + __('hours', 'reloadify-frontend-sync') + ' '
+            + m + ' ' + __('min', 'reloadify-frontend-sync') + ' '
+            + __('and', 'reloadify-frontend-sync') + ' '
+            + s + ' ' + __('sec', 'reloadify-frontend-sync') + ' '
+            + __('left', 'reloadify-frontend-sync');
+    }
+
+    /**
+     * Ticks down to the moment Developer Mode auto-disables itself (see
+     * Reloadify_Settings::DEV_MODE_MAX_AGE). Purely a display timer -- the server,
+     * not this countdown, is what actually turns it off. When it hits zero
+     * this just asks the App to re-fetch settings so the switch flips to
+     * "Off" without needing a manual page reload.
+     */
+    function DevModeCountdown(props) {
+        // wp_localize_script (and, depending on setup, JSON round-trips in
+        // general) can hand these over as strings. JS's `+` operator does
+        // string concatenation -- not addition -- the moment either side
+        // isn't a real number, which is exactly what produced the garbage
+        // "57723467 hours" reading: "1753832461" + 21600 became the string
+        // "175383246121600" instead of the sum. Number() first, always.
+        var enabledAtRaw     = Number(props.enabledAt) || 0;
+        var maxAge           = Number(props.maxAge) || (6 * 3600);
+        // Normalize enabledAt to seconds. If it's a large number (>= 10 digits),
+        // it's likely already in milliseconds from the REST API.
+        var enabledAtSeconds = enabledAtRaw > 9999999999 ? Math.floor(enabledAtRaw / 1000) : enabledAtRaw;
+        var endAt = (enabledAtSeconds + maxAge) * 1000;
+
+        var remState = useState(function () {
+            return Math.round((endAt - Date.now()) / 1000);
+        });
+        var remaining = remState[0], setRemaining = remState[1];
+
+        useEffect(function () {
+            var expired = false;
+
+            var timer = setInterval(function () {
+                var next = Math.round((endAt - Date.now()) / 1000);
+                setRemaining(next);
+                if (next <= 0 && !expired) {
+                    expired = true;
+                    clearInterval(timer);
+                    if (props.onExpire) { props.onExpire(); }
+                }
+            }, 1000);
+
+            return function () { clearInterval(timer); };
+        }, [props.enabledAt, props.maxAge]);
+
+        if (remaining <= 0) {
+            return null;
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-countdown' },
+            el('span', { className: 'reloadify-countdown-label' }, __('Auto-off in', 'reloadify-frontend-sync')),
+            el('span', { className: 'reloadify-countdown-value' }, formatCountdown(remaining))
         );
     }
 
@@ -187,6 +253,11 @@
                         large: true,
                         checked: settings.dev_mode_enabled,
                         onChange: function () { props.onChange(Object.assign({}, settings, { dev_mode_enabled: !settings.dev_mode_enabled })); }
+                    }),
+                    settings.dev_mode_enabled && settings.dev_mode_enabled_at && el(DevModeCountdown, {
+                        enabledAt: settings.dev_mode_enabled_at,
+                        maxAge: ReloadifyAdmin.devModeMaxAgeSeconds || (6 * 3600),
+                        onExpire: props.onExpire
                     })
                 ),
                 el(
@@ -206,7 +277,7 @@
             !settings.dev_mode_enabled && el(
                 'div',
                 { className: 'reloadify-callout reloadify-callout--warn' },
-                __('Developer Mode is off by default on purpose \u2014 while it\u2019s on, every visitor\u2019s browser keeps checking the server, which is fine for staging but adds real load on a busy live site. Turn it on while you\u2019re testing, then switch it off when you\u2019re done. It also turns itself off automatically after 6 hours, just in case.', 'reloadify-frontend-sync')
+                __('Developer Mode is off by default on purpose \u2014 while it\u2019s on, every visitor\u2019s browser keeps checking the server, which is fine for staging but adds real load on a busy live site. Turn it on while you\u2019re testing, then switch it off when you\u2019re done. It also turns itself off automatically after 12 hours, just in case.', 'reloadify-frontend-sync')
             ),
 
             el(
@@ -399,6 +470,87 @@
         );
     }
 
+    /**
+     * On by default the moment the plugin is activated -- unlike everything
+     * else in this tab, which stays opt-in. Deliberately does NOT show a
+     * fixed "X% faster" number: nobody can honestly promise one, since the
+     * real effect depends on the theme, other plugins, and hosting. What it
+     * shows instead is the exact, short list of what's actually switched on.
+     */
+    function SpeedBoostCard(props) {
+        var speed = props.speed;
+        var stateSaving = useState(false);
+        var saving = stateSaving[0], setSaving = stateSaving[1];
+
+        function toggle() {
+            var next = !speed.enabled;
+            setSaving(true);
+            wp.apiFetch({ path: '/reloadify/v1/speed', method: 'POST', data: { enabled: next } })
+                .then(function (response) {
+                    setSaving(false);
+                    props.onChange(response);
+                    props.onToast('success', response.enabled
+                        ? __('Speed Boost turned on.', 'reloadify-frontend-sync')
+                        : __('Speed Boost turned off.', 'reloadify-frontend-sync'));
+                })
+                .catch(function () {
+                    setSaving(false);
+                    props.onToast('error', __('Could not update Speed Boost.', 'reloadify-frontend-sync'));
+                });
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-speed-card' },
+            el(
+                'div',
+                { className: 'reloadify-speed-card-head' },
+                el('h2', null, __('Speed Boost', 'reloadify-frontend-sync')),
+                el(Switch, { large: true, checked: speed.enabled, onChange: toggle, disabled: saving })
+            )
+        );
+    }
+
+    /**
+     * On by default: deleting the plugin from the Plugins screen (not just
+     * deactivating it) also removes its settings and the uploads/reloadify-reload
+     * folder, for a clean uninstall. Turn off to keep settings around for a
+     * reinstall later.
+     */
+    function DeleteOnUninstallCard(props) {
+        var cleanup = props.cleanup;
+        var stateSaving = useState(false);
+        var saving = stateSaving[0], setSaving = stateSaving[1];
+
+        function toggle() {
+            var next = !cleanup.enabled;
+            setSaving(true);
+            wp.apiFetch({ path: '/reloadify/v1/cleanup', method: 'POST', data: { enabled: next } })
+                .then(function (response) {
+                    setSaving(false);
+                    props.onChange(response);
+                    props.onToast('success', response.enabled
+                        ? __('Will delete settings & the reloadify-reload folder if the plugin is deleted.', 'reloadify-frontend-sync')
+                        : __('Settings & the reloadify-reload folder will be kept if the plugin is deleted.', 'reloadify-frontend-sync'));
+                })
+                .catch(function () {
+                    setSaving(false);
+                    props.onToast('error', __('Could not update this setting.', 'reloadify-frontend-sync'));
+                });
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-speed-card' },
+            el(
+                'div',
+                { className: 'reloadify-speed-card-head' },
+                el('h2', null, __('Delete Data on Uninstall', 'reloadify-frontend-sync')),
+                el(Switch, { large: true, checked: cleanup.enabled, onChange: toggle, disabled: saving })
+            )
+        );
+    }
+
     function PerformanceTab(props) {
         var data = props.data;
         var stateModal = useState(false);
@@ -420,12 +572,12 @@
             }
             setOpcacheApplying(true);
             setOpcacheResult(null);
-            wp.apiFetch({ path: '/reloadify/v1/performance/apply-opcache', method: 'POST', data: { confirmed: true } })
+            wp.apiFetch({ path: '/reloadify/v1/performance/apply-opcache', method: 'POST', data: { confirmed: true, desired: data.settings.desired } })
                 .then(function (response) {
                     setOpcacheResult(response.result);
                     props.onChange(Object.assign({}, data, { live: response.live }));
                     setOpcacheApplying(false);
-                    props.onToast(response.result.success ? 'success' : 'error', response.result.success ? __('Snippet ready below \u2014 paste it into the php.ini shown, then restart PHP.', 'reloadify-frontend-sync') : __('Couldn\u2019t generate a snippet \u2014 see the result below for why.', 'reloadify-frontend-sync'));
+                    props.onToast(response.result.success ? 'success' : 'error', response.result.success ? __('Written to php.ini \u2014 restart PHP for it to take effect.', 'reloadify-frontend-sync') : __('Not applied \u2014 see the result below for why.', 'reloadify-frontend-sync'));
                 })
                 .catch(function () {
                     setOpcacheApplying(false);
@@ -454,10 +606,11 @@
         function attemptServerOverride() {
             setApplying(true);
             setApplyResults(null);
-            wp.apiFetch({ path: '/reloadify/v1/performance/apply-server', method: 'POST' })
+            wp.apiFetch({ path: '/reloadify/v1/performance/apply-server', method: 'POST', data: { desired: data.settings.desired } })
                 .then(function (response) {
                     setApplyResults(response.results);
-                    props.onChange(Object.assign({}, data, { live: response.live }));
+                    var updatedData = Object.assign({}, data, { live: response.live });
+                    props.onChange(updatedData);
                     setApplying(false);
                     var anySuccess = (response.results.user_ini && response.results.user_ini.success) || (response.results.htaccess && response.results.htaccess.success);
                     props.onToast(anySuccess ? 'success' : 'error', anySuccess ? __('Attempted \u2014 see results below. .user.ini changes can take a few minutes to take effect.', 'reloadify-frontend-sync') : __('Neither method could write on this server \u2014 see results below for why.', 'reloadify-frontend-sync'));
@@ -477,7 +630,7 @@
                 el(
                     'div',
                     null,
-                    __('A plugin can only change PHP settings that are still adjustable while a page is loading \u2014 that covers memory_limit, max_execution_time, and 3 of the 6 opcache settings below. "Live" means it applies to real WordPress page loads; a cached page served without hitting PHP won\u2019t see it. Upload limits, realpath cache, and the 3 memory-sizing opcache settings are locked before WordPress even starts, so those need a real php.ini, .user.ini, or host-level change instead. Everything below starts out showing what your server is actually running right now.', 'reloadify-frontend-sync')
+                    __('Only PHP settings that are still changeable at runtime can be updated live here \u2014 everything else needs a php.ini, .user.ini, or host-level change.', 'reloadify-frontend-sync')
                 ),
                 el(
                     'button',
@@ -485,6 +638,10 @@
                     props.syncing ? __('Syncing\u2026', 'reloadify-frontend-sync') : __('Sync from server', 'reloadify-frontend-sync')
                 )
             ),
+
+            el(SpeedBoostCard, { speed: props.speed, onChange: props.onSpeedChange, onToast: props.onToast }),
+
+            el(DeleteOnUninstallCard, { cleanup: props.cleanup, onChange: props.onCleanupChange, onToast: props.onToast }),
 
             Object.keys(PERF_GROUPS).map(function (groupKey) {
                 var group = PERF_GROUPS[groupKey];
@@ -552,14 +709,14 @@
                         el(
                             'button',
                             { className: 'button reloadify-button-danger', onClick: attemptOpcacheOverride, disabled: !opcacheConfirmed || opcacheApplying || !data.phpIniPath },
-                            opcacheApplying ? __('Generating\u2026', 'reloadify-frontend-sync') : __('Generate opcache snippet (local dev only)', 'reloadify-frontend-sync')
+                            opcacheApplying ? __('Writing\u2026', 'reloadify-frontend-sync') : __('Attempt opcache override (local dev only)', 'reloadify-frontend-sync')
                         ),
                         opcacheResult && el(
                             'div',
                             { className: 'reloadify-apply-result-row reloadify-apply-result-row--solo' },
-                            el('span', { className: 'reloadify-badge ' + (opcacheResult.success ? 'reloadify-badge--live' : 'reloadify-badge--host') }, opcacheResult.success ? __('Snippet ready', 'reloadify-frontend-sync') : __('Not available', 'reloadify-frontend-sync')),
+                            el('span', { className: 'reloadify-badge ' + (opcacheResult.success ? 'reloadify-badge--live' : 'reloadify-badge--host') }, opcacheResult.success ? __('Written', 'reloadify-frontend-sync') : __('Not applied', 'reloadify-frontend-sync')),
                             el('p', null, opcacheResult.message),
-                            opcacheResult.snippet && el('pre', { className: 'reloadify-code' }, opcacheResult.snippet)
+                            opcacheResult.backup_path && el('p', null, __('Backup saved at: ', 'reloadify-frontend-sync'), el('code', null, opcacheResult.backup_path))
                         )
                     )
                 );
@@ -589,6 +746,12 @@
         var perfState = useState(initial.performance || null);
         var perf = perfState[0], setPerf = perfState[1];
 
+        var speedState = useState(initial.speed || { enabled: true, items: [] });
+        var speed = speedState[0], setSpeed = speedState[1];
+
+        var cleanupState = useState(initial.cleanup || { enabled: true });
+        var cleanup = cleanupState[0], setCleanup = cleanupState[1];
+
         var savingState = useState(false);
         var saving = savingState[0], setSaving = savingState[1];
 
@@ -601,6 +764,12 @@
         function showToast(type, message) {
             setToast({ type: type, message: message });
             setTimeout(function () { setToast(null); }, 3500);
+        }
+
+        function refreshSettings() {
+            wp.apiFetch({ path: '/reloadify/v1/settings', method: 'GET' })
+                .then(function (data) { setSettings(data); })
+                .catch(function () { /* next manual save will still correct this */ });
         }
 
         function syncPerformance() {
@@ -662,8 +831,8 @@
                 'div',
                 { className: 'reloadify-tab-panel' },
                 tab === 'reload'
-                    ? el(ReloadTab, { settings: settings, onChange: setSettings })
-                    : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing })
+                    ? el(ReloadTab, { settings: settings, onChange: setSettings, onExpire: refreshSettings })
+                    : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, cleanup: cleanup, onCleanupChange: setCleanup })
             ),
             el(
                 'div',

@@ -3,7 +3,7 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers and windows whenever content is updated in WordPress—regardless of the theme, plugin, or page builder you're using.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            Programmershaoun
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'RELOADIFY_VERSION', '1.0.0' );
+define( 'RELOADIFY_VERSION', '1.0.1' );
 define( 'RELOADIFY_PLUGIN_FILE', __FILE__ );
 define( 'RELOADIFY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RELOADIFY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -26,6 +26,8 @@ define( 'RELOADIFY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 require_once RELOADIFY_PLUGIN_DIR . 'includes/reloadify-filesystem.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-settings.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-performance.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-speed.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-cleanup.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-rest.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-admin.php';
 
@@ -44,13 +46,14 @@ class Reloadify_Frontend_Sync {
 		register_activation_hook( RELOADIFY_PLUGIN_FILE, [ 'Reloadify_Settings', 'activate' ] );
 		add_action( 'activated_plugin', [ $this, 'redirect_after_activation' ] );
 
-		// Runtime PHP-directive overrides (memory_limit, max_execution_time,
-		// opcache.*) must NOT run globally on every request — that would
-		// silently change PHP behavior for unrelated frontend/admin traffic.
-		// They're applied only around the specific operations that belong to
-		// this plugin: its own admin dashboard page, and its own REST calls
-		// (handled separately inside Reloadify_Rest itself).
-		add_action( 'admin_init', [ 'Reloadify_Performance', 'maybe_apply_runtime_overrides_for_admin' ] );
+		// plugins_loaded is the earliest hook a plugin can use — WordPress core
+		// already set its own default memory_limit/max_execution_time in
+		// wp-settings.php before any plugin code runs at all, so this is simply
+		// the earliest point this plugin can override that default on every
+		// single WordPress-processed request (front-end and admin alike).
+		add_action( 'plugins_loaded', [ 'Reloadify_Performance', 'apply_runtime_overrides' ], 0 );
+
+		Reloadify_Speed::init();
 
 		add_action( 'save_post', [ $this, 'record_site_update' ], 10, 3 );
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_reloader_script' ] );
@@ -191,7 +194,8 @@ class Reloadify_Frontend_Sync {
 			] );
 		} else {
 			wp_send_json_success( [
-				'reload' => false,
+				'reload'        => false,
+				'new_timestamp' => $server_ts,
 			] );
 		}
 	}

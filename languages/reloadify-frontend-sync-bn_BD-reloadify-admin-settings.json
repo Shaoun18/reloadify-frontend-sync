@@ -1,0 +1,281 @@
+{
+ "translation-revision-date": "2026-07-24 00:00+0000",
+ "generator": "manual",
+ "domain": "messages",
+ "locale_data": {
+  "messages": {
+   "": {
+    "domain": "messages",
+    "lang": "bn_BD",
+    "plural-forms": "nplurals=2; plural=(n != 1);"
+   },
+   " snippet copied.": [
+    " স্নিপেট কপি করা হয়েছে।"
+   ],
+   "(default)": [
+    "(ডিফল্ট)"
+   ],
+   ".htaccess (Apache + mod_php only)": [
+    ".htaccess (শুধুমাত্র Apache + mod_php)"
+   ],
+   "Appends a cache-busting parameter so the page is fetched fresh instead of served from cache. Use this if soft reload sometimes shows stale content.": [
+    "একটি ক্যাশ-বাস্টিং প্যারামিটার যোগ করে, যাতে পেজটি ক্যাশ থেকে না দেখিয়ে নতুনভাবে আনা হয়। সফট রিলোডে মাঝেমধ্যে পুরনো কনটেন্ট দেখালে এটি ব্যবহার করুন।"
+   ],
+   "Applied automatically by this plugin": [
+    "এই প্লাগইন দ্বারা স্বয়ংক্রিয়ভাবে প্রয়োগ করা হয়েছে"
+   ],
+   "Attempt automatic server override": [
+    "স্বয়ংক্রিয় সার্ভার ওভাররাইড চেষ্টা করুন"
+   ],
+   "Attempt opcache override (local dev only)": [
+    "Opcache ওভাররাইড চেষ্টা করুন (শুধু লোকাল ডেভ)"
+   ],
+   "Attempted — see results below. .user.ini changes can take a few minutes to take effect.": [
+    "চেষ্টা করা হয়েছে — নিচে ফলাফল দেখুন। .user.ini-র পরিবর্তন কার্যকর হতে কয়েক মিনিট সময় লাগতে পারে।"
+   ],
+   "Attempting…": [
+    "চেষ্টা করা হচ্ছে…"
+   ],
+   "Auto-attempt": [
+    "স্বয়ংক্রিয় চেষ্টা"
+   ],
+   "Auto-off in": [
+    "স্বয়ংক্রিয়ভাবে বন্ধ হবে"
+   ],
+   "Backup saved at: ": [
+    "ব্যাকআপ সংরক্ষিত হয়েছে: "
+   ],
+   "Browsers & windows": [
+    "ব্রাউজার ও উইন্ডো"
+   ],
+   "Browsers enabled": [
+    "ব্রাউজার সক্রিয়"
+   ],
+   "Copy": [
+    "কপি করুন"
+   ],
+   "Could not copy — select and copy manually.": [
+    "কপি করা যায়নি — নিজে নির্বাচন করে কপি করুন।"
+   ],
+   "Could not sync from the server.": [
+    "সার্ভার থেকে সিঙ্ক করা যায়নি।"
+   ],
+   "Could not update Speed Boost.": [
+    "স্পিড বুস্ট আপডেট করা যায়নি।"
+   ],
+   "Could not update this setting.": [
+    "এই সেটিং আপডেট করা যায়নি।"
+   ],
+   "Cross-Browser Reload": [
+    "ক্রস-ব্রাউজার রিলোড"
+   ],
+   "Cross-browser live reload for page-builder QA — and a clear picture of which server settings this plugin can and can’t change for you.": [
+    "পেজ-বিল্ডার QA-র জন্য ক্রস-ব্রাউজার লাইভ রিলোড — এবং এই প্লাগইন সার্ভারের কোন সেটিংস পরিবর্তন করতে পারে আর কোনটা পারে না, তার স্পষ্ট চিত্র।"
+   ],
+   "Current: ": [
+    "বর্তমান: "
+   ],
+   "Delete Data on Uninstall": [
+    "আনইনস্টলে ডেটা মুছে ফেলুন"
+   ],
+   "Developer Mode": [
+    "ডেভেলপার মোড"
+   ],
+   "Developer Mode is off by default on purpose — while it’s on, every visitor’s browser keeps checking the server, which is fine for staging but adds real load on a busy live site. Turn it on while you’re testing, then switch it off when you’re done. It also turns itself off automatically after 12 hours, just in case.": [
+    "ডেভেলপার মোড ইচ্ছাকৃতভাবেই ডিফল্টভাবে বন্ধ থাকে — এটি চালু থাকা অবস্থায় প্রতিটি ভিজিটরের ব্রাউজার বারবার সার্ভার পরীক্ষা করতে থাকে, যা স্টেজিং-এর জন্য ঠিক আছে কিন্তু ব্যস্ত লাইভ সাইটে প্রকৃত লোড যোগ করে। টেস্ট করার সময় এটি চালু রাখুন, শেষ হলে বন্ধ করে দিন। নিরাপত্তার জন্য এটি ১২ ঘণ্টা পর নিজে থেকেই বন্ধ হয়ে যায়।"
+   ],
+   "Done": [
+    "সম্পন্ন"
+   ],
+   "Failed to save settings.": [
+    "সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।"
+   ],
+   "File this would write to: ": [
+    "এটি যেখানে লিখবে: "
+   ],
+   "Generate config snippet": [
+    "কনফিগ স্নিপেট তৈরি করুন"
+   ],
+   "Hard": [
+    "হার্ড"
+   ],
+   "Hard reload": [
+    "হার্ড রিলোড"
+   ],
+   "I understand this can crash PHP for the whole server, and I’m only doing this on a local development site I fully control.": [
+    "আমি বুঝি এটি পুরো সার্ভারের PHP ক্র্যাশ করাতে পারে, এবং আমি শুধুমাত্র এমন একটি লোকাল ডেভেলপমেন্ট সাইটে এটি করছি যা আমি সম্পূর্ণভাবে নিয়ন্ত্রণ করি।"
+   ],
+   "Incognito": [
+    "ইনকগনিটো"
+   ],
+   "Incognito/private detection is best-effort — some browsers deliberately make it undetectable, so treat it as a helper, not a guarantee.": [
+    "ইনকগনিটো/প্রাইভেট শনাক্তকরণ সর্বোচ্চ চেষ্টা পর্যায়ের — কিছু ব্রাউজার ইচ্ছাকৃতভাবে এটি শনাক্ত-অযোগ্য করে রাখে, তাই একে সহায়ক হিসেবে ধরুন, নিশ্চয়তা হিসেবে নয়।"
+   ],
+   "It also does nothing until PHP restarts — this plugin cannot restart PHP for you.": [
+    "PHP রিস্টার্ট না হওয়া পর্যন্ত এটিও কিছু করে না — এই প্লাগইন আপনার হয়ে PHP রিস্টার্ট করতে পারে না।"
+   ],
+   "Live": [
+    "লাইভ"
+   ],
+   "Loading…": [
+    "লোড হচ্ছে…"
+   ],
+   "Local dev only": [
+    "শুধু লোকাল ডেভ"
+   ],
+   "Manual only": [
+    "শুধু ম্যানুয়াল"
+   ],
+   "Neither method could write on this server — see results below for why.": [
+    "এই সার্ভারে কোনো পদ্ধতিই লিখতে পারেনি — কারণ জানতে নিচের ফলাফল দেখুন।"
+   ],
+   "Normal": [
+    "নরমাল"
+   ],
+   "Not applied": [
+    "প্রয়োগ করা হয়নি"
+   ],
+   "Not applied — see the result below for why.": [
+    "প্রয়োগ করা হয়নি — কারণ জানতে নিচের ফলাফল দেখুন।"
+   ],
+   "Off": [
+    "বন্ধ"
+   ],
+   "On": [
+    "চালু"
+   ],
+   "Only PHP settings that are still changeable at runtime can be updated live here — everything else needs a php.ini, .user.ini, or host-level change.": [
+    "রানটাইমে এখনও পরিবর্তনযোগ্য PHP সেটিংসগুলোই কেবল এখানে সরাসরি আপডেট করা যায় — বাকি সবকিছুর জন্য php.ini, .user.ini, অথবা হোস্ট-লেভেল পরিবর্তন প্রয়োজন।"
+   ],
+   "Only covers the directives Apache is allowed to set per-directory. opcache.* and realpath_cache_* cannot go here — and this block won’t work at all on Nginx or PHP-FPM.": [
+    "শুধুমাত্র সেই ডিরেক্টিভগুলো কভার করে, যা Apache প্রতি-ডিরেক্টরি ভিত্তিতে নির্ধারণ করার অনুমতি দেয়। opcache.* এবং realpath_cache_* এখানে দেওয়া যাবে না — এবং এই ব্লক Nginx বা PHP-FPM-এ একেবারেই কাজ করবে না।"
+   ],
+   "Only these three actually require editing the real php.ini: they size a shared-memory pool once when PHP starts, before any plugin runs. See the warning below before touching this section.": [
+    "শুধুমাত্র এই তিনটির জন্যই সত্যিকারের php.ini সম্পাদনা প্রয়োজন: PHP চালু হওয়ার সময়, কোনো প্লাগইন চালু হওয়ার আগেই, এগুলো একবার শেয়ার্ড-মেমরি পুলের আকার নির্ধারণ করে। এই সেকশন স্পর্শ করার আগে নিচের সতর্কবার্তা দেখুন।"
+   ],
+   "PHP locks these before WordPress ever loads. The automatic attempt below writes .user.ini / .htaccess for these — safe to try on a live site, since at worst it just fails quietly if your host doesn’t support it.": [
+    "ওয়ার্ডপ্রেস লোড হওয়ার আগেই PHP এগুলো লক করে রাখে। নিচের স্বয়ংক্রিয় চেষ্টাটি এগুলোর জন্য .user.ini / .htaccess লেখে — লাইভ সাইটে চেষ্টা করা নিরাপদ, কারণ সর্বোচ্চ খারাপ ক্ষেত্রে আপনার হোস্ট সমর্থন না করলে এটি নীরবে ব্যর্থ হবে মাত্র।"
+   ],
+   "Reload behavior": [
+    "রিলোড আচরণ"
+   ],
+   "Reload mode": [
+    "রিলোড মোড"
+   ],
+   "Reloadify Frontend Sync": [
+    "Reloadify Frontend Sync"
+   ],
+   "Requires your host / server config": [
+    "আপনার হোস্ট/সার্ভার কনফিগারেশন প্রয়োজন"
+   ],
+   "Save Changes": [
+    "পরিবর্তন সংরক্ষণ করুন"
+   ],
+   "Saving…": [
+    "সংরক্ষণ করা হচ্ছে…"
+   ],
+   "Server Performance": [
+    "সার্ভার পারফরম্যান্স"
+   ],
+   "Server config snippets": [
+    "সার্ভার কনফিগ স্নিপেট"
+   ],
+   "Settings & the reloadify-reload folder will be kept if the plugin is deleted.": [
+    "প্লাগইন মুছে ফেললেও সেটিংস ও reloadify-reload ফোল্ডার রেখে দেওয়া হবে।"
+   ],
+   "Settings saved successfully.": [
+    "সেটিংস সফলভাবে সংরক্ষিত হয়েছে।"
+   ],
+   "Soft": [
+    "সফট"
+   ],
+   "Soft reload": [
+    "সফট রিলোড"
+   ],
+   "Speed Boost": [
+    "স্পিড বুস্ট"
+   ],
+   "Speed Boost turned off.": [
+    "স্পিড বুস্ট বন্ধ করা হয়েছে।"
+   ],
+   "Speed Boost turned on.": [
+    "স্পিড বুস্ট চালু করা হয়েছে।"
+   ],
+   "Standard page reload. Fast, uses the browser cache like a normal refresh.": [
+    "সাধারণ পেজ রিলোড। দ্রুত, স্বাভাবিক রিফ্রেশের মতো ব্রাউজারের ক্যাশ ব্যবহার করে।"
+   ],
+   "Sync from server": [
+    "সার্ভার থেকে সিঙ্ক করুন"
+   ],
+   "Synced with the server’s current values.": [
+    "সার্ভারের বর্তমান মানের সাথে সিঙ্ক করা হয়েছে।"
+   ],
+   "Syncing…": [
+    "সিঙ্ক করা হচ্ছে…"
+   ],
+   "The request failed.": [
+    "অনুরোধটি ব্যর্থ হয়েছে।"
+   ],
+   "These are PHP_INI_ALL, meaning ini_set() genuinely works on them at runtime — no server access needed, applied on every WordPress-processed request. (opcache.enable can only be switched off this way, never back on once the server started with it disabled — that’s PHP’s own rule.)": [
+    "এগুলো PHP_INI_ALL, অর্থাৎ ini_set() রানটাইমে সত্যিকার অর্থেই কাজ করে — সার্ভার অ্যাক্সেসের দরকার নেই, ওয়ার্ডপ্রেসের প্রতিটি প্রক্রিয়াকৃত অনুরোধে প্রয়োগ হয়। (opcache.enable শুধু এভাবেই বন্ধ করা যায়, সার্ভার একবার বন্ধ অবস্থায় চালু হলে আর কখনও চালু করা যায় না — এটি PHP-র নিজস্ব নিয়ম।)"
+   ],
+   "These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP — no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).": [
+    "এই তিনটি সেটিংস PHP চালু হওয়ার সময়ই লক হয়ে যায়, তাই এগুলো পরিবর্তনের একমাত্র উপায় হলো আপনার প্রকৃত php.ini ফাইল সম্পাদনা করে PHP রিস্টার্ট করা — কোনো প্লাগইন অন্য কোনোভাবে এটি করতে পারে না। এই অ্যাকশনটি সরাসরি সেই ফাইল সম্পাদনা করে। এখানে একটি ভুল, অথবা কোনো শেয়ার্ড বা লাইভ সার্ভারে এটি চালানো, সেই সার্ভারের প্রতিটি সাইটের PHP বন্ধ করে দিতে পারে যতক্ষণ না কেউ হাতে-কলমে ঠিক করে। শুধুমাত্র এমন লোকাল সাইটে এটি ব্যবহার করুন যা আপনি সম্পূর্ণভাবে নিয়ন্ত্রণ করেন এবং সহজেই পুনরায় ইনস্টল করতে পারেন (Local, XAMPP, MAMP, Laragon, অথবা নিজের Docker সেটআপ)।"
+   ],
+   "These values cannot be set by any WordPress plugin at runtime — PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host.": [
+    "এই মানগুলো কোনো ওয়ার্ডপ্রেস প্লাগইন রানটাইমে নির্ধারণ করতে পারে না — ওয়ার্ডপ্রেস লোড হওয়ার আগেই PHP এগুলো লক করে দেয়। আপনার হোস্টিং সেটআপের সাথে মিলে যায় এমন ব্লকটি পেস্ট করুন, অথবা আপনার হোস্টকে পাঠান।"
+   ],
+   "This server reports no loaded php.ini file at all, so this action can’t do anything here.": [
+    "এই সার্ভার জানাচ্ছে যে কোনো php.ini ফাইল লোড হয়নি, তাই এই অ্যাকশন এখানে কিছুই করতে পারবে না।"
+   ],
+   "Will delete settings & the reloadify-reload folder if the plugin is deleted.": [
+    "প্লাগইন মুছে ফেললে সেটিংস ও reloadify-reload ফোল্ডার মুছে ফেলা হবে।"
+   ],
+   "Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM).": [
+    "opcache ও realpath cache-সহ নিচের সব ডিরেক্টিভের জন্যই কাজ করে। আপনি সরাসরি php.ini পরিচালনা করলে, অথবা আপনার হোস্ট .user.ini সমর্থন করলে (PHP-FPM-এ সাধারণ), এটি ব্যবহার করুন।"
+   ],
+   "Writes .user.ini and .htaccess in your WordPress root. Safe to try on a live site — if your host doesn’t support it, it just fails and tells you why.": [
+    "আপনার ওয়ার্ডপ্রেস রুটে .user.ini এবং .htaccess লেখে। লাইভ সাইটে চেষ্টা করা নিরাপদ — আপনার হোস্ট সমর্থন না করলে, এটি শুধু ব্যর্থ হয়ে কারণ জানিয়ে দেয়।"
+   ],
+   "Writing…": [
+    "লেখা হচ্ছে…"
+   ],
+   "Written": [
+    "লেখা হয়েছে"
+   ],
+   "Written to php.ini — restart PHP for it to take effect.": [
+    "php.ini-তে লেখা হয়েছে — কার্যকর করতে PHP রিস্টার্ট করুন।"
+   ],
+   "and": [
+    "এবং"
+   ],
+   "hours": [
+    "ঘণ্টা"
+   ],
+   "left": [
+    "বাকি"
+   ],
+   "min": [
+    "মিনিট"
+   ],
+   "opcache memory sizing — danger zone": [
+    "opcache মেমরি সাইজিং — বিপজ্জনক অঞ্চল"
+   ],
+   "php.ini / .user.ini": [
+    "php.ini / .user.ini"
+   ],
+   "sec": [
+    "সেকেন্ড"
+   ],
+   "⚠ Local development only — do not use on a live/production site.": [
+    "⚠ শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য — লাইভ/প্রোডাকশন সাইটে ব্যবহার করবেন না।"
+   ],
+   "✓ Matches the live server right now.": [
+    "✓ এখন লাইভ সার্ভারের সাথে মিলে যাচ্ছে।"
+   ],
+   "✗ Not applied yet on this page load — save your changes, then reload this page to confirm.": [
+    "✗ এই পেজ লোডে এখনও প্রয়োগ হয়নি — পরিবর্তন সংরক্ষণ করুন, তারপর নিশ্চিত করতে পেজটি রিলোড করুন।"
+   ]
+  }
+ }
+}

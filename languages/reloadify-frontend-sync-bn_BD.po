@@ -1,0 +1,453 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Reloadify Frontend Sync 1.0.1\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/reloadify-frontend-sync\n"
+"POT-Creation-Date: 2026-07-24 01:50+0000\n"
+"PO-Revision-Date: 2026-07-24 01:50+0000\n"
+"Last-Translator: Shaoun Chandra Shill\n"
+"Language-Team: Bengali\n"
+"Language: bn_BD\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: manual\n"
+"X-Domain: reloadify-frontend-sync\n"
+
+#: assets/js/admin-settings.js:729
+msgid " snippet copied."
+msgstr " স্নিপেট কপি করা হয়েছে।"
+
+#: assets/js/admin-settings.js:430
+msgid "(default)"
+msgstr "(ডিফল্ট)"
+
+#: assets/js/admin-settings.js:371
+msgid ".htaccess (Apache + mod_php only)"
+msgstr ".htaccess (শুধুমাত্র Apache + mod_php)"
+
+#: includes/class-reloadify-performance.php:385
+msgid ".htaccess exists but isn't writable by PHP, so nothing was changed."
+msgstr ".htaccess ফাইল আছে কিন্তু PHP তাতে লিখতে পারছে না, তাই কিছুই পরিবর্তন করা হয়নি।"
+
+#: includes/class-reloadify-performance.php:264
+msgid "Aborted before making any changes: couldn't write a backup copy first."
+msgstr "কোনো পরিবর্তন করার আগেই বাতিল করা হয়েছে: প্রথমে ব্যাকআপ কপি লেখা যায়নি।"
+
+#: assets/js/admin-settings.js:302
+msgid "Appends a cache-busting parameter so the page is fetched fresh instead of served from cache. Use this if soft reload sometimes shows stale content."
+msgstr "একটি ক্যাশ-বাস্টিং প্যারামিটার যোগ করে, যাতে পেজটি ক্যাশ থেকে না দেখিয়ে নতুনভাবে আনা হয়। সফট রিলোডে মাঝেমধ্যে পুরনো কনটেন্ট দেখালে এটি ব্যবহার করুন।"
+
+#: assets/js/admin-settings.js:55
+msgid "Applied automatically by this plugin"
+msgstr "এই প্লাগইন দ্বারা স্বয়ংক্রিয়ভাবে প্রয়োগ করা হয়েছে"
+
+#: assets/js/admin-settings.js:675
+msgid "Attempt automatic server override"
+msgstr "স্বয়ংক্রিয় সার্ভার ওভাররাইড চেষ্টা করুন"
+
+#: assets/js/admin-settings.js:712
+msgid "Attempt opcache override (local dev only)"
+msgstr "Opcache ওভাররাইড চেষ্টা করুন (শুধু লোকাল ডেভ)"
+
+#: assets/js/admin-settings.js:616
+msgid "Attempted — see results below. .user.ini changes can take a few minutes to take effect."
+msgstr "চেষ্টা করা হয়েছে — নিচে ফলাফল দেখুন। .user.ini-র পরিবর্তন কার্যকর হতে কয়েক মিনিট সময় লাগতে পারে।"
+
+#: assets/js/admin-settings.js:675
+msgid "Attempting…"
+msgstr "চেষ্টা করা হচ্ছে…"
+
+#: includes/class-reloadify-admin.php:18
+#: includes/class-reloadify-admin.php:19
+msgid "Auto Reloader"
+msgstr "অটো রিলোডার"
+
+#: assets/js/admin-settings.js:400
+msgid "Auto-attempt"
+msgstr "স্বয়ংক্রিয় চেষ্টা"
+
+#: assets/js/admin-settings.js:189
+msgid "Auto-off in"
+msgstr "স্বয়ংক্রিয়ভাবে বন্ধ হবে"
+
+#: assets/js/admin-settings.js:719
+msgid "Backup saved at: "
+msgstr "ব্যাকআপ সংরক্ষিত হয়েছে: "
+
+#: assets/js/admin-settings.js:310
+msgid "Browsers & windows"
+msgstr "ব্রাউজার ও উইন্ডো"
+
+#: assets/js/admin-settings.js:266
+msgid "Browsers enabled"
+msgstr "ব্রাউজার সক্রিয়"
+
+#: assets/js/admin-settings.js:369
+#: assets/js/admin-settings.js:374
+msgid "Copy"
+msgstr "কপি করুন"
+
+#: assets/js/admin-settings.js:729
+msgid "Could not copy — select and copy manually."
+msgstr "কপি করা যায়নি — নিজে নির্বাচন করে কপি করুন।"
+
+#: assets/js/admin-settings.js:785
+msgid "Could not sync from the server."
+msgstr "সার্ভার থেকে সিঙ্ক করা যায়নি।"
+
+#: assets/js/admin-settings.js:498
+msgid "Could not update Speed Boost."
+msgstr "স্পিড বুস্ট আপডেট করা যায়নি।"
+
+#: assets/js/admin-settings.js:538
+msgid "Could not update this setting."
+msgstr "এই সেটিং আপডেট করা যায়নি।"
+
+#: assets/js/admin-settings.js:827
+msgid "Cross-Browser Reload"
+msgstr "ক্রস-ব্রাউজার রিলোড"
+
+#: assets/js/admin-settings.js:820
+msgid "Cross-browser live reload for page-builder QA — and a clear picture of which server settings this plugin can and can’t change for you."
+msgstr "পেজ-বিল্ডার QA-র জন্য ক্রস-ব্রাউজার লাইভ রিলোড — এবং এই প্লাগইন সার্ভারের কোন সেটিংস পরিবর্তন করতে পারে আর কোনটা পারে না, তার স্পষ্ট চিত্র।"
+
+#: assets/js/admin-settings.js:429
+msgid "Current: "
+msgstr "বর্তমান: "
+
+#: assets/js/admin-settings.js:548
+msgid "Delete Data on Uninstall"
+msgstr "আনইনস্টলে ডেটা মুছে ফেলুন"
+
+#: assets/js/admin-settings.js:250
+msgid "Developer Mode"
+msgstr "ডেভেলপার মোড"
+
+#: assets/js/admin-settings.js:280
+msgid "Developer Mode is off by default on purpose — while it’s on, every visitor’s browser keeps checking the server, which is fine for staging but adds real load on a busy live site. Turn it on while you’re testing, then switch it off when you’re done. It also turns itself off automatically after 12 hours, just in case."
+msgstr "ডেভেলপার মোড ইচ্ছাকৃতভাবেই ডিফল্টভাবে বন্ধ থাকে — এটি চালু থাকা অবস্থায় প্রতিটি ভিজিটরের ব্রাউজার বারবার সার্ভার পরীক্ষা করতে থাকে, যা স্টেজিং-এর জন্য ঠিক আছে কিন্তু ব্যস্ত লাইভ সাইটে প্রকৃত লোড যোগ করে। টেস্ট করার সময় এটি চালু রাখুন, শেষ হলে বন্ধ করে দিন। নিরাপত্তার জন্য এটি ১২ ঘণ্টা পর নিজে থেকেই বন্ধ হয়ে যায়।"
+
+#: assets/js/admin-settings.js:379
+msgid "Done"
+msgstr "সম্পন্ন"
+
+#: includes/class-reloadify-speed.php:74
+msgid "Drops unused <link> tags from <head> (RSD, WLW manifest, shortlink, generator tag)"
+msgstr "<head>-এর অব্যবহৃত <link> ট্যাগ বাদ দেয় (RSD, WLW ম্যানিফেস্ট, শর্টলিংক, জেনারেটর ট্যাগ)"
+
+#: assets/js/admin-settings.js:801
+msgid "Failed to save settings."
+msgstr "সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।"
+
+#: assets/js/admin-settings.js:695
+msgid "File this would write to: "
+msgstr "এটি যেখানে লিখবে: "
+
+#: assets/js/admin-settings.js:680
+msgid "Generate config snippet"
+msgstr "কনফিগ স্নিপেট তৈরি করুন"
+
+#: assets/js/admin-settings.js:273
+msgid "Hard"
+msgstr "হার্ড"
+
+#: assets/js/admin-settings.js:301
+msgid "Hard reload"
+msgstr "হার্ড রিলোড"
+
+#: assets/js/admin-settings.js:707
+msgid "I understand this can crash PHP for the whole server, and I’m only doing this on a local development site I fully control."
+msgstr "আমি বুঝি এটি পুরো সার্ভারের PHP ক্র্যাশ করাতে পারে, এবং আমি শুধুমাত্র এমন একটি লোকাল ডেভেলপমেন্ট সাইটে এটি করছি যা আমি সম্পূর্ণভাবে নিয়ন্ত্রণ করি।"
+
+#: assets/js/admin-settings.js:221
+msgid "Incognito"
+msgstr "ইনকগনিটো"
+
+#: assets/js/admin-settings.js:311
+msgid "Incognito/private detection is best-effort — some browsers deliberately make it undetectable, so treat it as a helper, not a guarantee."
+msgstr "ইনকগনিটো/প্রাইভেট শনাক্তকরণ সর্বোচ্চ চেষ্টা পর্যায়ের — কিছু ব্রাউজার ইচ্ছাকৃতভাবে এটি শনাক্ত-অযোগ্য করে রাখে, তাই একে সহায়ক হিসেবে ধরুন, নিশ্চয়তা হিসেবে নয়।"
+
+#: assets/js/admin-settings.js:697
+msgid "It also does nothing until PHP restarts — this plugin cannot restart PHP for you."
+msgstr "PHP রিস্টার্ট না হওয়া পর্যন্ত এটিও কিছু করে না — এই প্লাগইন আপনার হয়ে PHP রিস্টার্ট করতে পারে না।"
+
+#: assets/js/admin-settings.js:396
+msgid "Live"
+msgstr "লাইভ"
+
+#: assets/js/admin-settings.js:806
+msgid "Loading…"
+msgstr "লোড হচ্ছে…"
+
+#: assets/js/admin-settings.js:398
+msgid "Local dev only"
+msgstr "শুধু লোকাল ডেভ"
+
+#: assets/js/admin-settings.js:402
+msgid "Manual only"
+msgstr "শুধু ম্যানুয়াল"
+
+#: assets/js/admin-settings.js:616
+msgid "Neither method could write on this server — see results below for why."
+msgstr "এই সার্ভারে কোনো পদ্ধতিই লিখতে পারেনি — কারণ জানতে নিচের ফলাফল দেখুন।"
+
+#: includes/class-reloadify-performance.php:377
+msgid "No .htaccess file exists and the WordPress root isn't writable, so one couldn't be created."
+msgstr "কোনো .htaccess ফাইল নেই এবং ওয়ার্ডপ্রেসের রুট লেখার উপযোগী নয়, তাই একটি তৈরি করা যায়নি।"
+
+#: includes/class-reloadify-performance.php:279
+msgid "No opcache values to write. Did you set values for memory_consumption, interned_strings_buffer, and/or max_accelerated_files?"
+msgstr "লেখার মতো কোনো opcache মান নেই। memory_consumption, interned_strings_buffer এবং/অথবা max_accelerated_files-এর জন্য মান নির্ধারণ করেছেন তো?"
+
+#: assets/js/admin-settings.js:215
+msgid "Normal"
+msgstr "নরমাল"
+
+#: assets/js/admin-settings.js:465
+#: assets/js/admin-settings.js:717
+msgid "Not applied"
+msgstr "প্রয়োগ করা হয়নি"
+
+#: assets/js/admin-settings.js:580
+msgid "Not applied — see the result below for why."
+msgstr "প্রয়োগ করা হয়নি — কারণ জানতে নিচের ফলাফল দেখুন।"
+
+#: includes/class-reloadify-performance.php:231
+msgid "Not attempted — the confirmation was missing."
+msgstr "চেষ্টা করা হয়নি — নিশ্চিতকরণ পাওয়া যায়নি।"
+
+#: assets/js/admin-settings.js:251
+msgid "Off"
+msgstr "বন্ধ"
+
+#: assets/js/admin-settings.js:251
+msgid "On"
+msgstr "চালু"
+
+#: assets/js/admin-settings.js:633
+msgid "Only PHP settings that are still changeable at runtime can be updated live here — everything else needs a php.ini, .user.ini, or host-level change."
+msgstr "রানটাইমে এখনও পরিবর্তনযোগ্য PHP সেটিংসগুলোই কেবল এখানে সরাসরি আপডেট করা যায় — বাকি সবকিছুর জন্য php.ini, .user.ini, অথবা হোস্ট-লেভেল পরিবর্তন প্রয়োজন।"
+
+#: assets/js/admin-settings.js:372
+msgid "Only covers the directives Apache is allowed to set per-directory. opcache.* and realpath_cache_* cannot go here — and this block won’t work at all on Nginx or PHP-FPM."
+msgstr "শুধুমাত্র সেই ডিরেক্টিভগুলো কভার করে, যা Apache প্রতি-ডিরেক্টরি ভিত্তিতে নির্ধারণ করার অনুমতি দেয়। opcache.* এবং realpath_cache_* এখানে দেওয়া যাবে না — এবং এই ব্লক Nginx বা PHP-FPM-এ একেবারেই কাজ করবে না।"
+
+#: assets/js/admin-settings.js:66
+msgid "Only these three actually require editing the real php.ini: they size a shared-memory pool once when PHP starts, before any plugin runs. See the warning below before touching this section."
+msgstr "শুধুমাত্র এই তিনটির জন্যই সত্যিকারের php.ini সম্পাদনা প্রয়োজন: PHP চালু হওয়ার সময়, কোনো প্লাগইন চালু হওয়ার আগেই, এগুলো একবার শেয়ার্ড-মেমরি পুলের আকার নির্ধারণ করে। এই সেকশন স্পর্শ করার আগে নিচের সতর্কবার্তা দেখুন।"
+
+#: includes/class-reloadify-performance.php:241
+msgid "PHP isn't using a php.ini file at all on this server (php_ini_loaded_file() returned nothing), so there's nothing to write to."
+msgstr "এই সার্ভারে PHP আদৌ কোনো php.ini ফাইল ব্যবহার করছে না (php_ini_loaded_file() কিছুই ফেরত দেয়নি), তাই লেখার মতো কিছু নেই।"
+
+#: assets/js/admin-settings.js:61
+msgid "PHP locks these before WordPress ever loads. The automatic attempt below writes .user.ini / .htaccess for these — safe to try on a live site, since at worst it just fails quietly if your host doesn’t support it."
+msgstr "ওয়ার্ডপ্রেস লোড হওয়ার আগেই PHP এগুলো লক করে রাখে। নিচের স্বয়ংক্রিয় চেষ্টাটি এগুলোর জন্য .user.ini / .htaccess লেখে — লাইভ সাইটে চেষ্টা করা নিরাপদ, কারণ সর্বোচ্চ খারাপ ক্ষেত্রে আপনার হোস্ট সমর্থন না করলে এটি নীরবে ব্যর্থ হবে মাত্র।"
+
+#: includes/class-reloadify-speed.php:82
+msgid "Raises wp-admin's memory_limit and max_execution_time headroom (never below what your host already allows) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched"
+msgstr "wp-admin-এর memory_limit ও max_execution_time-এর সীমা বাড়িয়ে দেয় (আপনার হোস্ট আগে থেকে যতটুকু অনুমতি দেয়, তার চেয়ে কখনও কম নয়), যাতে Divi/Elementor-এর মতো ভারী বিল্ডারে সেভ করার সময় ধীরগতি বা ব্যর্থতার সম্ভাবনা কমে — ফ্রন্টএন্ড ভিজিটরের অনুরোধে এর কোনো প্রভাব পড়ে না"
+
+#: assets/js/admin-settings.js:286
+msgid "Reload behavior"
+msgstr "রিলোড আচরণ"
+
+#: assets/js/admin-settings.js:272
+msgid "Reload mode"
+msgstr "রিলোড মোড"
+
+#: assets/js/admin-settings.js:819
+msgid "Reloadify Frontend Sync"
+msgstr "Reloadify Frontend Sync"
+
+#: includes/class-reloadify-speed.php:70
+msgid "Removes the emoji-detection script & inline CSS WordPress prints on every page (frontend and wp-admin)"
+msgstr "প্রতিটি পেজে (ফ্রন্টএন্ড ও wp-admin উভয় জায়গায়) ওয়ার্ডপ্রেস যে ইমোজি-শনাক্তকরণ স্ক্রিপ্ট ও ইনলাইন CSS যোগ করে, তা সরিয়ে দেয়"
+
+#: assets/js/admin-settings.js:60
+msgid "Requires your host / server config"
+msgstr "আপনার হোস্ট/সার্ভার কনফিগারেশন প্রয়োজন"
+
+#: assets/js/admin-settings.js:840
+msgid "Save Changes"
+msgstr "পরিবর্তন সংরক্ষণ করুন"
+
+#: assets/js/admin-settings.js:840
+msgid "Saving…"
+msgstr "সংরক্ষণ করা হচ্ছে…"
+
+#: assets/js/admin-settings.js:828
+msgid "Server Performance"
+msgstr "সার্ভার পারফরম্যান্স"
+
+#: assets/js/admin-settings.js:358
+msgid "Server config snippets"
+msgstr "সার্ভার কনফিগ স্নিপেট"
+
+#: assets/js/admin-settings.js:534
+msgid "Settings & the reloadify-reload folder will be kept if the plugin is deleted."
+msgstr "প্লাগইন মুছে ফেললেও সেটিংস ও reloadify-reload ফোল্ডার রেখে দেওয়া হবে।"
+
+#: assets/js/admin-settings.js:798
+msgid "Settings saved successfully."
+msgstr "সেটিংস সফলভাবে সংরক্ষিত হয়েছে।"
+
+#: assets/js/admin-settings.js:273
+msgid "Soft"
+msgstr "সফট"
+
+#: assets/js/admin-settings.js:294
+msgid "Soft reload"
+msgstr "সফট রিলোড"
+
+#: assets/js/admin-settings.js:508
+msgid "Speed Boost"
+msgstr "স্পিড বুস্ট"
+
+#: assets/js/admin-settings.js:494
+msgid "Speed Boost turned off."
+msgstr "স্পিড বুস্ট বন্ধ করা হয়েছে।"
+
+#: assets/js/admin-settings.js:493
+msgid "Speed Boost turned on."
+msgstr "স্পিড বুস্ট চালু করা হয়েছে।"
+
+#: assets/js/admin-settings.js:295
+msgid "Standard page reload. Fast, uses the browser cache like a normal refresh."
+msgstr "সাধারণ পেজ রিলোড। দ্রুত, স্বাভাবিক রিফ্রেশের মতো ব্রাউজারের ক্যাশ ব্যবহার করে।"
+
+#: assets/js/admin-settings.js:638
+msgid "Sync from server"
+msgstr "সার্ভার থেকে সিঙ্ক করুন"
+
+#: assets/js/admin-settings.js:781
+msgid "Synced with the server’s current values."
+msgstr "সার্ভারের বর্তমান মানের সাথে সিঙ্ক করা হয়েছে।"
+
+#: assets/js/admin-settings.js:638
+msgid "Syncing…"
+msgstr "সিঙ্ক করা হচ্ছে…"
+
+#: includes/class-reloadify-performance.php:336
+msgid "The WordPress root directory (or the existing .user.ini file) is not writable by PHP, so nothing was changed."
+msgstr "ওয়ার্ডপ্রেসের রুট ডিরেক্টরিতে (অথবা বিদ্যমান .user.ini ফাইলে) PHP লিখতে পারছে না, তাই কিছুই পরিবর্তন করা হয়নি।"
+
+#: assets/js/admin-settings.js:584
+#: assets/js/admin-settings.js:620
+msgid "The request failed."
+msgstr "অনুরোধটি ব্যর্থ হয়েছে।"
+
+#: assets/js/admin-settings.js:56
+msgid "These are PHP_INI_ALL, meaning ini_set() genuinely works on them at runtime — no server access needed, applied on every WordPress-processed request. (opcache.enable can only be switched off this way, never back on once the server started with it disabled — that’s PHP’s own rule.)"
+msgstr "এগুলো PHP_INI_ALL, অর্থাৎ ini_set() রানটাইমে সত্যিকার অর্থেই কাজ করে — সার্ভার অ্যাক্সেসের দরকার নেই, ওয়ার্ডপ্রেসের প্রতিটি প্রক্রিয়াকৃত অনুরোধে প্রয়োগ হয়। (opcache.enable শুধু এভাবেই বন্ধ করা যায়, সার্ভার একবার বন্ধ অবস্থায় চালু হলে আর কখনও চালু করা যায় না — এটি PHP-র নিজস্ব নিয়ম।)"
+
+#: assets/js/admin-settings.js:693
+msgid "These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP — no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup)."
+msgstr "এই তিনটি সেটিংস PHP চালু হওয়ার সময়ই লক হয়ে যায়, তাই এগুলো পরিবর্তনের একমাত্র উপায় হলো আপনার প্রকৃত php.ini ফাইল সম্পাদনা করে PHP রিস্টার্ট করা — কোনো প্লাগইন অন্য কোনোভাবে এটি করতে পারে না। এই অ্যাকশনটি সরাসরি সেই ফাইল সম্পাদনা করে। এখানে একটি ভুল, অথবা কোনো শেয়ার্ড বা লাইভ সার্ভারে এটি চালানো, সেই সার্ভারের প্রতিটি সাইটের PHP বন্ধ করে দিতে পারে যতক্ষণ না কেউ হাতে-কলমে ঠিক করে। শুধুমাত্র এমন লোকাল সাইটে এটি ব্যবহার করুন যা আপনি সম্পূর্ণভাবে নিয়ন্ত্রণ করেন এবং সহজেই পুনরায় ইনস্টল করতে পারেন (Local, XAMPP, MAMP, Laragon, অথবা নিজের Docker সেটআপ)।"
+
+#: assets/js/admin-settings.js:364
+msgid "These values cannot be set by any WordPress plugin at runtime — PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host."
+msgstr "এই মানগুলো কোনো ওয়ার্ডপ্রেস প্লাগইন রানটাইমে নির্ধারণ করতে পারে না — ওয়ার্ডপ্রেস লোড হওয়ার আগেই PHP এগুলো লক করে দেয়। আপনার হোস্টিং সেটআপের সাথে মিলে যায় এমন ব্লকটি পেস্ট করুন, অথবা আপনার হোস্টকে পাঠান।"
+
+#: includes/class-reloadify-performance.php:249
+msgid "This php.ini is not writable by PHP. On a live/shared/managed host that's expected and correct — it means this action simply can't do anything here, safely."
+msgstr "এই php.ini ফাইলে PHP লিখতে পারছে না। লাইভ/শেয়ার্ড/ম্যানেজড হোস্টিং-এ এটাই স্বাভাবিক ও সঠিক — এর মানে হলো, এই কাজটি এখানে নিরাপদভাবে কিছুই করতে পারবে না।"
+
+#: assets/js/admin-settings.js:696
+msgid "This server reports no loaded php.ini file at all, so this action can’t do anything here."
+msgstr "এই সার্ভার জানাচ্ছে যে কোনো php.ini ফাইল লোড হয়নি, তাই এই অ্যাকশন এখানে কিছুই করতে পারবে না।"
+
+#: includes/class-reloadify-speed.php:78
+msgid "Turns PHP OPcache on if your host has it available but left it off"
+msgstr "আপনার হোস্টিং-এ PHP OPcache থাকলেও তা বন্ধ থাকলে, এটি চালু করে দেয়"
+
+#: assets/js/admin-settings.js:533
+msgid "Will delete settings & the reloadify-reload folder if the plugin is deleted."
+msgstr "প্লাগইন মুছে ফেললে সেটিংস ও reloadify-reload ফোল্ডার মুছে ফেলা হবে।"
+
+#: assets/js/admin-settings.js:367
+msgid "Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM)."
+msgstr "opcache ও realpath cache-সহ নিচের সব ডিরেক্টিভের জন্যই কাজ করে। আপনি সরাসরি php.ini পরিচালনা করলে, অথবা আপনার হোস্ট .user.ini সমর্থন করলে (PHP-FPM-এ সাধারণ), এটি ব্যবহার করুন।"
+
+#: includes/class-reloadify-performance.php:297
+msgid "Write failed (file_put_contents returned 0 or false). The backup was created and left in place. Check permissions and disk space."
+msgstr "লেখা ব্যর্থ হয়েছে (file_put_contents 0 অথবা false ফেরত দিয়েছে)। ব্যাকআপ তৈরি করে যথাস্থানে রাখা হয়েছে। পারমিশন ও ডিস্ক স্পেস পরীক্ষা করুন।"
+
+#: includes/class-reloadify-performance.php:348
+msgid "Write failed even though the file appeared writable. Check server error logs."
+msgstr "ফাইলটি লেখার উপযোগী মনে হলেও লেখা ব্যর্থ হয়েছে। সার্ভারের এরর লগ পরীক্ষা করুন।"
+
+#: includes/class-reloadify-performance.php:395
+msgid "Write failed. This is also a no-op on Nginx or PHP-FPM setups that don't use .htaccess at all — confirm your server actually uses Apache with mod_php."
+msgstr "লেখা ব্যর্থ হয়েছে। যেসব Nginx বা PHP-FPM সেটআপে .htaccess ব্যবহারই হয় না, সেখানেও এটি কিছু করে না — নিশ্চিত করুন আপনার সার্ভার আসলেই mod_php-সহ Apache ব্যবহার করছে।"
+
+#: assets/js/admin-settings.js:682
+msgid "Writes .user.ini and .htaccess in your WordPress root. Safe to try on a live site — if your host doesn’t support it, it just fails and tells you why."
+msgstr "আপনার ওয়ার্ডপ্রেস রুটে .user.ini এবং .htaccess লেখে। লাইভ সাইটে চেষ্টা করা নিরাপদ — আপনার হোস্ট সমর্থন না করলে, এটি শুধু ব্যর্থ হয়ে কারণ জানিয়ে দেয়।"
+
+#: assets/js/admin-settings.js:712
+msgid "Writing…"
+msgstr "লেখা হচ্ছে…"
+
+#: assets/js/admin-settings.js:465
+#: assets/js/admin-settings.js:717
+msgid "Written"
+msgstr "লেখা হয়েছে"
+
+#: assets/js/admin-settings.js:580
+msgid "Written to php.ini — restart PHP for it to take effect."
+msgstr "php.ini-তে লেখা হয়েছে — কার্যকর করতে PHP রিস্টার্ট করুন।"
+
+#: includes/class-reloadify-performance.php:306
+msgid "Written to the real php.ini. This does NOT take effect until PHP itself restarts — this plugin cannot do that for you (restart PHP-FPM/Apache, or just restart your local dev server). If anything breaks, restore the backup file listed above and restart PHP again."
+msgstr "প্রকৃত php.ini-তে লেখা হয়েছে। PHP নিজে রিস্টার্ট না হওয়া পর্যন্ত এটি কার্যকর হবে না — এই প্লাগইন আপনার হয়ে তা করতে পারে না (PHP-FPM/Apache রিস্টার্ট করুন, অথবা আপনার লোকাল ডেভ সার্ভার রিস্টার্ট করুন)। কিছু ভেঙে গেলে, উপরে দেখানো ব্যাকআপ ফাইল পুনরুদ্ধার করে আবার PHP রিস্টার্ট করুন।"
+
+#: includes/class-reloadify-performance.php:355
+msgid "Written. Most PHP-FPM hosts re-read .user.ini every 300 seconds (user_ini.cache_ttl), so give it a few minutes and confirm with \"Sync from server\". Some hosts ignore .user.ini entirely — if the live value never changes, that's why."
+msgstr "লেখা হয়েছে। বেশিরভাগ PHP-FPM হোস্ট প্রতি ৩০০ সেকেন্ডে .user.ini আবার পড়ে (user_ini.cache_ttl), তাই কয়েক মিনিট অপেক্ষা করে \"Sync from server\" দিয়ে নিশ্চিত করুন। কিছু হোস্ট .user.ini সম্পূর্ণ উপেক্ষা করে — লাইভ মান কখনো পরিবর্তন না হলে, এটাই কারণ।"
+
+#: includes/class-reloadify-performance.php:402
+msgid "Written. Only takes effect on Apache with mod_php — has no effect on Nginx or PHP-FPM, which most managed hosts use today."
+msgstr "লেখা হয়েছে। এটি শুধুমাত্র mod_php-সহ Apache-তে কার্যকর হয় — Nginx বা PHP-FPM-এ কোনো প্রভাব ফেলে না, যা আজকাল বেশিরভাগ ম্যানেজড হোস্টিং ব্যবহার করে।"
+
+#: assets/js/admin-settings.js:135
+msgid "and"
+msgstr "এবং"
+
+#: assets/js/admin-settings.js:133
+msgid "hours"
+msgstr "ঘণ্টা"
+
+#: assets/js/admin-settings.js:137
+msgid "left"
+msgstr "বাকি"
+
+#: assets/js/admin-settings.js:134
+msgid "min"
+msgstr "মিনিট"
+
+#: assets/js/admin-settings.js:65
+msgid "opcache memory sizing — danger zone"
+msgstr "opcache মেমরি সাইজিং — বিপজ্জনক অঞ্চল"
+
+#: assets/js/admin-settings.js:366
+msgid "php.ini / .user.ini"
+msgstr "php.ini / .user.ini"
+
+#: assets/js/admin-settings.js:136
+msgid "sec"
+msgstr "সেকেন্ড"
+
+#: assets/js/admin-settings.js:692
+msgid "⚠ Local development only — do not use on a live/production site."
+msgstr "⚠ শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য — লাইভ/প্রোডাকশন সাইটে ব্যবহার করবেন না।"
+
+#: assets/js/admin-settings.js:412
+msgid "✓ Matches the live server right now."
+msgstr "✓ এখন লাইভ সার্ভারের সাথে মিলে যাচ্ছে।"
+
+#: assets/js/admin-settings.js:413
+msgid "✗ Not applied yet on this page load — save your changes, then reload this page to confirm."
+msgstr "✗ এই পেজ লোডে এখনও প্রয়োগ হয়নি — পরিবর্তন সংরক্ষণ করুন, তারপর নিশ্চিত করতে পেজটি রিলোড করুন।"
+

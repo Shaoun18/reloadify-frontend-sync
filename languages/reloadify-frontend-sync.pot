@@ -1,0 +1,451 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Reloadify Frontend Sync 1.0.1\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/reloadify-frontend-sync\n"
+"POT-Creation-Date: 2026-07-24 01:50+0000\n"
+"PO-Revision-Date: 2026-07-24 01:50+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: manual\n"
+"X-Domain: reloadify-frontend-sync\n"
+
+#: assets/js/admin-settings.js:729
+msgid " snippet copied."
+msgstr ""
+
+#: assets/js/admin-settings.js:430
+msgid "(default)"
+msgstr ""
+
+#: assets/js/admin-settings.js:371
+msgid ".htaccess (Apache + mod_php only)"
+msgstr ""
+
+#: includes/class-reloadify-performance.php:385
+msgid ".htaccess exists but isn't writable by PHP, so nothing was changed."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:264
+msgid "Aborted before making any changes: couldn't write a backup copy first."
+msgstr ""
+
+#: assets/js/admin-settings.js:302
+msgid "Appends a cache-busting parameter so the page is fetched fresh instead of served from cache. Use this if soft reload sometimes shows stale content."
+msgstr ""
+
+#: assets/js/admin-settings.js:55
+msgid "Applied automatically by this plugin"
+msgstr ""
+
+#: assets/js/admin-settings.js:675
+msgid "Attempt automatic server override"
+msgstr ""
+
+#: assets/js/admin-settings.js:712
+msgid "Attempt opcache override (local dev only)"
+msgstr ""
+
+#: assets/js/admin-settings.js:616
+msgid "Attempted — see results below. .user.ini changes can take a few minutes to take effect."
+msgstr ""
+
+#: assets/js/admin-settings.js:675
+msgid "Attempting…"
+msgstr ""
+
+#: includes/class-reloadify-admin.php:18
+#: includes/class-reloadify-admin.php:19
+msgid "Auto Reloader"
+msgstr ""
+
+#: assets/js/admin-settings.js:400
+msgid "Auto-attempt"
+msgstr ""
+
+#: assets/js/admin-settings.js:189
+msgid "Auto-off in"
+msgstr ""
+
+#: assets/js/admin-settings.js:719
+msgid "Backup saved at: "
+msgstr ""
+
+#: assets/js/admin-settings.js:310
+msgid "Browsers & windows"
+msgstr ""
+
+#: assets/js/admin-settings.js:266
+msgid "Browsers enabled"
+msgstr ""
+
+#: assets/js/admin-settings.js:369
+#: assets/js/admin-settings.js:374
+msgid "Copy"
+msgstr ""
+
+#: assets/js/admin-settings.js:729
+msgid "Could not copy — select and copy manually."
+msgstr ""
+
+#: assets/js/admin-settings.js:785
+msgid "Could not sync from the server."
+msgstr ""
+
+#: assets/js/admin-settings.js:498
+msgid "Could not update Speed Boost."
+msgstr ""
+
+#: assets/js/admin-settings.js:538
+msgid "Could not update this setting."
+msgstr ""
+
+#: assets/js/admin-settings.js:827
+msgid "Cross-Browser Reload"
+msgstr ""
+
+#: assets/js/admin-settings.js:820
+msgid "Cross-browser live reload for page-builder QA — and a clear picture of which server settings this plugin can and can’t change for you."
+msgstr ""
+
+#: assets/js/admin-settings.js:429
+msgid "Current: "
+msgstr ""
+
+#: assets/js/admin-settings.js:548
+msgid "Delete Data on Uninstall"
+msgstr ""
+
+#: assets/js/admin-settings.js:250
+msgid "Developer Mode"
+msgstr ""
+
+#: assets/js/admin-settings.js:280
+msgid "Developer Mode is off by default on purpose — while it’s on, every visitor’s browser keeps checking the server, which is fine for staging but adds real load on a busy live site. Turn it on while you’re testing, then switch it off when you’re done. It also turns itself off automatically after 12 hours, just in case."
+msgstr ""
+
+#: assets/js/admin-settings.js:379
+msgid "Done"
+msgstr ""
+
+#: includes/class-reloadify-speed.php:74
+msgid "Drops unused <link> tags from <head> (RSD, WLW manifest, shortlink, generator tag)"
+msgstr ""
+
+#: assets/js/admin-settings.js:801
+msgid "Failed to save settings."
+msgstr ""
+
+#: assets/js/admin-settings.js:695
+msgid "File this would write to: "
+msgstr ""
+
+#: assets/js/admin-settings.js:680
+msgid "Generate config snippet"
+msgstr ""
+
+#: assets/js/admin-settings.js:273
+msgid "Hard"
+msgstr ""
+
+#: assets/js/admin-settings.js:301
+msgid "Hard reload"
+msgstr ""
+
+#: assets/js/admin-settings.js:707
+msgid "I understand this can crash PHP for the whole server, and I’m only doing this on a local development site I fully control."
+msgstr ""
+
+#: assets/js/admin-settings.js:221
+msgid "Incognito"
+msgstr ""
+
+#: assets/js/admin-settings.js:311
+msgid "Incognito/private detection is best-effort — some browsers deliberately make it undetectable, so treat it as a helper, not a guarantee."
+msgstr ""
+
+#: assets/js/admin-settings.js:697
+msgid "It also does nothing until PHP restarts — this plugin cannot restart PHP for you."
+msgstr ""
+
+#: assets/js/admin-settings.js:396
+msgid "Live"
+msgstr ""
+
+#: assets/js/admin-settings.js:806
+msgid "Loading…"
+msgstr ""
+
+#: assets/js/admin-settings.js:398
+msgid "Local dev only"
+msgstr ""
+
+#: assets/js/admin-settings.js:402
+msgid "Manual only"
+msgstr ""
+
+#: assets/js/admin-settings.js:616
+msgid "Neither method could write on this server — see results below for why."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:377
+msgid "No .htaccess file exists and the WordPress root isn't writable, so one couldn't be created."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:279
+msgid "No opcache values to write. Did you set values for memory_consumption, interned_strings_buffer, and/or max_accelerated_files?"
+msgstr ""
+
+#: assets/js/admin-settings.js:215
+msgid "Normal"
+msgstr ""
+
+#: assets/js/admin-settings.js:465
+#: assets/js/admin-settings.js:717
+msgid "Not applied"
+msgstr ""
+
+#: assets/js/admin-settings.js:580
+msgid "Not applied — see the result below for why."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:231
+msgid "Not attempted — the confirmation was missing."
+msgstr ""
+
+#: assets/js/admin-settings.js:251
+msgid "Off"
+msgstr ""
+
+#: assets/js/admin-settings.js:251
+msgid "On"
+msgstr ""
+
+#: assets/js/admin-settings.js:633
+msgid "Only PHP settings that are still changeable at runtime can be updated live here — everything else needs a php.ini, .user.ini, or host-level change."
+msgstr ""
+
+#: assets/js/admin-settings.js:372
+msgid "Only covers the directives Apache is allowed to set per-directory. opcache.* and realpath_cache_* cannot go here — and this block won’t work at all on Nginx or PHP-FPM."
+msgstr ""
+
+#: assets/js/admin-settings.js:66
+msgid "Only these three actually require editing the real php.ini: they size a shared-memory pool once when PHP starts, before any plugin runs. See the warning below before touching this section."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:241
+msgid "PHP isn't using a php.ini file at all on this server (php_ini_loaded_file() returned nothing), so there's nothing to write to."
+msgstr ""
+
+#: assets/js/admin-settings.js:61
+msgid "PHP locks these before WordPress ever loads. The automatic attempt below writes .user.ini / .htaccess for these — safe to try on a live site, since at worst it just fails quietly if your host doesn’t support it."
+msgstr ""
+
+#: includes/class-reloadify-speed.php:82
+msgid "Raises wp-admin's memory_limit and max_execution_time headroom (never below what your host already allows) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched"
+msgstr ""
+
+#: assets/js/admin-settings.js:286
+msgid "Reload behavior"
+msgstr ""
+
+#: assets/js/admin-settings.js:272
+msgid "Reload mode"
+msgstr ""
+
+#: assets/js/admin-settings.js:819
+msgid "Reloadify Frontend Sync"
+msgstr ""
+
+#: includes/class-reloadify-speed.php:70
+msgid "Removes the emoji-detection script & inline CSS WordPress prints on every page (frontend and wp-admin)"
+msgstr ""
+
+#: assets/js/admin-settings.js:60
+msgid "Requires your host / server config"
+msgstr ""
+
+#: assets/js/admin-settings.js:840
+msgid "Save Changes"
+msgstr ""
+
+#: assets/js/admin-settings.js:840
+msgid "Saving…"
+msgstr ""
+
+#: assets/js/admin-settings.js:828
+msgid "Server Performance"
+msgstr ""
+
+#: assets/js/admin-settings.js:358
+msgid "Server config snippets"
+msgstr ""
+
+#: assets/js/admin-settings.js:534
+msgid "Settings & the reloadify-reload folder will be kept if the plugin is deleted."
+msgstr ""
+
+#: assets/js/admin-settings.js:798
+msgid "Settings saved successfully."
+msgstr ""
+
+#: assets/js/admin-settings.js:273
+msgid "Soft"
+msgstr ""
+
+#: assets/js/admin-settings.js:294
+msgid "Soft reload"
+msgstr ""
+
+#: assets/js/admin-settings.js:508
+msgid "Speed Boost"
+msgstr ""
+
+#: assets/js/admin-settings.js:494
+msgid "Speed Boost turned off."
+msgstr ""
+
+#: assets/js/admin-settings.js:493
+msgid "Speed Boost turned on."
+msgstr ""
+
+#: assets/js/admin-settings.js:295
+msgid "Standard page reload. Fast, uses the browser cache like a normal refresh."
+msgstr ""
+
+#: assets/js/admin-settings.js:638
+msgid "Sync from server"
+msgstr ""
+
+#: assets/js/admin-settings.js:781
+msgid "Synced with the server’s current values."
+msgstr ""
+
+#: assets/js/admin-settings.js:638
+msgid "Syncing…"
+msgstr ""
+
+#: includes/class-reloadify-performance.php:336
+msgid "The WordPress root directory (or the existing .user.ini file) is not writable by PHP, so nothing was changed."
+msgstr ""
+
+#: assets/js/admin-settings.js:584
+#: assets/js/admin-settings.js:620
+msgid "The request failed."
+msgstr ""
+
+#: assets/js/admin-settings.js:56
+msgid "These are PHP_INI_ALL, meaning ini_set() genuinely works on them at runtime — no server access needed, applied on every WordPress-processed request. (opcache.enable can only be switched off this way, never back on once the server started with it disabled — that’s PHP’s own rule.)"
+msgstr ""
+
+#: assets/js/admin-settings.js:693
+msgid "These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP — no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup)."
+msgstr ""
+
+#: assets/js/admin-settings.js:364
+msgid "These values cannot be set by any WordPress plugin at runtime — PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:249
+msgid "This php.ini is not writable by PHP. On a live/shared/managed host that's expected and correct — it means this action simply can't do anything here, safely."
+msgstr ""
+
+#: assets/js/admin-settings.js:696
+msgid "This server reports no loaded php.ini file at all, so this action can’t do anything here."
+msgstr ""
+
+#: includes/class-reloadify-speed.php:78
+msgid "Turns PHP OPcache on if your host has it available but left it off"
+msgstr ""
+
+#: assets/js/admin-settings.js:533
+msgid "Will delete settings & the reloadify-reload folder if the plugin is deleted."
+msgstr ""
+
+#: assets/js/admin-settings.js:367
+msgid "Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM)."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:297
+msgid "Write failed (file_put_contents returned 0 or false). The backup was created and left in place. Check permissions and disk space."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:348
+msgid "Write failed even though the file appeared writable. Check server error logs."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:395
+msgid "Write failed. This is also a no-op on Nginx or PHP-FPM setups that don't use .htaccess at all — confirm your server actually uses Apache with mod_php."
+msgstr ""
+
+#: assets/js/admin-settings.js:682
+msgid "Writes .user.ini and .htaccess in your WordPress root. Safe to try on a live site — if your host doesn’t support it, it just fails and tells you why."
+msgstr ""
+
+#: assets/js/admin-settings.js:712
+msgid "Writing…"
+msgstr ""
+
+#: assets/js/admin-settings.js:465
+#: assets/js/admin-settings.js:717
+msgid "Written"
+msgstr ""
+
+#: assets/js/admin-settings.js:580
+msgid "Written to php.ini — restart PHP for it to take effect."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:306
+msgid "Written to the real php.ini. This does NOT take effect until PHP itself restarts — this plugin cannot do that for you (restart PHP-FPM/Apache, or just restart your local dev server). If anything breaks, restore the backup file listed above and restart PHP again."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:355
+msgid "Written. Most PHP-FPM hosts re-read .user.ini every 300 seconds (user_ini.cache_ttl), so give it a few minutes and confirm with \"Sync from server\". Some hosts ignore .user.ini entirely — if the live value never changes, that's why."
+msgstr ""
+
+#: includes/class-reloadify-performance.php:402
+msgid "Written. Only takes effect on Apache with mod_php — has no effect on Nginx or PHP-FPM, which most managed hosts use today."
+msgstr ""
+
+#: assets/js/admin-settings.js:135
+msgid "and"
+msgstr ""
+
+#: assets/js/admin-settings.js:133
+msgid "hours"
+msgstr ""
+
+#: assets/js/admin-settings.js:137
+msgid "left"
+msgstr ""
+
+#: assets/js/admin-settings.js:134
+msgid "min"
+msgstr ""
+
+#: assets/js/admin-settings.js:65
+msgid "opcache memory sizing — danger zone"
+msgstr ""
+
+#: assets/js/admin-settings.js:366
+msgid "php.ini / .user.ini"
+msgstr ""
+
+#: assets/js/admin-settings.js:136
+msgid "sec"
+msgstr ""
+
+#: assets/js/admin-settings.js:692
+msgid "⚠ Local development only — do not use on a live/production site."
+msgstr ""
+
+#: assets/js/admin-settings.js:412
+msgid "✓ Matches the live server right now."
+msgstr ""
+
+#: assets/js/admin-settings.js:413
+msgid "✗ Not applied yet on this page load — save your changes, then reload this page to confirm."
+msgstr ""
+

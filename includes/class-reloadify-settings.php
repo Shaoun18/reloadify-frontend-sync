@@ -56,9 +56,9 @@ class Reloadify_Settings {
 
 	/**
 	 * Safety net: if Developer Mode is left on and forgotten, it auto-disables
-	 * itself after 6 hours instead of quietly polling every visitor forever.
+	 * itself after 12 hours instead of quietly polling every visitor forever.
 	 */
-	const DEV_MODE_MAX_AGE = 6 * HOUR_IN_SECONDS;
+	const DEV_MODE_MAX_AGE = 12 * HOUR_IN_SECONDS;
 
 	public static function activate() {
 		if ( false === get_option( self::OPTION_KEY, false ) ) {
@@ -66,6 +66,9 @@ class Reloadify_Settings {
 		}
 		if ( false === get_option( 'reloadify_last_site_update', false ) ) {
 			add_option( 'reloadify_last_site_update', time(), '', false );
+		}
+		if ( false === get_option( 'reloadify_delete_data_on_uninstall', false ) ) {
+			add_option( 'reloadify_delete_data_on_uninstall', true );
 		}
 		self::write_timestamp_file( time() );
 	}
@@ -93,7 +96,7 @@ class Reloadify_Settings {
 	public static function update_settings( $incoming ) {
 		$clean = self::sanitize( $incoming );
 
-		// Stamp the moment Developer Mode is switched on, so the 6-hour
+		// Stamp the moment Developer Mode is switched on, so the 12-hour
 		// safety-net expiry above has something to measure from. Switching it
 		// off (or leaving it off) clears the stamp.
 		$previous = self::get_settings();
@@ -194,6 +197,22 @@ class Reloadify_Settings {
 		if ( ! file_exists( $dir ) ) {
 			wp_mkdir_p( $dir );
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
+		}
+
+		// Some hosts/CDNs apply far-future "cache everything static" rules that
+		// don't care about query strings. If timestamp.json ever gets caught by
+		// one of those, the frontend keeps polling a value that's stuck in the
+		// past -- this file asks Apache (where supported) not to do that.
+		$htaccess = $dir . '/.htaccess';
+		if ( ! file_exists( $htaccess ) ) {
+			@file_put_contents(
+				$htaccess,
+				"<IfModule mod_headers.c>\n" .
+				"\tHeader set Cache-Control \"no-cache, no-store, must-revalidate\"\n" .
+				"\tHeader set Pragma \"no-cache\"\n" .
+				"\tHeader set Expires 0\n" .
+				"</IfModule>\n"
+			);
 		}
 
 		if ( ! reloadify_path_is_writable( $dir ) ) {

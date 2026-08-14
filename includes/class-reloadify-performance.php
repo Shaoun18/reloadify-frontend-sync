@@ -105,15 +105,33 @@ class Reloadify_Performance {
 	public static function get_settings() {
 		$saved    = get_option( self::OPTION_KEY, [] );
 		$saved    = is_array( $saved ) ? $saved : [];
-		$defaults = self::default_settings();
+		$map      = self::directive_map();
 
-		$merged             = wp_parse_args( $saved, $defaults );
-		$merged['desired']  = isset( $saved['desired'] ) && is_array( $saved['desired'] )
-			? array_merge( $defaults['desired'], $saved['desired'] )
-			: $defaults['desired'];
-		$merged['runtime_enabled'] = isset( $saved['runtime_enabled'] ) && is_array( $saved['runtime_enabled'] )
-			? array_merge( $defaults['runtime_enabled'], $saved['runtime_enabled'] )
-			: $defaults['runtime_enabled'];
+		// Build static defaults from the directive map, not from live ini_get() values.
+		// This ensures saved "desired" values persist instead of being overwritten
+		// by the current live server state every time the page loads.
+		$static_defaults = [
+			'runtime_enabled' => [],
+			'desired' => [],
+		];
+
+		foreach ( $map as $key => $info ) {
+			if ( $info['runtime'] ) {
+				$static_defaults['runtime_enabled'][ $key ] = false;
+			}
+			$static_defaults['desired'][ $key ] = $info['default'];
+		}
+
+		// Merge saved settings on top of static defaults. This preserves user-saved
+		// custom values while filling in any missing keys with the hard-coded defaults.
+		$merged = [
+			'runtime_enabled' => isset( $saved['runtime_enabled'] ) && is_array( $saved['runtime_enabled'] )
+				? array_merge( $static_defaults['runtime_enabled'], $saved['runtime_enabled'] )
+				: $static_defaults['runtime_enabled'],
+			'desired' => isset( $saved['desired'] ) && is_array( $saved['desired'] )
+				? array_merge( $static_defaults['desired'], $saved['desired'] )
+				: $static_defaults['desired'],
+		];
 
 		return $merged;
 	}
@@ -193,19 +211,24 @@ class Reloadify_Performance {
 	 * opcache.validate_timestamps, and opcache.revalidate_freq are PHP_INI_ALL
 	 * and handled safely via ini_set() in apply_runtime_overrides() instead —
 	 * they never reach this method. For the three that remain, the only file
-	 * that can ever affect them is the real php.ini PHP actually loaded. This
-	 * plugin does not write to that file \u2014 it lives outside the WordPress
-	 * install and is a server-level config file, not a location a plugin may
-	 * modify. Instead this generates a ready-to-paste snippet and tells the
-	 * person exactly which file to add it to and that PHP needs restarting
-	 * afterwards.
+	 * that can ever affect them is the real php.ini PHP actually loaded, and
+	 * even a successful, syntactically valid write does nothing until PHP
+	 * itself is restarted (which this plugin has no way to trigger). On
+	 * shared/managed hosting, php.ini is almost never writable by the PHP
+	 * process, and that lockdown is a *good* thing — this will typically,
+	 * correctly, just fail there. Where it IS writable (a local dev stack you
+	 * fully control: Local, XAMPP, MAMP, Laragon, a Docker container with the
+	 * ini bind-mounted), a bad edit can break PHP for every site the server
+	 * hosts, not just this one, until it's fixed by hand — which is exactly
+	 * why $confirmed must be explicitly true and a backup is always written
+	 * first. This is never attempted implicitly.
 	 */
 	public static function attempt_opcache_override( $desired, $confirmed ) {
 		if ( true !== $confirmed ) {
 			return [
 				'success' => false,
 				'path'    => '',
-				'message' => __( 'Not attempted \u2014 the confirmation was missing.', 'reloadify-frontend-sync' ),
+				'message' => __( 'Not attempted — the confirmation was missing.', 'reloadify-frontend-sync' ),
 			];
 		}
 
@@ -215,29 +238,72 @@ class Reloadify_Performance {
 			return [
 				'success' => false,
 				'path'    => '',
-				'snippet' => '',
-				'message' => __( 'PHP isn\u2019t using a php.ini file at all on this server (php_ini_loaded_file() returned nothing), so there\u2019s no file to point you to.', 'reloadify-frontend-sync' ),
+				'message' => __( 'PHP isn\'t using a php.ini file at all on this server (php_ini_loaded_file() returned nothing), so there\'s nothing to write to.', 'reloadify-frontend-sync' ),
 			];
 		}
 
-		// This plugin never writes to php.ini itself: it lives outside the
-		// WordPress install and is a server-level config file, not a location
-		// a plugin is allowed to modify. Instead, generate the exact snippet
-		// the person (or their host) can paste in by hand, and tell them
-		// exactly where it goes.
+		if ( ! reloadify_path_is_writable( $path ) ) {
+			return [
+				'success' => false,
+				'path'    => $path,
+				'message' => __( 'This php.ini is not writable by PHP. On a live/shared/managed host that\'s expected and correct — it means this action simply can\'t do anything here, safely.', 'reloadify-frontend-sync' ),
+			];
+		}
+
+		$existing = @file_get_contents( $path );
+		$existing = false !== $existing ? $existing : '';
+
+		// Always back up before touching the real php.ini, and abort if the
+		// backup itself can't be written -- never edit without one in hand.
+		$backup_path = $path . '.reloadify-backup-' . time() . '.bak';
+		$backup_written = @file_put_contents( $backup_path, $existing, LOCK_EX );
+		if ( false === $backup_written ) {
+			return [
+				'success' => false,
+				'path'    => $path,
+				'message' => __( 'Aborted before making any changes: couldn\'t write a backup copy first.', 'reloadify-frontend-sync' ),
+			];
+		}
+
 		$lines = [];
 		foreach ( self::OPCACHE_KEYS as $key ) {
 			if ( isset( $desired[ $key ] ) && '' !== $desired[ $key ] ) {
 				$lines[] = $key . '=' . $desired[ $key ];
 			}
 		}
-		$snippet = "; " . self::MARKER . " (opcache)\n" . implode( "\n", $lines );
+
+		if ( empty( $lines ) ) {
+			return [
+				'success'     => false,
+				'path'        => $path,
+				'message'     => __( 'No opcache values to write. Did you set values for memory_consumption, interned_strings_buffer, and/or max_accelerated_files?', 'reloadify-frontend-sync' ),
+				'backup_path' => $backup_path,
+			];
+		}
+
+		$block = "; BEGIN " . self::MARKER . " (opcache)\n" . implode( "\n", $lines ) . "\n; END " . self::MARKER . " (opcache)";
+
+		$pattern = '/; BEGIN ' . preg_quote( self::MARKER, '/' ) . ' \(opcache\).*?; END ' . preg_quote( self::MARKER, '/' ) . ' \(opcache\)/s';
+
+		$new_content = preg_match( $pattern, $existing )
+			? preg_replace( $pattern, $block, $existing )
+			: rtrim( $existing ) . "\n\n" . $block . "\n";
+
+		$write_result = @file_put_contents( $path, $new_content, LOCK_EX );
+		if ( false === $write_result || 0 === $write_result ) {
+			return [
+				'success'     => false,
+				'path'        => $path,
+				'message'     => __( 'Write failed (file_put_contents returned 0 or false). The backup was created and left in place. Check permissions and disk space.', 'reloadify-frontend-sync' ),
+				'backup_path' => $backup_path,
+			];
+		}
 
 		return [
-			'success' => true,
-			'path'    => $path,
-			'snippet' => $snippet,
-			'message' => __( 'These directives can only take effect via the real php.ini, and only after a PHP restart \u2014 this plugin can\u2019t edit that file for you. Copy the snippet below into the php.ini shown, then restart PHP-FPM/Apache (or your local dev server).', 'reloadify-frontend-sync' ),
+			'success'     => true,
+			'path'        => $path,
+			'backup_path' => $backup_path,
+			'message'     => __( 'Written to the real php.ini. This does NOT take effect until PHP itself restarts — this plugin cannot do that for you (restart PHP-FPM/Apache, or just restart your local dev server). If anything breaks, restore the backup file listed above and restart PHP again.', 'reloadify-frontend-sync' ),
 		];
 	}
 
@@ -286,7 +352,7 @@ class Reloadify_Performance {
 		return [
 			'success' => true,
 			'path'    => $path,
-			'message' => __( 'Written. Most PHP-FPM hosts re-read .user.ini every 300 seconds (user_ini.cache_ttl), so give it a few minutes and confirm with "Sync from server". Some hosts ignore .user.ini entirely — if the live value never changes, that\u2019s why.', 'reloadify-frontend-sync' ),
+			'message' => __( 'Written. Most PHP-FPM hosts re-read .user.ini every 300 seconds (user_ini.cache_ttl), so give it a few minutes and confirm with "Sync from server". Some hosts ignore .user.ini entirely — if the live value never changes, that\'s why.', 'reloadify-frontend-sync' ),
 		];
 	}
 
@@ -308,7 +374,7 @@ class Reloadify_Performance {
 			return [
 				'success' => false,
 				'path'    => $path,
-				'message' => __( 'No .htaccess file exists and the WordPress root isn\u2019t writable, so one couldn\u2019t be created.', 'reloadify-frontend-sync' ),
+				'message' => __( 'No .htaccess file exists and the WordPress root isn\'t writable, so one couldn\'t be created.', 'reloadify-frontend-sync' ),
 			];
 		}
 
@@ -316,7 +382,7 @@ class Reloadify_Performance {
 			return [
 				'success' => false,
 				'path'    => $path,
-				'message' => __( '.htaccess exists but isn\u2019t writable by PHP, so nothing was changed.', 'reloadify-frontend-sync' ),
+				'message' => __( '.htaccess exists but isn\'t writable by PHP, so nothing was changed.', 'reloadify-frontend-sync' ),
 			];
 		}
 
@@ -326,14 +392,14 @@ class Reloadify_Performance {
 			return [
 				'success' => false,
 				'path'    => $path,
-				'message' => __( 'Write failed. This is also a no-op on Nginx or PHP-FPM setups that don\u2019t use .htaccess at all \u2014 confirm your server actually uses Apache with mod_php.', 'reloadify-frontend-sync' ),
+				'message' => __( 'Write failed. This is also a no-op on Nginx or PHP-FPM setups that don\'t use .htaccess at all — confirm your server actually uses Apache with mod_php.', 'reloadify-frontend-sync' ),
 			];
 		}
 
 		return [
 			'success' => true,
 			'path'    => $path,
-			'message' => __( 'Written. Only takes effect on Apache with mod_php \u2014 has no effect on Nginx or PHP-FPM, which most managed hosts use today.', 'reloadify-frontend-sync' ),
+			'message' => __( 'Written. Only takes effect on Apache with mod_php — has no effect on Nginx or PHP-FPM, which most managed hosts use today.', 'reloadify-frontend-sync' ),
 		];
 	}
 
@@ -358,38 +424,10 @@ class Reloadify_Performance {
 	}
 
 	/**
-	 * Hooked on admin_init. Only applies the runtime PHP-directive overrides
-	 * when the current request is actually this plugin's own dashboard page —
-	 * never for the rest of wp-admin, and never for frontend visitors. This is
-	 * intentionally narrow: WordPress.org guidelines require any ini_set()/
-	 * set_time_limit() calls to be scoped to the specific operation that needs
-	 * them, not applied as a site-wide default on every request.
-	 */
-	public static function maybe_apply_runtime_overrides_for_admin() {
-		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-
-		// Not form processing -- this only reads which admin screen is loaded
-		// (same pattern WordPress core itself uses, e.g. get_current_screen()),
-		// so there is no form submission here for a nonce to protect.
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reading current page slug only, not processing submitted data.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-
-		if ( 'reloadify-frontend-sync' !== $page ) {
-			return;
-		}
-
-		self::apply_runtime_overrides();
-	}
-
-	/**
 	 * Applies every directive the map marks as genuinely runtime-capable
 	 * (memory_limit, max_execution_time, and opcache.enable,
 	 * opcache.validate_timestamps, opcache.revalidate_freq — all PHP_INI_ALL).
-	 * Callers must scope WHEN this runs themselves — see
-	 * maybe_apply_runtime_overrides_for_admin() and Reloadify_Rest for the two
-	 * places this plugin legitimately calls it from.
+	 * Hooked as early as possible so it affects the rest of the request.
 	 */
 	public static function apply_runtime_overrides() {
 		$settings = self::get_settings();
