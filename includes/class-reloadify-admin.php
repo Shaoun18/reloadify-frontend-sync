@@ -45,12 +45,18 @@ class Reloadify_Admin {
 			true
 		);
 
+		// Without this, every wp.i18n __() call in admin-settings.js still returns
+		// the raw English string even when a matching translation exists -- this
+		// is what actually points the script at /languages/reloadify-frontend-sync-{locale}-{handle}.json.
+		wp_set_script_translations( 'reloadify-admin-settings', 'reloadify-frontend-sync', RELOADIFY_PLUGIN_DIR . 'languages' );
+
 		wp_localize_script( 'reloadify-admin-settings', 'ReloadifyAdmin', [
 			'restUrl'       => esc_url_raw( rest_url( 'reloadify/v1' ) ),
 			'nonce'         => wp_create_nonce( 'wp_rest' ),
 			'version'       => RELOADIFY_VERSION,
 			'browsers'      => Reloadify_Settings::supported_browsers(),
 			'browserLabels' => Reloadify_Settings::browser_labels(),
+			'devModeMaxAgeSeconds' => Reloadify_Settings::DEV_MODE_MAX_AGE,
 			// Rendered straight from PHP so the dashboard paints immediately instead
 			// of showing a loading state while it waits on two REST round-trips.
 			'initial'       => [
@@ -60,6 +66,10 @@ class Reloadify_Admin {
 					'live'       => Reloadify_Performance::get_live_values(),
 					'map'        => Reloadify_Performance::directive_map(),
 					'phpIniPath' => Reloadify_Performance::get_php_ini_path(),
+				],
+				'speed'       => [
+					'enabled' => Reloadify_Speed::is_enabled(),
+					'items'   => Reloadify_Speed::items(),
 				],
 			],
 		] );

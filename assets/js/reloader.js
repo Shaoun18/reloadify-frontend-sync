@@ -58,8 +58,8 @@
 
     function doReload(mode) {
         if (mode === 'hard') {
-            var url = window.location.href.replace(/([?&])_far=\d+/, '');
-            url += (url.indexOf('?') === -1 ? '?' : '&') + '_far=' + Date.now();
+            var url = window.location.href.replace(/([?&])_reloadify_ts=\d+/, '');
+            url += (url.indexOf('?') === -1 ? '?' : '&') + '_reloadify_ts=' + Date.now();
             window.location.replace(url);
         } else {
             window.location.reload();
@@ -72,7 +72,6 @@
         }
 
         var checkInterval = parseInt(ReloadifySync.interval, 10) || 2000;
-        var currentTimestamp = parseInt(ReloadifySync.timestamp, 10);
         var nonce = ReloadifySync.nonce;
         var reloadMode = ReloadifySync.reload_mode === 'hard' ? 'hard' : 'soft';
         var timestampUrl = ReloadifySync.timestamp_url;
@@ -81,6 +80,34 @@
         // once we know the lightweight static file works (or definitively
         // doesn't, e.g. blocked by server config).
         var useStaticFile = !!timestampUrl;
+
+        // IMPORTANT: the page markup itself (and the ReloadifySync.timestamp
+        // value baked into it) can be served from a full-page cache, a CDN edge
+        // cache, or a browser back-forward cache. If that's stale, trusting it
+        // as the comparison baseline makes literally every load look "changed"
+        // -- and since the reload just re-serves the same stale cached page,
+        // that becomes an infinite reload loop with no real edit involved. It
+        // also explains why a brand-new tab can miss the very next real save:
+        // whatever number happened to be baked into that particular cached
+        // copy is not reliably "now".
+        //
+        // The fix: never compare against the baked-in value. Use it only as a
+        // rough placeholder until the first LIVE response comes back, then
+        // adopt that live value as the real baseline. Everything after that
+        // point compares live-fetch vs. live-fetch, which is what makes the
+        // "did it change" check trustworthy in the first place.
+        var currentTimestamp = parseInt(ReloadifySync.timestamp, 10) || 0;
+        var hasSyncedBaseline = false;
+
+        // Belt-and-braces: even after the static file starts working, cross-check
+        // against admin-ajax.php every so often. admin-ajax.php always executes
+        // PHP fresh and is excluded from caching by virtually every caching
+        // plugin/CDN by convention, so if some layer of the stack is quietly
+        // serving a stale copy of timestamp.json forever, this cross-check is
+        // what still catches the real change instead of polling a dead value
+        // indefinitely.
+        var checksSinceAjaxVerify = 0;
+        var AJAX_VERIFY_EVERY = 10; // roughly every 10 * checkInterval
 
         // A self-scheduling loop (rather than setInterval) means the next check is
         // always spaced out from when the *previous one finished*, not from when it
@@ -91,6 +118,15 @@
         }
 
         function handleTimestamp(newTimestamp) {
+            if (!hasSyncedBaseline) {
+                // First live value we've ever seen this page-load: adopt it as
+                // truth instead of comparing against the (possibly stale,
+                // possibly cached) value the server rendered into the HTML.
+                hasSyncedBaseline = true;
+                currentTimestamp = newTimestamp;
+                return false;
+            }
+
             if (newTimestamp > currentTimestamp) {
                 currentTimestamp = newTimestamp;
                 console.log('Reloadify Frontend Sync: change detected, reloading (' + reloadMode + ').');
@@ -110,10 +146,25 @@
                 timeout: 5000,
                 cache: false,
                 dataType: 'json',
+                headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' },
                 success: function (response) {
-                    if (response && !handleTimestamp(parseInt(response.t, 10))) {
+                    if (!response) {
                         scheduleNext(checkInterval);
+                        return;
                     }
+
+                    if (handleTimestamp(parseInt(response.t, 10))) {
+                        return;
+                    }
+
+                    checksSinceAjaxVerify++;
+                    if (hasSyncedBaseline && checksSinceAjaxVerify >= AJAX_VERIFY_EVERY) {
+                        checksSinceAjaxVerify = 0;
+                        checkViaAjax();
+                        return;
+                    }
+
+                    scheduleNext(checkInterval);
                 },
                 error: function () {
                     // The static file genuinely isn't reachable on this host
@@ -127,22 +178,33 @@
         }
 
         // The fallback path: heavier (boots all of WordPress per check), only
-        // used when the static file truly can't be reached on this host.
+        // used when the static file truly can't be reached on this host, and
+        // periodically as a cross-check while it can (see AJAX_VERIFY_EVERY).
         function checkViaAjax() {
             $.ajax({
                 url: ReloadifySync.ajax_url,
                 type: 'POST',
                 timeout: 5000,
+                cache: false,
                 data: {
                     action: 'reloadify_reloader_check',
                     timestamp: currentTimestamp,
                     nonce: nonce
                 },
                 success: function (response) {
-                    if (response && response.success && response.data.reload) {
-                        console.log('Reloadify Frontend Sync: change detected, reloading (' + reloadMode + ').');
-                        doReload(reloadMode);
-                        return;
+                    if (response && response.success && response.data) {
+                        if (!hasSyncedBaseline) {
+                            hasSyncedBaseline = true;
+                            currentTimestamp = parseInt(response.data.new_timestamp, 10) || currentTimestamp;
+                            scheduleNext(checkInterval);
+                            return;
+                        }
+
+                        if (response.data.reload) {
+                            console.log('Reloadify Frontend Sync: change detected, reloading (' + reloadMode + ').');
+                            doReload(reloadMode);
+                            return;
+                        }
                     }
                     scheduleNext(checkInterval);
                 },

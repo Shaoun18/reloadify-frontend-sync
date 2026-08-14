@@ -1,100 +1,78 @@
 # Reloadify Frontend Sync
 
-Automatically reloads the frontend across all open browsers and windows whenever content is updated in WordPress — regardless of the theme, plugin, or page builder you're using.
-
-**Version:** 1.0.0
-**Requires at least:** WordPress 6.4
+**Contributors:** shaounchandrashill
+**Tags:** reload, auto-refresh, elementor, divi, performance
+**Requires at least:** 6.4
+**Tested up to:** 7.0
 **Requires PHP:** 7.4
+**Stable tag:** 1.0.1
 **License:** GPLv2 or later
+**License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
-## How reload detection works
+Auto-reloads the frontend in all open browsers whenever WordPress content is updated—works with any theme, plugin, or page builder.
 
-Reload uses a single **site-wide "last changed" clock** (`reloadify_last_site_update`), bumped on every `save_post`, and the polling script is enqueued on **every** front-end page — home, archive, search, singular, all of it. That's what makes reload work no matter which frontend tab is open, not just the exact post being edited.
+## Description
 
-## Key features
+**Reloadify Frontend Sync** is a developer and QA tool designed to streamline the workflow when building sites with page builders like **Elementor** and **Divi**.
 
-- Reload works on any frontend page type, in any browser, in normal or incognito windows, out of the box.
-- **Soft vs. hard reload** — soft is a normal `location.reload()`; hard appends a cache-busting `_far=<timestamp>` parameter and navigates via `location.replace()` so you get a genuinely fresh fetch instead of a cached copy.
-- **Tabbed dashboard** — gradient hero header, tabbed layout (Cross-Browser Reload / Server Performance), stat cards, and a card grid per browser with a colored icon badge instead of a plain table.
-- **Server Performance panel** — see below, this one comes with an important honesty note.
+Instead of manually refreshing your frontend tab every time you save a change in the builder, this plugin detects the save event and **automatically reloads** the frontend view for you — wherever that view happens to be open.
 
-## Server Performance panel — read this before relying on it
+**Key Features:**
+*   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, and the classic WordPress editor.
+*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
+*   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
+*   Choice of soft reload or cache-busting hard reload (`_reloadify_ts` query param).
+*   A modern settings dashboard with per-browser cards and live status.
+*   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
+*   Speed Boost: on by default, applies a short list of safe, reversible frontend + backend optimizations on activation.
+*   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
 
-You asked for a panel that applies settings like `opcache.*`, `post_max_size`, `upload_max_filesize`, and `memory_limit` site-wide by default. Here's the technical reality: **a WordPress plugin runs after PHP has already started processing the request.** PHP directives are split into categories:
+## Installation
 
-- `PHP_INI_ALL` / `PHP_INI_USER` — changeable at runtime with `ini_set()`. Only **`memory_limit`** and **`max_execution_time`** from your list fall here.
-- `PHP_INI_PERDIR` / `PHP_INI_SYSTEM` — locked in before your plugin code ever runs. This is **everything else you listed**: `max_input_time`, `post_max_size`, `upload_max_filesize`, every `opcache.*` directive, and `realpath_cache_size`/`realpath_cache_ttl`.
+1. Upload the plugin files to `/wp-content/plugins/reloadify-frontend-sync`, or install through the WordPress plugins screen.
+2. Activate the plugin.
+3. Open a page in your builder in one tab/browser, and the frontend view in another (any browser, any window).
+4. Save in the builder — the frontend reloads on its own.
+5. Visit **Auto Reloader** in the wp-admin sidebar to fine-tune Developer Mode, reload behavior, per-browser settings, and server performance.
 
-No WordPress plugin, on any host, can change the second group at runtime — that's not a limitation of this plugin's code, it's how PHP itself works. A plugin that claimed to apply those "automatically" would silently do nothing on the directives that matter most (opcache tuning, upload limits) while looking like it worked.
+## Frequently Asked Questions
 
-So the panel is split honestly:
+**Why doesn't it reload in a particular browser?**
+Check Auto Reloader → Cross-Browser Reload: confirm Developer Mode is on and that browser/mode is toggled on. Everything is on by default, but if you turned things off before, check there first.
 
-- **Applied automatically** (`memory_limit`, `max_execution_time`) — toggle these on and the plugin calls `ini_set()`/`set_time_limit()` on every request. This actually works.
-- **Requires host config** (everything else) — set your desired value, then click **Generate config snippet** to get copy-paste blocks for `php.ini`/`.user.ini` (works for all of them, including opcache) and `.htaccess` (Apache + mod_php only, and it can't carry opcache or realpath_cache directives at all — those aren't legal in `.htaccess` on any server). Hand the relevant block to yourself or your host.
+**Is incognito/private mode detection 100% reliable?**
+No — it's a best-effort heuristic. Several browsers deliberately make private mode indistinguishable from normal mode. When it can't tell, the plugin defaults to running the reloader anyway rather than staying silent.
 
-## Can a plugin really override server PHP settings?
+**Does the Server Performance panel really change opcache/upload limits?**
+memory_limit, max_execution_time, and three of the six opcache.* directives (enable, validate_timestamps, revalidate_freq) genuinely can be applied live by any WordPress plugin — that's just how PHP classifies them. The other three opcache directives (memory_consumption, interned_strings_buffer, max_accelerated_files) size shared memory once at PHP startup and truly can't be touched without editing php.ini and restarting PHP — same for post_max_size, upload_max_filesize, and realpath cache. For those, the panel writes a best-effort .user.ini/.htaccess (works on many hosts) or generates a copy-paste snippet, instead of pretending to apply them for you.
 
-Short answer: **partially, and it depends on your host.** There's an opt-in **"Attempt automatic server override"** action that writes:
+**Should I leave Developer Mode on in production?**
+No — turn it on only while you're actively testing, then switch it back off. It's off by default for exactly this reason: while it's on, every visitor's browser polls the server, which is fine for staging but adds real load with real traffic. It also auto-disables itself after 12 hours in case you forget.
 
-- **`.user.ini`** in the WordPress root — the mechanism PHP-FPM/CGI hosting (the majority of modern managed WordPress hosts) uses for per-directory PHP config. Covers `max_input_time`, `post_max_size`, `upload_max_filesize`, `realpath_cache_size`, `realpath_cache_ttl`.
-- **`.htaccess`** — a marked `php_value` block for Apache + mod*php setups specifically. Only covers `max_input_time`, `post_max_size`, `upload_max_filesize` (Apache doesn't accept `realpath_cache*\*`there — it's`PHP_INI_SYSTEM`, not per-directory).
-
-Both are genuinely real server config mechanisms, not a trick — when they work, they work for real, for every request, indefinitely, no plugin code needed after the write. But neither is guaranteed:
-
-- `.user.ini` is picked up on a cache cycle (`user_ini.cache_ttl`, 300 seconds by default) — not instantly.
-- Some hosts disable `.user.ini` scanning entirely, or run `open_basedir`/read-only filesystems that block the write outright.
-- `.htaccess` `php_value` lines do nothing at all on Nginx or PHP-FPM without Apache — which is most modern hosting.
-- **`opcache.*` cannot be reached by either mechanism, or by any plugin, on any host.** It's `PHP_INI_SYSTEM` — fixed at PHP startup, before any per-directory config is even read. The only way to change it is editing the real `php.ini` (or an FPM pool file) and restarting PHP. The panel is explicit about this rather than pretending a file write can reach it.
-
-Every write attempt reports back exactly what happened (written / not writable / write failed) rather than assuming success — check the results panel after clicking, and use "Sync from server" afterward to confirm whether the live value actually changed.
-
-### Why memory_limit looked "admin only"
-
-`ini_set('memory_limit', ...)` changes the limit for the rest of _that specific request_, for any request that actually executes PHP through WordPress — front-end or admin, no difference in the code. The most common reason it can look admin-only: a **page-caching plugin or CDN serving frontend pages without hitting PHP at all**. wp-admin is essentially never full-page-cached, so it always runs our override; a cached frontend hit skips PHP (and therefore this plugin) entirely, so it still shows whatever value was baked in when that cache entry was generated. The override runs on `plugins_loaded` priority 0 — the earliest hook any regular plugin can use — for maximum consistency on requests that do hit PHP.
-
-### opcache.\* — three are live-applied, three are local development only
-
-Turns out not all six opcache directives are equally locked down. Per the PHP manual, `opcache.enable`, `opcache.validate_timestamps`, and `opcache.revalidate_freq` are `PHP_INI_ALL` — a per-request check, not a startup allocation — so they moved into the same safe "Applied automatically" group as `memory_limit`, live via `ini_set()`, no file writing involved. (`opcache.enable` can only be switched _off_ this way, never back on once the server started with it disabled — that's PHP's own rule, not this plugin's.)
-
-The other three — `opcache.memory_consumption`, `opcache.interned_strings_buffer`, `opcache.max_accelerated_files` — genuinely can't be reached any other way: they size a shared-memory pool once when PHP starts, before any plugin runs. For just these three, there's an opt-in **"Attempt opcache override"** action, but it comes with a hard line: **only ever use it on a local development environment you fully control — never on a live/production site.**
-
-It writes directly to the real, loaded `php.ini` (always backing up the original first) — a bad edit, or running this on a shared or live server, can break PHP for _every site the server hosts_, not just this one, until someone fixes it by hand. It's also a no-op until PHP restarts, which this plugin has no way to trigger. Because of that, it's gated behind a persistent red warning banner and a required "I understand this can crash the server" checkbox — it will not run without both.
-
-## Settings dashboard
-
-Found under **Auto Reloader** in the wp-admin sidebar (top-level menu, not buried in Settings). Built with `wp.element` (React bundled with WordPress core, no build step) and `wp.apiFetch`.
-
-- **Cross-Browser Reload tab** — Developer Mode switch, soft/hard reload choice, and a card grid (icon + name + Normal/Incognito toggles) for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser.
-- **Server Performance tab** — the panel described above, plus the snippet-generator modal.
-- Toasts (green success / red error) confirm every save.
-
-## File structure
-
-```
-reloadify-frontend-sync/
-├── reloadify-frontend-sync.php     Bootstrap, hooks, global "site changed" clock, AJAX handler
-├── includes/
-│   ├── class-reloadify-settings.php     Reload/browser settings, defaults, sanitization
-│   ├── class-reloadify-performance.php  Runtime vs. host-only PHP directive handling
-│   ├── class-reloadify-rest.php         REST API for both settings groups
-│   └── class-reloadify-admin.php        Top-level admin menu + asset enqueueing
-├── assets/
-│   ├── js/
-│   │   ├── reloader.js            Frontend polling, browser/mode gating, soft/hard reload
-│   │   └── admin-settings.js      Tabbed React dashboard
-│   └── css/
-│       └── admin-settings.css     Modern gradient/card design
-├── readme.txt                     WordPress.org plugin readme
-└── readme.md                      This file
-```
-
-## Security notes
-
-- The AJAX update-check endpoint is nonce-protected for both logged-in and logged-out requests.
-- The only thing exposed to a logged-out visitor is a single "site last changed" integer timestamp — no post content, titles, or IDs.
-- Developer Mode defaults to **off** and auto-disables itself after 6 hours if left on — turn it on only while actively testing, so the polling script isn't shipped to real visitors on a live site.
-- The Server Performance panel never writes to `php.ini`, `.htaccess`, or any server file on its own — it only shows you the snippet to apply yourself.
+**Will this slow my site down?**
+The frontend check is a small static file the webserver answers directly — no PHP or WordPress involved — so it's cheap per check. The main thing that adds load is leaving Developer Mode on for a long time on a busy live site, since every visitor's browser then polls continuously; keep it switched on only while you're actually testing.
 
 ## Changelog
 
-Initial public release, v1.0.0. See `readme.txt` for the full changelog.
+### 1.0.1
+*   New "Speed Boost" (on by default, one toggle to turn off): strips the emoji detection script/CSS WordPress prints on every page, trims a few unused `<head>` tags, turns PHP OPcache on if the host has it available but left it off, and — scoped strictly to wp-admin/admin-ajax.php, never a frontend visitor's request — raises `memory_limit`/`max_execution_time` headroom, only ever upward, never below whatever the host already allows. No fixed "% faster" claim is shown, since the real number depends on the site's theme, other plugins, and hosting.
+*   New "Delete Data on Uninstall" toggle (on by default): deleting the plugin from the Plugins screen also removes its settings and the `uploads/reloadify-reload` folder. Turn it off to keep settings around for a later reinstall.
+*   Developer Mode now shows a live countdown (hh:mm:ss) to when it will auto-disable itself, and the auto-off window is now 12 hours (was 6).
+*   Fixed: the frontend could keep auto-reloading in a loop with no real change if the page HTML was served from a cache (full-page cache plugin, host-level cache, or CDN) whose baked-in "last changed" value never caught up — the reloader now establishes its baseline from a live check on load instead of trusting cached markup. Same fix also resolves a freshly opened tab sometimes missing the very next save until a manual refresh.
+*   Added a periodic admin-ajax.php cross-check alongside the lightweight static-file check, plus no-cache headers for the timestamp file, so a cached/stale timestamp can't silently block reloads.
+*   The local-development-only opcache override (Server Performance tab) now genuinely writes the 3 PHP-startup-locked directives to `php.ini`, with an automatic backup, once explicitly confirmed — instead of only generating a copy-paste snippet.
+*   Added Bengali (bn_BD) translation for the entire settings dashboard and all admin-facing messages, bundled directly in this plugin's languages folder — WordPress.org automatically loads it for Bengali-locale sites without any extra code needed, and it displays translated immediately rather than waiting on the community translation queue.
+*   Fixed two `\u2019`/`\u2014` escape sequences that were being printed literally instead of as an apostrophe/dash in a couple of Server Performance messages (PHP single-quoted strings don't interpret `\u` escapes).
+*   Code-quality fix: prefixed two global variables in `uninstall.php` flagged by the WordPress Coding Standards checker.
+
+### 1.0.0
+*   Initial public release.
+*   Cross-browser, cross-window frontend reload — works with Elementor, Divi, Bricks, Oxygen, Beaver Builder, and the classic WordPress editor, in Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser (including incognito/private).
+*   Reload now works on the homepage, archives, and any frontend page — not just the exact post being edited — via a single site-wide "last changed" clock.
+*   Choice of soft reload or cache-busting hard reload.
+*   Frontend polling checks a small static JSON file served directly by the webserver instead of booting WordPress on every check, for minimal overhead.
+*   Developer Mode is off by default and auto-disables after 6 hours as a safety net, since it's the setting that adds ongoing load on a live site while active.
+*   A Server Performance panel that's upfront about what a plugin can and can't do: applies memory_limit, max_execution_time, and 3 of 6 opcache.* directives live; generates ready-to-paste php.ini / .htaccess snippets and offers a best-effort .user.ini/.htaccess write for the settings that genuinely require a real server-side change (upload/post size limits, realpath cache, and the 3 memory-sizing opcache directives).
+*   A local-development-only, explicitly-confirmed option to write the 3 truly PHP-startup-locked opcache directives directly to php.ini, with automatic backup.
+*   Modern tabbed settings dashboard with per-browser cards, live status, and a "Sync from server" action.
+*   Intelligent exclusion: never triggers a reload loop inside a page builder's own editing canvas.
