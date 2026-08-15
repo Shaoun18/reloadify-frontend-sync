@@ -4,26 +4,60 @@ Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Auto-reloads the frontend in all open browsers whenever WordPress content is updated—works with any theme, plugin, or page builder.
+Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
 
 == Description ==
 
 **Reloadify Frontend Sync** is a developer and QA tool designed to streamline the workflow when building sites with page builders like **Elementor** and **Divi**.
 
-Instead of manually refreshing your frontend tab every time you save a change in the builder, this plugin detects the save event and **automatically reloads** the frontend view for you — wherever that view happens to be open.
+Instead of manually refreshing your frontend every time you save a change, **Reloadify Frontend Sync** automatically reloads every connected browser or window, keeping all your frontend previews synchronized without interrupting your workflow.
 
-**Key Features:**
-*   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, and the classic WordPress editor.
+= Why Use Reloadify? =
+
+Manually refreshing the frontend after every save interrupts your workflow and wastes time, especially when testing across multiple browsers.
+
+Reloadify Frontend Sync keeps every open browser automatically synchronized, allowing you to focus on building instead of constantly refreshing.
+
+= Key Features =
+
+*   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, **WPBakery Page Builder**, and the classic WordPress editor.
 *   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
 *   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
 *   Choice of soft reload or cache-busting hard reload.
 *   A modern settings dashboard with per-browser cards and live status.
 *   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
 *   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
+
+= Works With =
+
+Reloadify Frontend Sync has been tested with:
+
+* WordPress Block Editor (Gutenberg)
+* Classic Editor
+* Elementor
+* Divi
+* Bricks Builder
+* Oxygen Builder
+* Beaver Builder
+* WPBakery Page Builder
+* Most WordPress themes
+
+= Video =
+
+https://youtu.be/3UPLTJkavJw
+
+= How It Works (for end users) =
+
+1.  Install and activate the plugin — no configuration needed to start; everything works out of the box.
+2.  Open your page in the builder (Elementor, Divi, etc.) in one browser tab.
+3.  Open the same page's live frontend view in another tab, another window, or even another browser entirely.
+4.  Make a change and save it in the builder as normal.
+5.  The frontend tab reloads on its own within a couple of seconds — no manual refresh needed.
+6.  If you ever need to fine-tune behavior (turn off a specific browser, switch to hard reload, check server settings), go to **Auto Reloader** in your wp-admin sidebar.
 
 == Installation ==
 
@@ -50,12 +84,21 @@ No — turn it on only while you're actively testing, then switch it back off. I
 = Will this slow my site down? =
 The frontend check is a small static file the webserver answers directly — no PHP or WordPress involved — so it's cheap per check. The main thing that adds load is leaving Developer Mode on for a long time on a busy live site, since every visitor's browser then polls continuously; keep it switched on only while you're actually testing.
 
+== Feedback ==
+
+If Reloadify Frontend Sync improves your workflow, please consider leaving a review on WordPress.org.
+
+Your feedback helps improve the plugin and supports future updates.
+
 == Screenshots ==
 
 1. Cross-Browser Reload tab — Developer Mode toggle, live browser/reload-mode status, soft vs. hard reload choice, and per-browser normal/incognito controls for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser.
 2. Server Performance tab — live PHP/OPcache values the plugin applies at runtime, plus the settings that require host-level changes, each clearly marked LIVE or AUTO-ATTEMPT.
 
 == Changelog ==
+
+= 1.0.2 =
+*   Added a video walkthrough and a step-by-step "How It Works" section to the plugin description, for people evaluating the plugin before installing.
 
 = 1.0.1 =
 *   New "Speed Boost" (on by default, one toggle to turn off): strips the emoji detection script/CSS WordPress prints on every page, trims a few unused `<head>` tags, turns PHP OPcache on if the host has it available but left it off, and — scoped strictly to wp-admin/admin-ajax.php, never a frontend visitor's request — raises memory_limit and max_execution_time headroom, but only ever upward, never below whatever the host already allows. Helps with the slow-or-failed-save symptom heavy builders like Divi/Elementor can hit on tight hosting/local-dev limits. No fixed "% faster" claim is made, since the real number depends on the site's theme, other plugins, and hosting.

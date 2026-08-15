@@ -5,17 +5,28 @@
 **Requires at least:** 6.4
 **Tested up to:** 7.0
 **Requires PHP:** 7.4
-**Stable tag:** 1.0.1
+**Stable tag:** 1.0.2
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
-Auto-reloads the frontend in all open browsers whenever WordPress content is updated—works with any theme, plugin, or page builder.
+Automatically reloads the frontend across all open browsers and windows whenever WordPress content updates—any theme, plugin, or builder.
 
 ## Description
 
 **Reloadify Frontend Sync** is a developer and QA tool designed to streamline the workflow when building sites with page builders like **Elementor** and **Divi**.
 
 Instead of manually refreshing your frontend tab every time you save a change in the builder, this plugin detects the save event and **automatically reloads** the frontend view for you — wherever that view happens to be open.
+
+[Watch the video walkthrough on YouTube](https://youtu.be/3UPLTJkavJw)
+
+### How It Works (for end users)
+
+1.  Install and activate the plugin — no configuration needed to start; everything works out of the box.
+2.  Open your page in the builder (Elementor, Divi, etc.) in one browser tab.
+3.  Open the same page's live frontend view in another tab, another window, or even another browser entirely.
+4.  Make a change and save it in the builder as normal.
+5.  The frontend tab reloads on its own within a couple of seconds — no manual refresh needed.
+6.  If you ever need to fine-tune behavior (turn off a specific browser, switch to hard reload, check server settings), go to **Auto Reloader** in your wp-admin sidebar.
 
 **Key Features:**
 *   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, and the classic WordPress editor.
@@ -53,6 +64,9 @@ No — turn it on only while you're actively testing, then switch it back off. I
 The frontend check is a small static file the webserver answers directly — no PHP or WordPress involved — so it's cheap per check. The main thing that adds load is leaving Developer Mode on for a long time on a busy live site, since every visitor's browser then polls continuously; keep it switched on only while you're actually testing.
 
 ## Changelog
+
+### 1.0.2
+*   Added a video walkthrough and a step-by-step "How It Works" section to the plugin description, for people evaluating the plugin before installing.
 
 ### 1.0.1
 *   New "Speed Boost" (on by default, one toggle to turn off): strips the emoji detection script/CSS WordPress prints on every page, trims a few unused `<head>` tags, turns PHP OPcache on if the host has it available but left it off, and — scoped strictly to wp-admin/admin-ajax.php, never a frontend visitor's request — raises `memory_limit`/`max_execution_time` headroom, only ever upward, never below whatever the host already allows. No fixed "% faster" claim is shown, since the real number depends on the site's theme, other plugins, and hosting.
