@@ -85,6 +85,33 @@ class Reloadify_Rest {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/media',
+			[
+				[
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => [ __CLASS__, 'get_media' ],
+					'permission_callback' => [ __CLASS__, 'permission_check' ],
+				],
+				[
+					'methods'             => WP_REST_Server::EDITABLE,
+					'callback'            => [ __CLASS__, 'update_media' ],
+					'permission_callback' => [ __CLASS__, 'permission_check' ],
+				],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/media/backfill-now',
+			[
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => [ __CLASS__, 'run_media_backfill_now' ],
+				'permission_callback' => [ __CLASS__, 'permission_check' ],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/cleanup',
 			[
 				[
@@ -95,6 +122,23 @@ class Reloadify_Rest {
 				[
 					'methods'             => WP_REST_Server::EDITABLE,
 					'callback'            => [ __CLASS__, 'update_cleanup' ],
+					'permission_callback' => [ __CLASS__, 'permission_check' ],
+				],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/extras',
+			[
+				[
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => [ __CLASS__, 'get_extras' ],
+					'permission_callback' => [ __CLASS__, 'permission_check' ],
+				],
+				[
+					'methods'             => WP_REST_Server::EDITABLE,
+					'callback'            => [ __CLASS__, 'update_extras' ],
 					'permission_callback' => [ __CLASS__, 'permission_check' ],
 				],
 			]
@@ -225,6 +269,29 @@ class Reloadify_Rest {
 		] );
 	}
 
+	public static function run_media_backfill_now() {
+		$result = Reloadify_Media::run_backfill_batch_now();
+		return rest_ensure_response( $result );
+	}
+
+	public static function get_media() {
+		return rest_ensure_response( [
+			'enabled' => Reloadify_Media::is_enabled(),
+			'items'   => Reloadify_Media::items(),
+		] );
+	}
+
+	public static function update_media( WP_REST_Request $request ) {
+		$body    = $request->get_json_params();
+		$body    = is_array( $body ) ? $body : [];
+		$enabled = Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) );
+
+		return rest_ensure_response( [
+			'enabled' => $enabled,
+			'items'   => Reloadify_Media::items(),
+		] );
+	}
+
 	public static function get_cleanup() {
 		return rest_ensure_response( [
 			'enabled' => Reloadify_Cleanup::is_enabled(),
@@ -241,18 +308,33 @@ class Reloadify_Rest {
 		] );
 	}
 
+	public static function get_extras() {
+		return rest_ensure_response( Reloadify_Extras::get_settings() );
+	}
+
+	public static function update_extras( WP_REST_Request $request ) {
+		$body   = $request->get_json_params();
+		$body   = is_array( $body ) ? $body : [];
+		$result = Reloadify_Extras::update_settings( $body );
+
+		return rest_ensure_response( $result );
+	}
+
 	public static function permission_check() {
 		return current_user_can( 'manage_options' );
 	}
 
 	public static function get_settings() {
-		return rest_ensure_response( Reloadify_Settings::get_settings() );
+		$settings = Reloadify_Settings::get_settings();
+		$settings['last_change_detected'] = Reloadify_Settings::get_site_updated_at();
+		return rest_ensure_response( $settings );
 	}
 
 	public static function update_settings( WP_REST_Request $request ) {
 		$body   = $request->get_json_params();
 		$body   = is_array( $body ) ? $body : [];
 		$result = Reloadify_Settings::update_settings( $body );
+		$result['last_change_detected'] = Reloadify_Settings::get_site_updated_at();
 
 		return rest_ensure_response( $result );
 	}

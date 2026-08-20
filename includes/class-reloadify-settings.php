@@ -54,12 +54,6 @@ class Reloadify_Settings {
 		];
 	}
 
-	/**
-	 * Safety net: if Developer Mode is left on and forgotten, it auto-disables
-	 * itself after 12 hours instead of quietly polling every visitor forever.
-	 */
-	const DEV_MODE_MAX_AGE = 12 * HOUR_IN_SECONDS;
-
 	public static function activate() {
 		if ( false === get_option( self::OPTION_KEY, false ) ) {
 			add_option( self::OPTION_KEY, self::default_settings() );
@@ -75,30 +69,15 @@ class Reloadify_Settings {
 
 	public static function get_settings() {
 		$saved = get_option( self::OPTION_KEY, [] );
-		$settings = self::merge_with_defaults( is_array( $saved ) ? $saved : [] );
-		return self::maybe_expire_dev_mode( $settings );
-	}
-
-	private static function maybe_expire_dev_mode( $settings ) {
-		if ( empty( $settings['dev_mode_enabled'] ) || empty( $settings['dev_mode_enabled_at'] ) ) {
-			return $settings;
-		}
-
-		if ( ( time() - (int) $settings['dev_mode_enabled_at'] ) < self::DEV_MODE_MAX_AGE ) {
-			return $settings;
-		}
-
-		$settings['dev_mode_enabled'] = false;
-		update_option( self::OPTION_KEY, $settings );
-		return $settings;
+		return self::merge_with_defaults( is_array( $saved ) ? $saved : [] );
 	}
 
 	public static function update_settings( $incoming ) {
 		$clean = self::sanitize( $incoming );
 
-		// Stamp the moment Developer Mode is switched on, so the 12-hour
-		// safety-net expiry above has something to measure from. Switching it
-		// off (or leaving it off) clears the stamp.
+		// Stamp the moment Developer Mode is switched on (kept as plain info,
+		// not used for any auto-off logic anymore). Switching it off (or
+		// leaving it off) clears the stamp.
 		$previous = self::get_settings();
 		if ( $clean['dev_mode_enabled'] && ! $previous['dev_mode_enabled'] ) {
 			$clean['dev_mode_enabled_at'] = time();

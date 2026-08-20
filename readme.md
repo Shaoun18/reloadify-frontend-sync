@@ -5,17 +5,51 @@
 **Requires at least:** 6.4
 **Tested up to:** 7.0
 **Requires PHP:** 7.4
-**Stable tag:** 1.0.2
+**Stable tag:** 1.1.0
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically reloads the frontend across all open browsers and windows whenever WordPress content updates—any theme, plugin, or builder.
+Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
 
 ## Description
 
 **Reloadify Frontend Sync** is a developer and QA tool designed to streamline the workflow when building sites with page builders like **Elementor** and **Divi**.
 
-Instead of manually refreshing your frontend tab every time you save a change in the builder, this plugin detects the save event and **automatically reloads** the frontend view for you — wherever that view happens to be open.
+Instead of manually refreshing your frontend every time you save a change, **Reloadify Frontend Sync** automatically reloads every connected browser or window, keeping all your frontend previews synchronized without interrupting your workflow.
+
+### Why Use Reloadify?
+
+Manually refreshing the frontend after every save interrupts your workflow and wastes time, especially when testing across multiple browsers.
+
+Reloadify Frontend Sync keeps every open browser automatically synchronized, allowing you to focus on building instead of constantly refreshing.
+
+### Key Features
+
+*   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, **WPBakery Page Builder**, and the classic WordPress editor.
+*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
+*   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
+*   Choice of soft reload or cache-busting hard reload (`_reloadify_ts` query param).
+*   A "Last change detected" readout with a one-click Check now button, so you can confirm the plugin picked up a save without waiting for a frontend tab to reload.
+*   A modern settings dashboard with per-browser cards and live status.
+*   **Speed Boost** — on by default: strips the emoji script, trims unused `<head>` tags, throttles the Heartbeat API, caps stored post revisions, disables self-pingbacks, and eases wp-admin memory/time limits for heavy builders — all reversible with one toggle.
+*   **Media Optimization** — on by default: new image uploads get WebP/AVIF versions automatically (when your server supports it), video is compressed in the background when ffmpeg is available, offscreen images and embedded video are lazy-loaded, and a new "Optimization" column in the Media Library shows the real, measured size saved on every file.
+*   **Extra Features tab** — optional SVG upload support (scanned for scripts/embedded HTML before accepting) and an optional Scroll To Top floating button with configurable position and color.
+*   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
+*   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
+
+### Works With
+
+Reloadify Frontend Sync has been tested with:
+
+* WordPress Block Editor (Gutenberg)
+* Classic Editor
+* Elementor
+* Divi
+* Bricks Builder
+* Oxygen Builder
+* Beaver Builder
+* WPBakery Page Builder
+* Most WordPress themes
 
 [Watch the video walkthrough on YouTube](https://youtu.be/3UPLTJkavJw)
 
@@ -27,16 +61,6 @@ Instead of manually refreshing your frontend tab every time you save a change in
 4.  Make a change and save it in the builder as normal.
 5.  The frontend tab reloads on its own within a couple of seconds — no manual refresh needed.
 6.  If you ever need to fine-tune behavior (turn off a specific browser, switch to hard reload, check server settings), go to **Auto Reloader** in your wp-admin sidebar.
-
-**Key Features:**
-*   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, and the classic WordPress editor.
-*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
-*   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
-*   Choice of soft reload or cache-busting hard reload (`_reloadify_ts` query param).
-*   A modern settings dashboard with per-browser cards and live status.
-*   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
-*   Speed Boost: on by default, applies a short list of safe, reversible frontend + backend optimizations on activation.
-*   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
 
 ## Installation
 
@@ -58,12 +82,30 @@ No — it's a best-effort heuristic. Several browsers deliberately make private 
 memory_limit, max_execution_time, and three of the six opcache.* directives (enable, validate_timestamps, revalidate_freq) genuinely can be applied live by any WordPress plugin — that's just how PHP classifies them. The other three opcache directives (memory_consumption, interned_strings_buffer, max_accelerated_files) size shared memory once at PHP startup and truly can't be touched without editing php.ini and restarting PHP — same for post_max_size, upload_max_filesize, and realpath cache. For those, the panel writes a best-effort .user.ini/.htaccess (works on many hosts) or generates a copy-paste snippet, instead of pretending to apply them for you.
 
 **Should I leave Developer Mode on in production?**
-No — turn it on only while you're actively testing, then switch it back off. It's off by default for exactly this reason: while it's on, every visitor's browser polls the server, which is fine for staging but adds real load with real traffic. It also auto-disables itself after 12 hours in case you forget.
+No — turn it on only while you're actively testing, then switch it back off yourself. It's off by default for exactly this reason: while it's on, every visitor's browser polls the server, which is fine for staging but adds real load with real traffic. Unlike earlier versions, Developer Mode no longer disables itself automatically — it stays exactly as you set it until you change it, so remembering to switch it off is now on you.
 
 **Will this slow my site down?**
 The frontend check is a small static file the webserver answers directly — no PHP or WordPress involved — so it's cheap per check. The main thing that adds load is leaving Developer Mode on for a long time on a busy live site, since every visitor's browser then polls continuously; keep it switched on only while you're actually testing.
 
+**Does Media Optimization touch my original uploaded files?**
+No. For images, the original file you uploaded is never modified — only the generated thumbnail/medium/large sizes get WebP or AVIF versions alongside them, and only if your server's image library actually supports that format. Video compression only runs if the server has ffmpeg available; if it doesn't, video is left completely untouched. The whole feature is one toggle — turn it off any time to leave media exactly as WordPress would handle it by default.
+
 ## Changelog
+
+### 1.1.0
+*   New "Extra Features" tab: optional SVG upload support (on by default — every upload is scanned for `<script>` tags, event-handler attributes, `javascript:` URIs, and embedded HTML before being accepted; blocked and rejected if any are found) and an optional Scroll To Top floating button (off by default; configurable position, color, and scroll-distance threshold).
+*   New "Media Optimization" (Server Performance tab, on by default): new image uploads automatically get WebP or AVIF versions generated alongside the original — whichever your server actually supports — without ever touching the original uploaded file. Existing media library images are optimized gradually in the background so a large library can't turn into one long blocking job. Video is compressed in the background only when the server genuinely has ffmpeg available; otherwise it's left untouched. Includes an "Optimize existing media now" button and a new "Optimization" column in the Media Library showing the real, measured before/after size for every file.
+*   Added forced lazy-loading for images and embedded video iframes (YouTube, Vimeo, etc.).
+*   Speed Boost: three more items — throttles the Heartbeat API to once every 60 seconds in wp-admin and removes it from the frontend entirely, caps stored post revisions at 5 going forward, and stops WordPress from pinging itself when a post links to another post on the same site.
+*   New "Last change detected" readout with a Check now button on the Cross-Browser Reload tab.
+*   Fixed: an admin settings save could go undetected the very first time a given option row was written (e.g. a WooCommerce setting saved for the first time on a fresh install) — WordPress fires `added_option` instead of `updated_option` for that first write, and only the latter was being listened for.
+*   Changed: Developer Mode is now a plain on/off toggle with no automatic timeout — it previously auto-disabled itself after 12 hours, but now stays exactly as you set it until you switch it off yourself.
+*   Replaced permanent help paragraphs under section titles with a small (i) icon you hover for the same explanation on demand — except the opcache "local dev only" danger warning, which stays as visible text since it's a safety warning.
+*   Speed Boost, Media Optimization, and Delete Data on Uninstall now sit side by side in one row instead of stacked full-width.
+*   Confirmed compatible with WordPress 7.0 ("Tested up to" header — WordPress.org's validator only accepts major.minor here, not the full patch version).
+*   Updated the Bengali (bn_BD) translation to cover every new string introduced by Extra Features, Media Optimization, and the additional Speed Boost items.
+*   Fixed the same literal `\u2019`/`\u2014`/`\u201c`/`\u201d` escape-sequence bug from 1.0.1 recurring in the new Extra Features, Media Optimization, and Speed Boost messages.
+*   Code-quality fix: prefixed two global variables in `uninstall.php` flagged by the WordPress Coding Standards checker.
 
 ### 1.0.2
 *   Added a video walkthrough and a step-by-step "How It Works" section to the plugin description, for people evaluating the plugin before installing.

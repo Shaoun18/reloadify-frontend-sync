@@ -261,6 +261,18 @@
     margin-bottom: 16px;
 }
 
+.reloadify-field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.reloadify-field-label input[type="number"] {
+    border-radius: 8px;
+    border: 1px solid #d7dae0;
+    padding: 6px 10px;
+}
+
 .reloadify-perf-card {
     border: 1px solid #eceef1;
     border-radius: 12px;
@@ -651,28 +663,24 @@
     background-color: #dc2626;
 }
 
-/* Developer Mode countdown */
-.reloadify-countdown {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-top: 6px;
+/* Speed Boost / Media Optimization / Delete on Uninstall -- side by side */
+.reloadify-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 18px;
 }
 
-.reloadify-countdown-label {
-    font-size: 11px;
-    color: #6b7280;
+.reloadify-toggle-grid .reloadify-section {
+    margin-bottom: 0;
 }
 
-.reloadify-countdown-value {
-    font-size: 13px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: #4338ca;
-    line-height: 1.4;
+@media (max-width: 900px) {
+    .reloadify-toggle-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
-/* Speed Boost card */
 .reloadify-speed-card {
     border-color: #c7f0d8;
     background: linear-gradient(180deg, #f0fdf6 0%, #ffffff 100%);
@@ -698,4 +706,73 @@
     gap: 6px;
     font-size: 13px;
     color: #1f2937;
+}
+
+.reloadify-media-backfill-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.reloadify-media-backfill-status {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.reloadify-media-backfill-status--ok {
+    color: #1a7f37;
+    font-weight: 600;
+}
+
+.reloadify-media-backfill-status--error {
+    color: #d63638;
+    font-weight: 600;
+}
+
+/* Info icon -- replaces the permanent help paragraphs that used to sit
+   under every section title; hover or focus to read the same text. */
+.reloadify-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 15px;
+    line-height: 1;
+    cursor: help;
+    flex: 0 0 auto;
+}
+
+.reloadify-info-icon:hover,
+.reloadify-info-icon:focus {
+    background: #c7d2fe;
+    outline: none;
+}
+
+.reloadify-section-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.reloadify-section-title-row h2 {
+    margin: 0;
+}
+
+.reloadify-stat-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reloadify-perf-header-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
 }
