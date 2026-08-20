@@ -56,11 +56,10 @@ class Reloadify_Admin {
 			'version'       => RELOADIFY_VERSION,
 			'browsers'      => Reloadify_Settings::supported_browsers(),
 			'browserLabels' => Reloadify_Settings::browser_labels(),
-			'devModeMaxAgeSeconds' => Reloadify_Settings::DEV_MODE_MAX_AGE,
 			// Rendered straight from PHP so the dashboard paints immediately instead
 			// of showing a loading state while it waits on two REST round-trips.
 			'initial'       => [
-				'settings'    => Reloadify_Settings::get_settings(),
+				'settings'    => array_merge( Reloadify_Settings::get_settings(), [ 'last_change_detected' => Reloadify_Settings::get_site_updated_at() ] ),
 				'performance' => [
 					'settings'   => Reloadify_Performance::get_settings(),
 					'live'       => Reloadify_Performance::get_live_values(),
@@ -71,6 +70,14 @@ class Reloadify_Admin {
 					'enabled' => Reloadify_Speed::is_enabled(),
 					'items'   => Reloadify_Speed::items(),
 				],
+				'media'       => [
+					'enabled' => Reloadify_Media::is_enabled(),
+					'items'   => Reloadify_Media::items(),
+				],
+				'cleanup'     => [
+					'enabled' => Reloadify_Cleanup::is_enabled(),
+				],
+				'extras'      => Reloadify_Extras::get_settings(),
 			],
 		] );
 	}

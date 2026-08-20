@@ -81,6 +81,18 @@ class Reloadify_Speed {
 				'key'   => 'backend_headroom',
 				'label' => __( 'Raises wp-admin\'s memory_limit and max_execution_time headroom (never below what your host already allows) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched', 'reloadify-frontend-sync' ),
 			],
+			[
+				'key'   => 'heartbeat',
+				'label' => __( 'Caps the Heartbeat API to once every 60 seconds in wp-admin (instead of every 15\u201360s) and removes it from the frontend entirely for visitors — fewer background requests hitting the server on both sides', 'reloadify-frontend-sync' ),
+			],
+			[
+				'key'   => 'revisions',
+				'label' => __( 'Caps stored post revisions at 5 per post going forward (older ones already saved are left alone) — keeps the posts table smaller and post-related queries a little faster on both the editor and the frontend', 'reloadify-frontend-sync' ),
+			],
+			[
+				'key'   => 'self_pingbacks',
+				'label' => __( 'Stops WordPress from pinging itself when one of your own posts links to another — removes a pointless outbound HTTP request and a comments-table write on every such save', 'reloadify-frontend-sync' ),
+			],
 		];
 	}
 
@@ -101,6 +113,74 @@ class Reloadify_Speed {
 		// actions actually run -- so this is in effect before the heavy
 		// save callback itself fires.
 		add_action( 'admin_init', [ __CLASS__, 'ease_backend_load' ] );
+
+		add_filter( 'heartbeat_settings', [ __CLASS__, 'throttle_heartbeat' ] );
+
+		// wp_print_scripts (not wp_enqueue_scripts) runs after every plugin
+		// and theme has had its chance to enqueue 'heartbeat' as a dependency
+		// -- dequeuing here removes it from the frontend output without
+		// touching the registration itself, so nothing that depends on it
+		// breaks; wp-admin is left alone entirely.
+		add_action( 'wp_print_scripts', [ __CLASS__, 'dequeue_frontend_heartbeat' ], 100 );
+
+		add_filter( 'wp_revisions_to_keep', [ __CLASS__, 'cap_revisions' ], 10, 2 );
+		add_action( 'pre_ping', [ __CLASS__, 'remove_self_pingbacks' ] );
+	}
+
+	/**
+	 * A filter, not a WP_POST_REVISIONS constant define -- the constant has
+	 * to be set before wp-settings.php loads (too early for a plugin to
+	 * reach), and once set it can't be changed at runtime at all. This
+	 * filter runs every time WordPress is about to prune revisions and
+	 * simply caps the number kept going forward; it never touches revisions
+	 * already saved before this was turned on.
+	 */
+	public static function cap_revisions( $num, $post ) {
+		return 5;
+	}
+
+	/**
+	 * WordPress pings itself over HTTP by default when a post links to
+	 * another post on the same site -- a real outbound request plus a
+	 * comments-table write for a "notification" you already know about
+	 * because you just wrote both posts yourself. This strips your own
+	 * site's URLs out of the list of links a save will ping, leaving pings
+	 * to genuinely external sites untouched.
+	 */
+	public static function remove_self_pingbacks( &$links ) {
+		$home = untrailingslashit( home_url() );
+
+		foreach ( $links as $key => $link ) {
+			if ( 0 === stripos( $link, $home ) ) {
+				unset( $links[ $key ] );
+			}
+		}
+	}
+
+	/**
+	 * Heartbeat's default interval is as low as 15 seconds on some admin
+	 * screens (post editor) and 60 elsewhere. Flooring everything at 60
+	 * cuts that traffic without turning Heartbeat off outright in wp-admin,
+	 * where some features (autosave conflict checks, session expiry
+	 * notices) still rely on it existing.
+	 */
+	public static function throttle_heartbeat( $settings ) {
+		$settings['interval'] = 60;
+		return $settings;
+	}
+
+	/**
+	 * A plain frontend visitor never needs Heartbeat at all -- it's a
+	 * wp-admin/editor mechanism. Removing it from the public side removes
+	 * a recurring background request per open tab with zero functional
+	 * loss for visitors.
+	 */
+	public static function dequeue_frontend_heartbeat() {
+		if ( is_admin() ) {
+			return;
+		}
+
+		wp_dequeue_script( 'heartbeat' );
 	}
 
 	public static function disable_emojis() {
