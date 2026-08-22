@@ -132,10 +132,26 @@
      * available on demand instead of always taking up space.
      */
     function InfoIcon(props) {
+        var stateOpen = useState(false);
+        var open = stateOpen[0], setOpen = stateOpen[1];
+
         return el(
             'span',
-            { className: 'reloadify-info-icon', tabIndex: 0, title: props.text, 'aria-label': props.text },
-            '\u24d8'
+            { className: 'reloadify-info-wrap' },
+            el(
+                'span',
+                {
+                    className: 'reloadify-info-icon',
+                    tabIndex: 0,
+                    'aria-label': props.text,
+                    onMouseEnter: function () { setOpen(true); },
+                    onMouseLeave: function () { setOpen(false); },
+                    onFocus: function () { setOpen(true); },
+                    onBlur: function () { setOpen(false); },
+                },
+                '\u24d8'
+            ),
+            open && el('span', { className: 'reloadify-tooltip', role: 'tooltip' }, props.text)
         );
     }
 
@@ -148,7 +164,7 @@
         );
     }
 
-    /* ---------------- Reload tab ---------------- */
+        /* ---------------- Reload tab ---------------- */
 
     function BrowserCard(props) {
         var row = props.value || { normal: false, incognito: false };
@@ -552,6 +568,9 @@
         var stateSaving = useState(false);
         var saving = stateSaving[0], setSaving = stateSaving[1];
 
+        var stateFormatSaving = useState(false);
+        var formatSaving = stateFormatSaving[0], setFormatSaving = stateFormatSaving[1];
+
         var stateRunning = useState(false);
         var running = stateRunning[0], setRunning = stateRunning[1];
 
@@ -571,6 +590,22 @@
                 })
                 .catch(function () {
                     setSaving(false);
+                    props.onToast('error', __('Could not update Media Optimization.', 'reloadify-frontend-sync'));
+                });
+        }
+
+        function setFormat(format) {
+            if (format === media.format_preference) {
+                return;
+            }
+            setFormatSaving(true);
+            wp.apiFetch({ path: '/reloadify/v1/media', method: 'POST', data: { enabled: media.enabled, format_preference: format } })
+                .then(function (response) {
+                    setFormatSaving(false);
+                    props.onChange(response);
+                })
+                .catch(function () {
+                    setFormatSaving(false);
                     props.onToast('error', __('Could not update Media Optimization.', 'reloadify-frontend-sync'));
                 });
         }
@@ -626,6 +661,45 @@
             }
         }
 
+        var caps = media.format_capabilities || { webp: false, avif: false };
+        var formatOptions = [
+            { value: 'auto', label: __('Automatic (recommended)', 'reloadify-frontend-sync'), disabled: false },
+            { value: 'webp', label: __('WebP only', 'reloadify-frontend-sync'), disabled: !caps.webp },
+            { value: 'avif', label: __('AVIF only', 'reloadify-frontend-sync'), disabled: !caps.avif },
+        ];
+
+        var formatRow = media.enabled && el(
+            'div',
+            { className: 'reloadify-media-format-row' },
+            el('div', { className: 'reloadify-media-format-label' }, __('Image format', 'reloadify-frontend-sync')),
+            el(
+                'div',
+                { className: 'reloadify-media-format-options' },
+                formatOptions.map(function (opt) {
+                    return el(
+                        'label',
+                        {
+                            key: opt.value,
+                            className: 'reloadify-media-format-option' + (opt.disabled ? ' is-disabled' : ''),
+                        },
+                        el('input', {
+                            type: 'radio',
+                            name: 'reloadify-media-format',
+                            checked: (media.format_preference || 'auto') === opt.value,
+                            disabled: opt.disabled || formatSaving,
+                            onChange: function () { setFormat(opt.value); },
+                        }),
+                        opt.label
+                    );
+                })
+            ),
+            !caps.avif && el(
+                'p',
+                { className: 'reloadify-media-format-note' },
+                __('AVIF isn\'t available on this server yet — pinning it falls back to WebP automatically.', 'reloadify-frontend-sync')
+            )
+        );
+
         return el(
             'div',
             { className: 'reloadify-section reloadify-speed-card' },
@@ -635,6 +709,7 @@
                 el('h2', null, __('Media Optimization', 'reloadify-frontend-sync')),
                 el(Switch, { large: true, checked: media.enabled, onChange: toggle, disabled: saving })
             ),
+            formatRow,
             media.enabled && el(
                 'div',
                 { className: 'reloadify-media-backfill-row' },
@@ -948,7 +1023,7 @@
         var speedState = useState(initial.speed || { enabled: true, items: [] });
         var speed = speedState[0], setSpeed = speedState[1];
 
-        var mediaState = useState(initial.media || { enabled: true, items: [] });
+        var mediaState = useState(initial.media || { enabled: true, items: [], format_preference: 'auto', format_capabilities: { webp: false, avif: false } });
         var media = mediaState[0], setMedia = mediaState[1];
 
         var cleanupState = useState(initial.cleanup || { enabled: true });
@@ -1039,7 +1114,7 @@
                 { className: 'reloadify-tabs' },
                 el('button', { className: 'reloadify-tab' + (tab === 'reload' ? ' is-active' : ''), onClick: function () { setTab('reload'); } }, __('Cross-Browser Reload', 'reloadify-frontend-sync')),
                 el('button', { className: 'reloadify-tab' + (tab === 'performance' ? ' is-active' : ''), onClick: function () { setTab('performance'); } }, __('Server Performance', 'reloadify-frontend-sync')),
-                el('button', { className: 'reloadify-tab' + (tab === 'extras' ? ' is-active' : ''), onClick: function () { setTab('extras'); } }, __('Extra Features', 'reloadify-frontend-sync'))
+                el('button', { className: 'reloadify-tab' + (tab === 'extras' ? ' is-active' : ''), onClick: function () { setTab('extras'); } }, __('Extensions', 'reloadify-frontend-sync'))
             ),
             el(
                 'div',

@@ -5,7 +5,7 @@
 **Requires at least:** 6.4
 **Tested up to:** 7.0
 **Requires PHP:** 7.4
-**Stable tag:** 1.1.0
+**Stable tag:** 1.1.1
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,8 +32,8 @@ Reloadify Frontend Sync keeps every open browser automatically synchronized, all
 *   A "Last change detected" readout with a one-click Check now button, so you can confirm the plugin picked up a save without waiting for a frontend tab to reload.
 *   A modern settings dashboard with per-browser cards and live status.
 *   **Speed Boost** — on by default: strips the emoji script, trims unused `<head>` tags, throttles the Heartbeat API, caps stored post revisions, disables self-pingbacks, and eases wp-admin memory/time limits for heavy builders — all reversible with one toggle.
-*   **Media Optimization** — on by default: new image uploads get WebP/AVIF versions automatically (when your server supports it), video is compressed in the background when ffmpeg is available, offscreen images and embedded video are lazy-loaded, and a new "Optimization" column in the Media Library shows the real, measured size saved on every file.
-*   **Extra Features tab** — optional SVG upload support (scanned for scripts/embedded HTML before accepting) and an optional Scroll To Top floating button with configurable position and color.
+*   **Media Optimization** — on by default: new image uploads get WebP/AVIF versions automatically (Automatic picks the best your server supports, or pin WebP/AVIF yourself), video is compressed in the background when ffmpeg is available, offscreen images and embedded video are lazy-loaded, and a new **Optimization** column in the Media Library shows the real, measured size saved on every file.
+*   **Extensions tab** — optional SVG upload support (off by default; scanned for scripts/embedded HTML before accepting) and an optional Scroll To Top floating button (off by default; configurable position and color).
 *   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
 *   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
 
@@ -91,6 +91,14 @@ The frontend check is a small static file the webserver answers directly — no 
 No. For images, the original file you uploaded is never modified — only the generated thumbnail/medium/large sizes get WebP or AVIF versions alongside them, and only if your server's image library actually supports that format. Video compression only runs if the server has ffmpeg available; if it doesn't, video is left completely untouched. The whole feature is one toggle — turn it off any time to leave media exactly as WordPress would handle it by default.
 
 ## Changelog
+
+### 1.1.1
+*   Fixed a video compression bug on Windows servers: the background ffmpeg command included `nice`, a Unix-only process-priority tool with no Windows equivalent, so the entire command failed to run there and video was silently never compressed (the original file was never at risk — this plugin only ever swaps a video if compression reports success — but Windows/local-dev users got zero benefit from the feature). Also hardened the success check so an implausibly small/truncated encode is rejected instead of accepted.
+*   New: Media Optimization image format is now a real choice — **Automatic** (default; picks the best your server supports), **WebP only**, or **AVIF only** — instead of always being decided for you. Choosing AVIF on a server that can't produce it falls back to WebP automatically.
+*   Fixed: the help (i) icons were using the browser's native tooltip (the plain `title` attribute), which can't be styled or positioned and could render overlapping adjacent labels. Replaced with a proper tooltip component — dark, rounded, positioned consistently below its icon.
+*   Renamed the **Extra Features** tab to **Extensions**.
+*   Fixed: **SVG Upload Support** defaulted to on, which didn't match this plugin's own documented intent or the Scroll To Top button's existing off-by-default behavior. Both now default to off.
+*   Updated the Bengali (bn_BD) translation to cover the new format-choice control and the Extensions tab name.
 
 ### 1.1.0
 *   New "Extra Features" tab: optional SVG upload support (on by default — every upload is scanned for `<script>` tags, event-handler attributes, `javascript:` URIs, and embedded HTML before being accepted; blocked and rejected if any are found) and an optional Scroll To Top floating button (off by default; configurable position, color, and scroll-distance threshold).

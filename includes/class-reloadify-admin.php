@@ -71,8 +71,10 @@ class Reloadify_Admin {
 					'items'   => Reloadify_Speed::items(),
 				],
 				'media'       => [
-					'enabled' => Reloadify_Media::is_enabled(),
-					'items'   => Reloadify_Media::items(),
+					'enabled'            => Reloadify_Media::is_enabled(),
+					'items'              => Reloadify_Media::items(),
+					'format_preference'  => Reloadify_Media::format_preference(),
+					'format_capabilities' => Reloadify_Media::capabilities(),
 				],
 				'cleanup'     => [
 					'enabled' => Reloadify_Cleanup::is_enabled(),

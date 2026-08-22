@@ -5,20 +5,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * "Extra Features" tab -- new in 1.1.0. Two independent, opt-in-by-toggle
+ * "Extensions" tab -- new in 1.1.0. Two independent, opt-in-by-toggle
  * additions that have nothing to do with the reload/performance logic
  * above, so they live in their own class and their own settings row.
  *
  * 1. SVG Upload Support: WordPress core blocks .svg uploads in the Media
  *    Library on purpose, because an SVG is really an XML document and can
- *    carry a <script> tag same as an HTML page can. This is ON by default
- *    in this plugin, and every uploaded SVG is run through a basic scan
- *    that rejects files containing <script> tags, on*="" event handler
- *    attributes, or javascript: URIs -- turn the toggle off if you'd
- *    rather WordPress's own stricter default (no SVG uploads at all) stay
- *    in place. The scan is a meaningful floor, not a full sanitizer -- a
- *    high-security multisite with untrusted authors should still restrict
- *    SVG upload to trusted roles, or use a dedicated sanitizing library.
+ *    carry a <script> tag same as an HTML page can. OFF by default -- this
+ *    plugin doesn't loosen a WordPress security default on your behalf
+ *    without you asking for it. Turn it on and every uploaded SVG is run
+ *    through a basic scan that rejects files containing <script> tags,
+ *    on*="" event handler attributes, or javascript: URIs. The scan is a
+ *    meaningful floor, not a full sanitizer -- a high-security multisite
+ *    with untrusted authors should still restrict SVG upload to trusted
+ *    roles, or use a dedicated sanitizing library.
  *
  * 2. Scroll To Top: a small floating button on the frontend that fades in
  *    after the visitor scrolls past a threshold and smooth-scrolls back to
@@ -34,10 +34,10 @@ class Reloadify_Extras {
 	public static function default_settings() {
 		return [
 			'svg_support' => [
-				'enabled' => true,
+				'enabled' => false,
 			],
 			'scroll_top' => [
-				'enabled'    => true,
+				'enabled'    => false,
 				'position'   => 'right', // 'left' or 'right'
 				'bg_color'   => '#4f46e5',
 				'show_after' => 300, // pixels scrolled before the button appears

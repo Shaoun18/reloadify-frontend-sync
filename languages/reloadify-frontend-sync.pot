@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: Reloadify Frontend Sync 1.1.0\n"
+"Project-Id-Version: Reloadify Frontend Sync 1.1.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/reloadify-frontend-sync\n"
-"POT-Creation-Date: 2026-07-28 08:25+0000\n"
-"PO-Revision-Date: 2026-07-28 08:25+0000\n"
+"POT-Creation-Date: 2026-07-29 11:34+0000\n"
+"PO-Revision-Date: 2026-07-29 11:34+0000\n"
 "Last-Translator: Shaoun Chandra Shill\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 ""
@@ -13,27 +13,27 @@ msgstr ""
 "X-Generator: manual\n"
 "X-Domain: reloadify-frontend-sync\n"
 
-#: assets/js/admin-settings.js:830
+#: assets/js/admin-settings.js:905
 msgid " snippet copied."
 msgstr ""
 
-#: assets/js/admin-settings.js:624
+#: assets/js/admin-settings.js:659
 msgid "%1$d images, %2$d videos left"
 msgstr ""
 
-#: includes/class-reloadify-media.php:828
+#: includes/class-reloadify-media.php:903
 msgid "%1$s – about %2$d%% smaller"
 msgstr ""
 
-#: assets/js/admin-settings.js:618
+#: assets/js/admin-settings.js:653
 msgid "%d video(s) not compressed — ffmpeg isn’t available on this server"
 msgstr ""
 
-#: assets/js/admin-settings.js:415
+#: assets/js/admin-settings.js:431
 msgid "(default)"
 msgstr ""
 
-#: assets/js/admin-settings.js:356
+#: assets/js/admin-settings.js:372
 msgid ".htaccess (Apache + mod_php only)"
 msgstr ""
 
@@ -41,19 +41,31 @@ msgstr ""
 msgid ".htaccess exists but isn't writable by PHP, so nothing was changed."
 msgstr ""
 
+#: assets/js/admin-settings.js:699
+msgid "AVIF isn't available on this server yet — pinning it falls back to WebP automatically."
+msgstr ""
+
+#: assets/js/admin-settings.js:668
+msgid "AVIF only"
+msgstr ""
+
+#: includes/class-reloadify-media.php:170
+msgid "AVIF was selected, but this server can't produce it, so WebP is used instead — the safe fallback, still smaller than the original format"
+msgstr ""
+
 #: includes/class-reloadify-performance.php:264
 msgid "Aborted before making any changes: couldn't write a backup copy first."
 msgstr ""
 
-#: assets/js/admin-settings.js:614
+#: assets/js/admin-settings.js:649
 msgid "All optimized"
 msgstr ""
 
-#: assets/js/admin-settings.js:863
+#: assets/js/admin-settings.js:938
 msgid "Allow SVG uploads"
 msgstr ""
 
-#: assets/js/admin-settings.js:288
+#: assets/js/admin-settings.js:304
 msgid "Appends a cache-busting parameter so the page is fetched fresh instead of served from cache. Use this if soft reload sometimes shows stale content."
 msgstr ""
 
@@ -61,19 +73,19 @@ msgstr ""
 msgid "Applied automatically by this plugin"
 msgstr ""
 
-#: assets/js/admin-settings.js:776
+#: assets/js/admin-settings.js:851
 msgid "Attempt automatic server override"
 msgstr ""
 
-#: assets/js/admin-settings.js:813
+#: assets/js/admin-settings.js:888
 msgid "Attempt opcache override (local dev only)"
 msgstr ""
 
-#: assets/js/admin-settings.js:713
+#: assets/js/admin-settings.js:788
 msgid "Attempted — see results below. .user.ini changes can take a few minutes to take effect."
 msgstr ""
 
-#: assets/js/admin-settings.js:776
+#: assets/js/admin-settings.js:851
 msgid "Attempting…"
 msgstr ""
 
@@ -82,31 +94,35 @@ msgstr ""
 msgid "Auto Reloader"
 msgstr ""
 
-#: assets/js/admin-settings.js:385
+#: assets/js/admin-settings.js:401
 msgid "Auto-attempt"
 msgstr ""
 
-#: assets/js/admin-settings.js:820
-msgid "Backup saved at: "
-msgstr ""
-
-#: assets/js/admin-settings.js:902
-msgid "Bottom left"
+#: assets/js/admin-settings.js:666
+msgid "Automatic (recommended)"
 msgstr ""
 
 #: assets/js/admin-settings.js:895
+msgid "Backup saved at: "
+msgstr ""
+
+#: assets/js/admin-settings.js:977
+msgid "Bottom left"
+msgstr ""
+
+#: assets/js/admin-settings.js:970
 msgid "Bottom right"
 msgstr ""
 
-#: assets/js/admin-settings.js:296
+#: assets/js/admin-settings.js:312
 msgid "Browsers & windows"
 msgstr ""
 
-#: assets/js/admin-settings.js:240
+#: assets/js/admin-settings.js:256
 msgid "Browsers enabled"
 msgstr ""
 
-#: assets/js/admin-settings.js:910
+#: assets/js/admin-settings.js:985
 msgid "Button color"
 msgstr ""
 
@@ -122,68 +138,69 @@ msgstr ""
 msgid "Changed live via ini_set() on every request — no server access needed."
 msgstr ""
 
-#: assets/js/admin-settings.js:265
+#: assets/js/admin-settings.js:281
 msgid "Check now"
 msgstr ""
 
-#: assets/js/admin-settings.js:265
+#: assets/js/admin-settings.js:281
 msgid "Checking…"
 msgstr ""
 
-#: assets/js/admin-settings.js:354
-#: assets/js/admin-settings.js:359
+#: assets/js/admin-settings.js:370
+#: assets/js/admin-settings.js:375
 msgid "Copy"
 msgstr ""
 
-#: assets/js/admin-settings.js:830
+#: assets/js/admin-settings.js:905
 msgid "Could not copy — select and copy manually."
 msgstr ""
 
-#: assets/js/admin-settings.js:601
+#: assets/js/admin-settings.js:636
 msgid "Could not run existing-media optimization."
 msgstr ""
 
-#: assets/js/admin-settings.js:993
+#: assets/js/admin-settings.js:1068
 msgid "Could not sync from the server."
 msgstr ""
 
-#: assets/js/admin-settings.js:574
+#: assets/js/admin-settings.js:593
+#: assets/js/admin-settings.js:609
 msgid "Could not update Media Optimization."
 msgstr ""
 
-#: assets/js/admin-settings.js:483
+#: assets/js/admin-settings.js:499
 msgid "Could not update Speed Boost."
 msgstr ""
 
-#: assets/js/admin-settings.js:523
+#: assets/js/admin-settings.js:539
 msgid "Could not update this setting."
 msgstr ""
 
-#: assets/js/admin-settings.js:1040
+#: assets/js/admin-settings.js:1115
 msgid "Cross-Browser Reload"
 msgstr ""
 
-#: assets/js/admin-settings.js:1033
+#: assets/js/admin-settings.js:1108
 msgid "Cross-browser live reload for page-builder QA — and a clear picture of which server settings this plugin can and can’t change for you."
 msgstr ""
 
-#: assets/js/admin-settings.js:414
+#: assets/js/admin-settings.js:430
 msgid "Current: "
 msgstr ""
 
-#: assets/js/admin-settings.js:896
+#: assets/js/admin-settings.js:971
 msgid "Default placement, out of the way of most site chrome."
 msgstr ""
 
-#: assets/js/admin-settings.js:533
+#: assets/js/admin-settings.js:549
 msgid "Delete Data on Uninstall"
 msgstr ""
 
-#: assets/js/admin-settings.js:227
+#: assets/js/admin-settings.js:243
 msgid "Developer Mode"
 msgstr ""
 
-#: assets/js/admin-settings.js:364
+#: assets/js/admin-settings.js:380
 msgid "Done"
 msgstr ""
 
@@ -191,107 +208,111 @@ msgstr ""
 msgid "Drops unused <link> tags from <head> (RSD, WLW manifest, shortlink, generator tag)"
 msgstr ""
 
-#: includes/class-reloadify-media.php:242
+#: includes/class-reloadify-media.php:282
 msgid "Every 5 minutes (Reloadify Frontend Sync)"
 msgstr ""
 
-#: includes/class-reloadify-media.php:178
+#: includes/class-reloadify-media.php:218
 msgid "Every optimized image and video gets a real, measured before/after size — visible as an “Optimization” column in the Media Library, not an estimate"
 msgstr ""
 
-#: includes/class-reloadify-media.php:156
+#: includes/class-reloadify-media.php:196
 msgid "Existing media library images are optimized gradually in the background, a few at a time, so it never blocks or slows down a live site"
 msgstr ""
 
-#: assets/js/admin-settings.js:1042
-msgid "Extra Features"
+#: assets/js/admin-settings.js:1117
+msgid "Extensions"
 msgstr ""
 
-#: assets/js/admin-settings.js:1014
+#: assets/js/admin-settings.js:1089
 msgid "Failed to save settings."
 msgstr ""
 
-#: assets/js/admin-settings.js:796
+#: assets/js/admin-settings.js:871
 msgid "File this would write to: "
 msgstr ""
 
-#: includes/class-reloadify-media.php:173
+#: includes/class-reloadify-media.php:213
 msgid "Forces native browser lazy-loading on for images (in case a theme or another plugin turned it off) and adds it to embedded video iframes (YouTube, Vimeo, etc.), so offscreen media doesn't load until a visitor actually scrolls to it"
 msgstr ""
 
-#: assets/js/admin-settings.js:781
+#: assets/js/admin-settings.js:856
 msgid "Generate config snippet"
 msgstr ""
 
-#: assets/js/admin-settings.js:247
+#: assets/js/admin-settings.js:263
 msgid "Hard"
 msgstr ""
 
-#: assets/js/admin-settings.js:287
+#: assets/js/admin-settings.js:303
 msgid "Hard reload"
 msgstr ""
 
-#: assets/js/admin-settings.js:808
+#: assets/js/admin-settings.js:883
 msgid "I understand this can crash PHP for the whole server, and I’m only doing this on a local development site I fully control."
 msgstr ""
 
-#: includes/class-reloadify-media.php:151
+#: assets/js/admin-settings.js:674
+msgid "Image format"
+msgstr ""
+
+#: includes/class-reloadify-media.php:191
 msgid "Image quality is capped at a visually-lossless level — only ever tightens an unusually high setting, never loosens one you already chose"
 msgstr ""
 
-#: assets/js/admin-settings.js:178
+#: assets/js/admin-settings.js:194
 msgid "Incognito"
 msgstr ""
 
-#: assets/js/admin-settings.js:296
+#: assets/js/admin-settings.js:312
 msgid "Incognito detection is best-effort, not a guarantee."
 msgstr ""
 
-#: assets/js/admin-settings.js:798
+#: assets/js/admin-settings.js:873
 msgid "It also does nothing until PHP restarts — this plugin cannot restart PHP for you."
 msgstr ""
 
-#: assets/js/admin-settings.js:255
+#: assets/js/admin-settings.js:271
 msgid "Last change detected"
 msgstr ""
 
-#: assets/js/admin-settings.js:381
+#: assets/js/admin-settings.js:397
 msgid "Live"
 msgstr ""
 
-#: assets/js/admin-settings.js:1019
+#: assets/js/admin-settings.js:1094
 msgid "Loading…"
 msgstr ""
 
-#: assets/js/admin-settings.js:383
+#: assets/js/admin-settings.js:399
 msgid "Local dev only"
 msgstr ""
 
-#: assets/js/admin-settings.js:387
+#: assets/js/admin-settings.js:403
 msgid "Manual only"
 msgstr ""
 
-#: assets/js/admin-settings.js:635
+#: assets/js/admin-settings.js:709
 msgid "Media Optimization"
 msgstr ""
 
-#: assets/js/admin-settings.js:570
+#: assets/js/admin-settings.js:589
 msgid "Media Optimization turned off."
 msgstr ""
 
-#: assets/js/admin-settings.js:569
+#: assets/js/admin-settings.js:588
 msgid "Media Optimization turned on."
 msgstr ""
 
-#: assets/js/admin-settings.js:713
+#: assets/js/admin-settings.js:788
 msgid "Neither method could write on this server — see results below for why."
 msgstr ""
 
-#: includes/class-reloadify-media.php:138
+#: includes/class-reloadify-media.php:177
 msgid "New image uploads automatically get %s versions generated alongside the original — your server supports it"
 msgstr ""
 
-#: includes/class-reloadify-media.php:162
+#: includes/class-reloadify-media.php:202
 msgid "Newly uploaded video is compressed in the background a few seconds after upload (ffmpeg found on this server) — runs at the lowest OS priority and never blocks the upload itself"
 msgstr ""
 
@@ -303,20 +324,20 @@ msgstr ""
 msgid "No opcache values to write. Did you set values for memory_consumption, interned_strings_buffer, and/or max_accelerated_files?"
 msgstr ""
 
-#: assets/js/admin-settings.js:172
+#: assets/js/admin-settings.js:188
 msgid "Normal"
 msgstr ""
 
-#: includes/class-reloadify-media.php:854
+#: includes/class-reloadify-media.php:929
 msgid "Not an image or video"
 msgstr ""
 
-#: assets/js/admin-settings.js:450
-#: assets/js/admin-settings.js:818
+#: assets/js/admin-settings.js:466
+#: assets/js/admin-settings.js:893
 msgid "Not applied"
 msgstr ""
 
-#: assets/js/admin-settings.js:677
+#: assets/js/admin-settings.js:752
 msgid "Not applied — see the result below for why."
 msgstr ""
 
@@ -324,47 +345,47 @@ msgstr ""
 msgid "Not attempted — the confirmation was missing."
 msgstr ""
 
-#: includes/class-reloadify-media.php:847
+#: includes/class-reloadify-media.php:922
 msgid "Not compressed – ffmpeg unavailable on this server"
 msgstr ""
 
-#: assets/js/admin-settings.js:230
-#: assets/js/admin-settings.js:864
-#: assets/js/admin-settings.js:881
+#: assets/js/admin-settings.js:246
+#: assets/js/admin-settings.js:939
+#: assets/js/admin-settings.js:956
 msgid "Off"
 msgstr ""
 
-#: assets/js/admin-settings.js:228
+#: assets/js/admin-settings.js:244
 msgid "Off by default — leaving it on adds real load to a live site. Now stays on until you switch it off yourself."
 msgstr ""
 
-#: assets/js/admin-settings.js:230
-#: assets/js/admin-settings.js:864
-#: assets/js/admin-settings.js:881
+#: assets/js/admin-settings.js:246
+#: assets/js/admin-settings.js:939
+#: assets/js/admin-settings.js:956
 msgid "On"
 msgstr ""
 
-#: assets/js/admin-settings.js:731
+#: assets/js/admin-settings.js:806
 msgid "Only PHP settings still changeable at runtime update live here. The rest need a server-side change."
 msgstr ""
 
-#: assets/js/admin-settings.js:357
+#: assets/js/admin-settings.js:373
 msgid "Only covers the directives Apache is allowed to set per-directory. opcache.* and realpath_cache_* cannot go here — and this block won’t work at all on Nginx or PHP-FPM."
 msgstr ""
 
-#: includes/class-reloadify-media.php:798
+#: includes/class-reloadify-media.php:873
 msgid "Optimization"
 msgstr ""
 
-#: assets/js/admin-settings.js:644
+#: assets/js/admin-settings.js:719
 msgid "Optimize existing media now"
 msgstr ""
 
-#: assets/js/admin-settings.js:644
+#: assets/js/admin-settings.js:719
 msgid "Optimizing…"
 msgstr ""
 
-#: includes/class-reloadify-media.php:838
+#: includes/class-reloadify-media.php:913
 msgid "Original kept – server has no WebP/AVIF support"
 msgstr ""
 
@@ -376,11 +397,11 @@ msgstr ""
 msgid "PHP locks these before WordPress loads. Auto-attempt below writes .user.ini / .htaccess."
 msgstr ""
 
-#: includes/class-reloadify-media.php:849
+#: includes/class-reloadify-media.php:924
 msgid "Pending – compresses in the background shortly"
 msgstr ""
 
-#: includes/class-reloadify-media.php:840
+#: includes/class-reloadify-media.php:915
 msgid "Pending – optimizes in the background shortly"
 msgstr ""
 
@@ -388,15 +409,15 @@ msgstr ""
 msgid "Raises wp-admin's memory_limit and max_execution_time headroom (never below what your host already allows) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched"
 msgstr ""
 
-#: assets/js/admin-settings.js:272
+#: assets/js/admin-settings.js:288
 msgid "Reload behavior"
 msgstr ""
 
-#: assets/js/admin-settings.js:246
+#: assets/js/admin-settings.js:262
 msgid "Reload mode"
 msgstr ""
 
-#: assets/js/admin-settings.js:1032
+#: assets/js/admin-settings.js:1107
 msgid "Reloadify Frontend Sync"
 msgstr ""
 
@@ -412,68 +433,68 @@ msgstr ""
 msgid "Requires your host / server config"
 msgstr ""
 
-#: assets/js/admin-settings.js:859
+#: assets/js/admin-settings.js:934
 msgid "SVG Upload Support"
 msgstr ""
 
-#: assets/js/admin-settings.js:1056
+#: assets/js/admin-settings.js:1131
 msgid "Save Changes"
 msgstr ""
 
-#: assets/js/admin-settings.js:1056
+#: assets/js/admin-settings.js:1131
 msgid "Saving…"
 msgstr ""
 
-#: assets/js/admin-settings.js:876
+#: assets/js/admin-settings.js:951
 msgid "Scroll To Top Button"
 msgstr ""
 
-#: assets/js/admin-settings.js:730
-#: assets/js/admin-settings.js:1041
+#: assets/js/admin-settings.js:805
+#: assets/js/admin-settings.js:1116
 msgid "Server Performance"
 msgstr ""
 
-#: assets/js/admin-settings.js:343
+#: assets/js/admin-settings.js:359
 msgid "Server config snippets"
 msgstr ""
 
-#: assets/js/admin-settings.js:519
+#: assets/js/admin-settings.js:535
 msgid "Settings & the reloadify-reload folder will be kept if the plugin is deleted."
 msgstr ""
 
-#: assets/js/admin-settings.js:1011
+#: assets/js/admin-settings.js:1086
 msgid "Settings saved successfully."
 msgstr ""
 
-#: assets/js/admin-settings.js:919
+#: assets/js/admin-settings.js:994
 msgid "Show after scrolling (pixels)"
 msgstr ""
 
-#: assets/js/admin-settings.js:880
+#: assets/js/admin-settings.js:955
 msgid "Show button on frontend"
 msgstr ""
 
-#: assets/js/admin-settings.js:247
+#: assets/js/admin-settings.js:263
 msgid "Soft"
 msgstr ""
 
-#: assets/js/admin-settings.js:280
+#: assets/js/admin-settings.js:296
 msgid "Soft reload"
 msgstr ""
 
-#: assets/js/admin-settings.js:493
+#: assets/js/admin-settings.js:509
 msgid "Speed Boost"
 msgstr ""
 
-#: assets/js/admin-settings.js:479
+#: assets/js/admin-settings.js:495
 msgid "Speed Boost turned off."
 msgstr ""
 
-#: assets/js/admin-settings.js:478
+#: assets/js/admin-settings.js:494
 msgid "Speed Boost turned on."
 msgstr ""
 
-#: assets/js/admin-settings.js:281
+#: assets/js/admin-settings.js:297
 msgid "Standard page reload. Fast, uses the browser cache like a normal refresh."
 msgstr ""
 
@@ -481,15 +502,15 @@ msgstr ""
 msgid "Stops WordPress from pinging itself when one of your own posts links to another — removes a pointless outbound HTTP request and a comments-table write on every such save"
 msgstr ""
 
-#: assets/js/admin-settings.js:736
+#: assets/js/admin-settings.js:811
 msgid "Sync from server"
 msgstr ""
 
-#: assets/js/admin-settings.js:989
+#: assets/js/admin-settings.js:1064
 msgid "Synced with the server’s current values."
 msgstr ""
 
-#: assets/js/admin-settings.js:736
+#: assets/js/admin-settings.js:811
 msgid "Syncing…"
 msgstr ""
 
@@ -497,8 +518,8 @@ msgstr ""
 msgid "The WordPress root directory (or the existing .user.ini file) is not writable by PHP, so nothing was changed."
 msgstr ""
 
-#: assets/js/admin-settings.js:681
-#: assets/js/admin-settings.js:717
+#: assets/js/admin-settings.js:756
+#: assets/js/admin-settings.js:792
 msgid "The request failed."
 msgstr ""
 
@@ -506,11 +527,11 @@ msgstr ""
 msgid "These size PHP’s memory once at startup — only a real php.ini edit can change them."
 msgstr ""
 
-#: assets/js/admin-settings.js:794
+#: assets/js/admin-settings.js:869
 msgid "These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP — no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup)."
 msgstr ""
 
-#: assets/js/admin-settings.js:349
+#: assets/js/admin-settings.js:365
 msgid "These values cannot be set by any WordPress plugin at runtime — PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host."
 msgstr ""
 
@@ -522,11 +543,11 @@ msgstr ""
 msgid "This php.ini is not writable by PHP. On a live/shared/managed host that's expected and correct — it means this action simply can't do anything here, safely."
 msgstr ""
 
-#: assets/js/admin-settings.js:797
+#: assets/js/admin-settings.js:872
 msgid "This server reports no loaded php.ini file at all, so this action can’t do anything here."
 msgstr ""
 
-#: assets/js/admin-settings.js:256
+#: assets/js/admin-settings.js:272
 msgid "Ticks up on any wp-admin save. Not resetting on Check now usually means the save didn’t submit."
 msgstr ""
 
@@ -534,23 +555,27 @@ msgstr ""
 msgid "Turns PHP OPcache on if your host has it available but left it off"
 msgstr ""
 
-#: assets/js/admin-settings.js:903
+#: assets/js/admin-settings.js:978
 msgid "Use this if a chat widget or something else already occupies bottom right."
 msgstr ""
 
-#: includes/class-reloadify-media.php:823
+#: includes/class-reloadify-media.php:898
 msgid "Video compressed – %d%% smaller"
 msgstr ""
 
-#: includes/class-reloadify-media.php:167
+#: includes/class-reloadify-media.php:207
 msgid "Video compression needs the ffmpeg program on the server, which isn't available here, so video is left untouched — image optimization above still applies"
 msgstr ""
 
-#: assets/js/admin-settings.js:518
+#: assets/js/admin-settings.js:667
+msgid "WebP only"
+msgstr ""
+
+#: assets/js/admin-settings.js:534
 msgid "Will delete settings & the reloadify-reload folder if the plugin is deleted."
 msgstr ""
 
-#: assets/js/admin-settings.js:352
+#: assets/js/admin-settings.js:368
 msgid "Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM)."
 msgstr ""
 
@@ -566,20 +591,20 @@ msgstr ""
 msgid "Write failed. This is also a no-op on Nginx or PHP-FPM setups that don't use .htaccess at all — confirm your server actually uses Apache with mod_php."
 msgstr ""
 
-#: assets/js/admin-settings.js:783
+#: assets/js/admin-settings.js:858
 msgid "Writes .user.ini / .htaccess. Safe to try — it just fails quietly if unsupported."
 msgstr ""
 
-#: assets/js/admin-settings.js:813
+#: assets/js/admin-settings.js:888
 msgid "Writing…"
 msgstr ""
 
-#: assets/js/admin-settings.js:450
-#: assets/js/admin-settings.js:818
+#: assets/js/admin-settings.js:466
+#: assets/js/admin-settings.js:893
 msgid "Written"
 msgstr ""
 
-#: assets/js/admin-settings.js:677
+#: assets/js/admin-settings.js:752
 msgid "Written to php.ini — restart PHP for it to take effect."
 msgstr ""
 
@@ -595,18 +620,18 @@ msgstr ""
 msgid "Written. Only takes effect on Apache with mod_php — has no effect on Nginx or PHP-FPM, which most managed hosts use today."
 msgstr ""
 
-#: includes/class-reloadify-media.php:145
+#: includes/class-reloadify-media.php:185
 msgid "Your server's image library doesn't support WebP or AVIF, so format conversion is skipped — quality-capped compression below still applies"
 msgstr ""
 
-#: assets/js/admin-settings.js:187
-#: assets/js/admin-settings.js:188
-#: assets/js/admin-settings.js:189
-#: assets/js/admin-settings.js:190
+#: assets/js/admin-settings.js:203
+#: assets/js/admin-settings.js:204
+#: assets/js/admin-settings.js:205
+#: assets/js/admin-settings.js:206
 msgid "ago"
 msgstr ""
 
-#: assets/js/admin-settings.js:186
+#: assets/js/admin-settings.js:202
 msgid "just now"
 msgstr ""
 
@@ -614,19 +639,19 @@ msgstr ""
 msgid "opcache memory sizing — danger zone"
 msgstr ""
 
-#: assets/js/admin-settings.js:351
+#: assets/js/admin-settings.js:367
 msgid "php.ini / .user.ini"
 msgstr ""
 
-#: assets/js/admin-settings.js:793
+#: assets/js/admin-settings.js:868
 msgid "⚠ Local development only — do not use on a live/production site."
 msgstr ""
 
-#: assets/js/admin-settings.js:397
+#: assets/js/admin-settings.js:413
 msgid "✓ Matches the live server right now."
 msgstr ""
 
-#: assets/js/admin-settings.js:398
+#: assets/js/admin-settings.js:414
 msgid "✗ Not applied yet on this page load — save your changes, then reload this page to confirm."
 msgstr ""
 
