@@ -4,48 +4,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * "Media Optimization" — on by default. Shrinks images and (where possible)
- * video without a visible quality hit, so uploading media doesn't turn into
- * the heaviest thing happening on the site.
- *
- * Same honesty rule as Reloadify_Speed: nothing here is faked, and nothing runs
- * unless this server can actually do it.
- *
- * - Images: uses WordPress's own image editor (GD or Imagick, whichever the
- *   host has) to save newly generated thumbnail/intermediate sizes as WebP,
- *   or AVIF if the host's image library supports it -- checked with core's
- *   own wp_image_editor_supports(), never assumed. The original uploaded
- *   file is left untouched; only the generated sizes change format. Quality
- *   is capped (never raised) at a level generally considered visually
- *   lossless, so this only ever tightens an unusually high setting, never
- *   loosens a lower one someone already chose on purpose.
- * - Existing images (uploaded before this was ever turned on): picked up a
- *   few at a time by a WP-Cron job every 5 minutes, not all at once, so a
- *   large media library can't turn into one huge blocking job on a live
- *   site.
- * - Video: genuinely compressing video needs the ffmpeg program on the
- *   server. Most shared hosting does not have it, and a lot of hosts
- *   disable the PHP functions (exec/shell_exec) needed to run it even when
- *   it's installed. Both are feature-detected in ffmpeg_path() below; if
- *   either is missing, video is simply left alone -- no fake "optimized"
- *   claim. When it IS available, the compression job is deferred to
- *   WP-Cron (runs a few seconds after upload, in its own request) so it
- *   never blocks the person's upload, and runs at the lowest OS scheduling
- *   priority (`nice -n 19`) so it competes as little as possible with
- *   requests other visitors are making at the same time. Existing videos
- *   (from before this was turned on) are picked up the same gradual way
- *   existing images are.
- * - Lazy loading: WordPress has loaded images natively (loading="lazy")
- *   since 5.5, but another plugin, theme, or filter can turn that off --
- *   this re-forces it on while the toggle is enabled. It also adds
- *   loading="lazy" to embedded video iframes (YouTube, Vimeo, etc. added
- *   via the block editor's embed feature), which core does not cover on
- *   its own and which are often the single heaviest thing on a page.
- * - Visibility: every optimized image and video gets a real, measured
- *   before/after size stored against it (not an estimate) -- visible as a
- *   new "Optimization" column in the Media Library list.
- */
 class Reloadify_Media {
 
 	const OPTION_KEY        = 'reloadify_media_optimize_enabled';
@@ -65,9 +23,6 @@ class Reloadify_Media {
 	public static function set_enabled( $enabled ) {
 		$enabled = (bool) $enabled;
 
-		// Same WordPress quirk worked around elsewhere in this plugin
-		// (Reloadify_Speed, Reloadify_Cleanup): update_option() no-ops on a brand-new
-		// `false` value if the option row doesn't exist yet. Seed it first.
 		add_option( self::OPTION_KEY, true );
 		update_option( self::OPTION_KEY, $enabled );
 
@@ -80,11 +35,6 @@ class Reloadify_Media {
 		return self::is_enabled();
 	}
 
-	/**
-	 * 'auto' (default) picks the best format this server actually
-	 * supports, AVIF first. 'webp' / 'avif' let the person pin a specific
-	 * format instead of leaving the choice to the plugin.
-	 */
 	public static function format_preference() {
 		$value = get_option( self::FORMAT_OPTION_KEY, 'auto' );
 		return in_array( $value, [ 'auto', 'webp', 'avif' ], true ) ? $value : 'auto';
@@ -96,10 +46,6 @@ class Reloadify_Media {
 		return $format;
 	}
 
-	/**
-	 * What this server can actually do -- checked, never assumed. Feeds
-	 * both items() below and the actual behavior in init().
-	 */
 	public static function capabilities() {
 		static $caps = null;
 
@@ -116,14 +62,6 @@ class Reloadify_Media {
 		return $caps;
 	}
 
-	/**
-	 * AVIF compresses smaller than WebP at the same visual quality when a
-	 * host supports it; WebP is the safe, far more common fallback. If the
-	 * person has pinned a specific format (format_preference()), that's
-	 * honored instead of the plugin choosing -- except AVIF pinned on a
-	 * server that can't actually do AVIF, which falls back to WebP rather
-	 * than silently converting nothing at all.
-	 */
 	public static function preferred_image_format() {
 		$caps = self::capabilities();
 		$pref = self::format_preference();
@@ -150,11 +88,6 @@ class Reloadify_Media {
 		return null;
 	}
 
-	/**
-	 * What's actually included, exposed to the UI so the toggle isn't a
-	 * black box -- and honestly reflects what THIS server can do, not a
-	 * generic feature list.
-	 */
 	public static function items() {
 		$caps      = self::capabilities();
 		$preferred = self::preferred_image_format();
@@ -173,7 +106,7 @@ class Reloadify_Media {
 				$items[] = [
 					'key'   => 'image_format',
 					'label' => sprintf(
-						/* translators: %s: AVIF or WEBP */
+						/* translators: %s: uppercase image format name, e.g. WEBP or AVIF. */
 						__( 'New image uploads automatically get %s versions generated alongside the original — your server supports it', 'reloadify-frontend-sync' ),
 						strtoupper( $preferred )
 					),
@@ -237,12 +170,10 @@ class Reloadify_Media {
 		add_action( self::CRON_HOOK_BACKFILL, [ __CLASS__, 'backfill_existing_images' ] );
 		add_action( self::CRON_HOOK_VIDEO_BACKFILL, [ __CLASS__, 'backfill_existing_videos' ] );
 
-		// Lazy loading.
 		add_filter( 'wp_lazy_loading_enabled', '__return_true', 20 );
 		add_filter( 'the_content', [ __CLASS__, 'lazy_load_iframes' ], 20 );
 		add_filter( 'embed_oembed_html', [ __CLASS__, 'lazy_load_iframes' ] );
 
-		// Media Library "Optimization" column.
 		add_filter( 'manage_media_columns', [ __CLASS__, 'add_media_column' ] );
 		add_action( 'manage_media_custom_column', [ __CLASS__, 'render_media_column' ], 10, 2 );
 		add_action( 'admin_head-upload.php', [ __CLASS__, 'media_column_css' ] );
@@ -285,14 +216,6 @@ class Reloadify_Media {
 		return $schedules;
 	}
 
-	/* ---------------- Images ---------------- */
-
-	/**
-	 * Only remaps the source mimes WordPress already knows how to generate
-	 * intermediate sizes for. Leaves the original uploaded file's own mime
-	 * type alone -- this only affects the extra generated sizes (thumbnail,
-	 * medium, large, etc.), never the original.
-	 */
 	public static function set_output_format( $formats ) {
 		$preferred = self::preferred_image_format();
 
@@ -308,13 +231,6 @@ class Reloadify_Media {
 		return $formats;
 	}
 
-	/**
-	 * Caps quality at 82 -- WordPress's own long-standing default JPEG
-	 * quality, and a level broadly considered visually indistinguishable
-	 * from higher settings. Only ever lowers a value above that; never
-	 * raises a lower value someone (a theme, another plugin, the host)
-	 * already configured on purpose.
-	 */
 	public static function cap_quality( $quality, $mime_type ) {
 		$capped_mimes = [ 'image/jpeg', 'image/webp', 'image/avif' ];
 
@@ -325,14 +241,6 @@ class Reloadify_Media {
 		return min( (int) $quality, 82 );
 	}
 
-	/**
-	 * Runs a few existing (pre-dating this feature, or added while it was
-	 * off) images through the normal WordPress thumbnail regenerator --
-	 * which, with the filters above active, produces WebP/AVIF sizes for
-	 * them too -- a handful at a time so this can never become one long
-	 * blocking job on a live site. Marks each one processed so it's never
-	 * repeated.
-	 */
 	public static function backfill_existing_images() {
 		if ( ! self::is_enabled() ) {
 			return 0;
@@ -350,7 +258,8 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; capped batch size (posts_per_page above), runs only in a deferred WP-Cron job.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => self::BACKFILL_META_KEY,
@@ -375,16 +284,14 @@ class Reloadify_Media {
 		return count( $query->posts );
 	}
 
-	/**
-	 * How many existing images are still waiting on the background job.
-	 */
 	public static function count_pending( $type ) {
 		$args = [
 			'post_type'      => 'attachment',
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; posts_per_page => 1 above bounds this to a single-row lookup.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => ( 'video' === $type ) ? self::VIDEO_BACKFILL_META_KEY : self::BACKFILL_META_KEY,
@@ -399,16 +306,6 @@ class Reloadify_Media {
 		return (int) $query->found_posts;
 	}
 
-	/**
-	 * Runs one batch right now instead of waiting for WP-Cron's next tick --
-	 * WP-Cron only fires on real site traffic (or a configured system cron),
-	 * so a low-traffic or local site can sit with existing media
-	 * unprocessed for a long time otherwise. Triggered only by an explicit
-	 * admin click (the "Optimize existing media now" button), never
-	 * automatically. Runs one video synchronously too (see
-	 * backfill_one_video_now()) rather than only scheduling it, for the
-	 * same reason.
-	 */
 	public static function run_backfill_batch_now() {
 		if ( ! self::is_enabled() ) {
 			return [
@@ -436,17 +333,6 @@ class Reloadify_Media {
 		];
 	}
 
-	/**
-	 * Measures a REAL before/after size, not an estimate. Runs once per
-	 * image, right after WordPress finishes generating its thumbnail sizes
-	 * (with the WebP/AVIF filters above already applied to that process).
-	 * To get a genuine comparison, it re-saves ONE representative size
-	 * (medium, or the largest available) in the image's original format,
-	 * purely to measure it, then immediately deletes that comparison file
-	 * -- it's never kept or served. This is one extra resize per upload
-	 * (not per size, and not per page load), which is why it's limited to
-	 * a single representative size rather than every size.
-	 */
 	public static function record_image_stats( $metadata, $attachment_id ) {
 		$preferred = self::preferred_image_format();
 
@@ -494,13 +380,13 @@ class Reloadify_Media {
 
 		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! file_exists( $saved['path'] ) ) {
 			if ( file_exists( $comparison_path ) ) {
-				wp_delete_file( $comparison_path ); // In case a partial file was left behind.
+				wp_delete_file( $comparison_path );
 			}
 			return $metadata;
 		}
 
 		$comparison_bytes = filesize( $saved['path'] );
-		wp_delete_file( $saved['path'] ); // Comparison file only ever existed to be measured -- never kept or served.
+		wp_delete_file( $saved['path'] );
 
 		if ( $comparison_bytes <= 0 ) {
 			return $metadata;
@@ -521,8 +407,6 @@ class Reloadify_Media {
 		return $metadata;
 	}
 
-	/* ---------------- Video ---------------- */
-
 	public static function maybe_schedule_video_compression( $attachment_id ) {
 		$mime = get_post_mime_type( $attachment_id );
 
@@ -531,10 +415,7 @@ class Reloadify_Media {
 		}
 
 		if ( ! self::ffmpeg_path() ) {
-			// Not available on this server -- leave the video file alone
-			// (don't fake it), but DO mark it as checked so it stops
-			// showing up as "pending" forever. Nothing about re-checking
-			// it will change unless the server itself changes.
+
 			if ( '' === get_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, true ) ) {
 				update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 'unavailable' );
 			}
@@ -546,12 +427,6 @@ class Reloadify_Media {
 		}
 	}
 
-	/**
-	 * Compresses one video, deferred to WP-Cron so it never runs inside the
-	 * person's actual upload request. Only ever swaps the file if ffmpeg
-	 * reports success AND the result is a valid, smaller file -- otherwise
-	 * the original is left exactly as it was.
-	 */
 	public static function compress_video( $attachment_id ) {
 		$ffmpeg = self::ffmpeg_path();
 
@@ -573,17 +448,6 @@ class Reloadify_Media {
 
 		$tmp_out       = $file . '.reloadify-optimized.mp4';
 
-		// -crf 26 with libx264 is a standard "visually near-lossless" web
-		// encode setting; -preset veryfast trades a little compression
-		// efficiency for a much shorter run time, which matters more here
-		// since this runs on the live server, not offline; +faststart
-		// moves metadata to the front of the file so it starts playing
-		// before it's fully downloaded.
-		// 'nice' lowers the OS process priority so this doesn't compete with
-		// real traffic -- but it's a Unix-only tool with no Windows
-		// equivalent. On Windows, prepending it made the whole command line
-		// fail to run at all (ffmpeg never even started), so it's only
-		// added on non-Windows systems.
 		$is_windows = ( 'WIN' === strtoupper( substr( PHP_OS, 0, 3 ) ) );
 		$cmd        = sprintf(
 			'%s%s -y -i %s -c:v libx264 -crf 26 -preset veryfast -c:a aac -b:a 128k -movflags +faststart %s 2>&1',
@@ -596,15 +460,8 @@ class Reloadify_Media {
 		$output    = [];
 		$exit_code = 1;
 
-		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- exec() is required to invoke ffmpeg; guarded by ffmpeg_path()'s own feature/availability detection, runs only inside a deferred WP-Cron request, and only ever compresses this plugin's own uploaded video files with fully-escaped arguments.
 		@exec( $cmd, $output, $exit_code );
 
-		// A truncated/corrupt encode can still exit 0 in rare cases (process
-		// killed, disk full mid-write). Beyond the existing exit-code and
-		// size checks, also reject anything implausibly small -- a genuine
-		// CRF 26 re-encode of real video essentially never comes out under
-		// 2% of the original size; that shape means the output is broken,
-		// not well-compressed.
 		$succeeded = ( 0 === $exit_code )
 			&& file_exists( $tmp_out )
 			&& filesize( $tmp_out ) > ( $original_size * 0.02 )
@@ -630,9 +487,7 @@ class Reloadify_Media {
 					'measured_at'       => time(),
 				] );
 			} elseif ( file_exists( $tmp_out ) ) {
-				// The compressed file was produced but couldn't replace the
-				// original (permissions, disk, etc.) -- leave the original
-				// video untouched and just clean up the leftover temp file.
+
 				wp_delete_file( $tmp_out );
 			}
 		} elseif ( file_exists( $tmp_out ) ) {
@@ -642,13 +497,6 @@ class Reloadify_Media {
 		update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 1 );
 	}
 
-	/**
-	 * Splits video backfill state into two real, distinguishable numbers
-	 * instead of one ambiguous "remaining" count: videos still waiting to
-	 * be checked, vs. videos already checked where this specific server
-	 * genuinely can't compress them (no ffmpeg). The UI uses this to show
-	 * green ("done") vs red ("blocked, here's why") instead of guessing.
-	 */
 	public static function video_backfill_status() {
 		$remaining = new WP_Query( [
 			'post_type'      => 'attachment',
@@ -656,7 +504,8 @@ class Reloadify_Media {
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; posts_per_page => 1 above bounds this to a single-row lookup.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -671,7 +520,8 @@ class Reloadify_Media {
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; posts_per_page => 1 above bounds this to a single-row lookup.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -687,27 +537,17 @@ class Reloadify_Media {
 		];
 	}
 
-	/**
-	 * Compresses ONE pending video right now, synchronously, instead of
-	 * deferring to WP-Cron. Only reachable from the explicit
-	 * "Optimize existing media now" admin action (see
-	 * run_backfill_batch_now() below) -- never from a visitor request or
-	 * an automatic hook -- so a several-second ffmpeg run here is an
-	 * admin-initiated wait, not something a site visitor is stuck behind.
-	 * New-upload video compression still goes through WP-Cron as before.
-	 */
 	private static function backfill_one_video_now() {
 		if ( ! self::ffmpeg_path() ) {
-			// Mark any still-pending videos as checked (not endlessly
-			// "pending") so the count reflects reality: not possible here,
-			// not "still working on it".
+
 			$query = new WP_Query( [
 				'post_type'      => 'attachment',
 				'post_mime_type' => 'video',
 				'post_status'    => 'inherit',
-				'posts_per_page' => 1000, // Bulk "mark as checked" only, not per-page filtering -- capped so one click on a very large library can't load every video ID into memory at once; a second click picks up any remainder.
+				'posts_per_page' => 1000,
 				'fields'         => 'ids',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; only reachable from an explicit admin click (never a visitor request or automatic hook), and posts_per_page above bounds the cost.
+
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 				'meta_query'     => [
 					[
 						'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -729,7 +569,8 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; posts_per_page => 1 above bounds this to a single-row lookup.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -746,13 +587,6 @@ class Reloadify_Media {
 		return 1;
 	}
 
-	/**
-	 * Same gradual, batched approach as backfill_existing_images(), for
-	 * video that predates this feature (or was uploaded while ffmpeg
-	 * wasn't available / the toggle was off). Only schedules compression
-	 * jobs -- the actual work still happens in compress_video() above, via
-	 * WP-Cron, never blocking a live request.
-	 */
 	public static function backfill_existing_videos() {
 		if ( ! self::is_enabled() ) {
 			return;
@@ -766,7 +600,8 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- there is no non-meta way to ask "which attachments are missing this meta key"; capped batch size (posts_per_page above), runs only in a deferred WP-Cron job.
+
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -780,13 +615,6 @@ class Reloadify_Media {
 		}
 	}
 
-	/**
-	 * Feature-detects ffmpeg itself: whether the PHP functions needed to
-	 * run it are even callable (a lot of shared hosts disable exec/
-	 * shell_exec outright), and if so, whether the binary can actually be
-	 * found. Returns false rather than guessing the moment either check
-	 * fails.
-	 */
 	public static function ffmpeg_path() {
 		static $checked = false;
 		static $path    = false;
@@ -818,9 +646,6 @@ class Reloadify_Media {
 			}
 		}
 
-		// `command -v` only works on Unix-like shells; Windows needs `where`.
-		// Try both rather than assuming the OS -- some Windows local-dev
-		// stacks (WSL-backed ones especially) still run a Unix-style shell.
 		$lookup_commands = $is_windows
 			? [ 'where ffmpeg 2>NUL', 'command -v ffmpeg 2>/dev/null' ]
 			: [ 'command -v ffmpeg 2>/dev/null', 'which ffmpeg 2>/dev/null' ];
@@ -828,7 +653,7 @@ class Reloadify_Media {
 		foreach ( $lookup_commands as $lookup ) {
 			$output    = [];
 			$exit_code = 1;
-			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- read-only PATH lookup, gated by the exec()/disable_functions checks above.
+
 			@exec( $lookup, $output, $exit_code );
 
 			if ( 0 === $exit_code && ! empty( $output[0] ) ) {
@@ -840,16 +665,6 @@ class Reloadify_Media {
 		return $path;
 	}
 
-	/* ---------------- Lazy loading ---------------- */
-
-	/**
-	 * WordPress's native loading="lazy" (forced on above via
-	 * wp_lazy_loading_enabled) only ever applies to <img> tags -- it does
-	 * not touch <iframe> embeds (YouTube, Vimeo, etc. added via the block
-	 * editor's embed feature), which are very often the single heaviest
-	 * element on a page. This adds the same attribute to any iframe that
-	 * doesn't already specify one, without touching anything else about it.
-	 */
 	public static function lazy_load_iframes( $html ) {
 		if ( empty( $html ) || false === stripos( $html, '<iframe' ) ) {
 			return $html;
@@ -859,15 +674,13 @@ class Reloadify_Media {
 			'/<iframe\b([^>]*)>/i',
 			function ( $matches ) {
 				if ( preg_match( '/\bloading\s*=/i', $matches[1] ) ) {
-					return $matches[0]; // Already has its own loading attribute -- leave it alone.
+					return $matches[0];
 				}
 				return '<iframe' . $matches[1] . ' loading="lazy">';
 			},
 			$html
 		);
 	}
-
-	/* ---------------- Media Library visibility ---------------- */
 
 	public static function add_media_column( $columns ) {
 		$columns['reloadify_media_optimize'] = __( 'Optimization', 'reloadify-frontend-sync' );
@@ -894,12 +707,12 @@ class Reloadify_Media {
 			$percent = (int) $stats['percent_saved'];
 			$label   = ( 'video' === $stats['type'] )
 				? sprintf(
-					/* translators: %d: percent smaller */
+					/* translators: %d: percentage the compressed video is smaller than the original. */
 					__( 'Video compressed \u2013 %d%% smaller', 'reloadify-frontend-sync' ),
 					max( 0, $percent )
 				)
 				: sprintf(
-					/* translators: 1: WEBP or AVIF, 2: percent smaller */
+					/* translators: %1$s: uppercase image format name (e.g. WEBP). %2$d: percentage smaller than the original. */
 					__( '%1$s \u2013 about %2$d%% smaller', 'reloadify-frontend-sync' ),
 					strtoupper( $stats['format'] ),
 					max( 0, $percent )

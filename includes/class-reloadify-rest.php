@@ -167,11 +167,9 @@ class Reloadify_Rest {
 		$body      = is_array( $body ) ? $body : [];
 		$confirmed = ! empty( $body['confirmed'] );
 
-		// Use the desired values from the request (form), or fall back to saved settings
 		$settings = Reloadify_Performance::get_settings();
-		$desired  = $settings['desired']; // Start with saved values
-		
-		// Merge in any values from the request
+		$desired  = $settings['desired'];
+
 		if ( isset( $body['desired'] ) && is_array( $body['desired'] ) ) {
 			foreach ( $body['desired'] as $key => $value ) {
 				$desired[ $key ] = $value;
@@ -181,14 +179,12 @@ class Reloadify_Rest {
 		$result   = Reloadify_Performance::attempt_opcache_override( $desired, $confirmed );
 		$result   = is_array( $result ) ? $result : [];
 
-		// If the write was successful, save these as the new desired values
 		$anySuccess = ! empty( $result['success'] );
 		if ( $anySuccess ) {
 			$settings['desired'] = $desired;
 			update_option( Reloadify_Performance::OPTION_KEY, $settings );
 		}
 
-		// If successful, return the desired values as "live" for immediate display
 		$live = $anySuccess ? $desired : Reloadify_Performance::get_live_values();
 
 		return rest_ensure_response( [
@@ -200,23 +196,19 @@ class Reloadify_Rest {
 	public static function apply_server_override( WP_REST_Request $request ) {
 		$body    = $request->get_json_params();
 		$body    = is_array( $body ) ? $body : [];
-		
-		// Use the desired values from the request (form), or fall back to saved settings
+
 		$settings = Reloadify_Performance::get_settings();
-		$desired  = $settings['desired']; // Start with saved values
-		
-		// Merge in any values from the request
+		$desired  = $settings['desired'];
+
 		if ( isset( $body['desired'] ) && is_array( $body['desired'] ) ) {
 			foreach ( $body['desired'] as $key => $value ) {
 				$desired[ $key ] = $value;
 			}
 		}
-		
+
 		$results  = Reloadify_Performance::attempt_server_override( $desired );
 		$results  = is_array( $results ) ? $results : [];
-		
-		// If the write was successful, save these as the new desired values
-		// so they persist in the database and display correctly
+
 		$anySuccess = false;
 		if ( isset( $results['user_ini'] ) && is_array( $results['user_ini'] ) && ! empty( $results['user_ini']['success'] ) ) {
 			$anySuccess = true;
@@ -224,14 +216,12 @@ class Reloadify_Rest {
 		if ( isset( $results['htaccess'] ) && is_array( $results['htaccess'] ) && ! empty( $results['htaccess']['success'] ) ) {
 			$anySuccess = true;
 		}
-		
+
 		if ( $anySuccess ) {
 			$settings['desired'] = $desired;
 			update_option( Reloadify_Performance::OPTION_KEY, $settings );
 		}
 
-		// If successful, return the desired values as "live" for immediate display
-		// (they'll update in ini_get() once PHP re-reads the config files)
 		$live = $anySuccess ? $desired : Reloadify_Performance::get_live_values();
 
 		return rest_ensure_response( [
@@ -253,8 +243,9 @@ class Reloadify_Rest {
 
 	public static function get_speed() {
 		return rest_ensure_response( [
-			'enabled' => Reloadify_Speed::is_enabled(),
-			'items'   => Reloadify_Speed::items(),
+			'enabled'          => Reloadify_Speed::is_enabled(),
+			'items'            => Reloadify_Speed::items(),
+			'delay_js_enabled' => Reloadify_Speed::delay_js_enabled(),
 		] );
 	}
 
@@ -263,9 +254,14 @@ class Reloadify_Rest {
 		$body    = is_array( $body ) ? $body : [];
 		$enabled = Reloadify_Speed::set_enabled( ! empty( $body['enabled'] ) );
 
+		if ( isset( $body['delay_js_enabled'] ) ) {
+			Reloadify_Speed::set_delay_js_enabled( ! empty( $body['delay_js_enabled'] ) );
+		}
+
 		return rest_ensure_response( [
-			'enabled' => $enabled,
-			'items'   => Reloadify_Speed::items(),
+			'enabled'          => $enabled,
+			'items'            => Reloadify_Speed::items(),
+			'delay_js_enabled' => Reloadify_Speed::delay_js_enabled(),
 		] );
 	}
 
@@ -370,13 +366,6 @@ class Reloadify_Rest {
 		$body   = is_array( $body ) ? $body : [];
 		$result = Reloadify_Performance::update_settings( $body );
 
-		// apply_runtime_overrides() already ran once for this request, at
-		// plugins_loaded -- before the settings above were saved. Without
-		// running it again here, the "live" values below would reflect the
-		// *previous* saved state, not what was just saved, making it look
-		// like Save did nothing even though the next page load would have
-		// picked it up correctly. Re-applying now makes the response the
-		// person sees immediately after clicking Save actually true.
 		Reloadify_Performance::apply_runtime_overrides();
 
 		return rest_ensure_response( [

@@ -1,5 +1,5 @@
 {
- "translation-revision-date": "2026-07-29 00:00+0000",
+ "translation-revision-date": "2026-08-04 00:00+0000",
  "generator": "manual",
  "domain": "messages",
  "locale_data": {
@@ -99,6 +99,9 @@
    "Could not sync from the server.": [
     "সার্ভার থেকে সিঙ্ক করা যায়নি।"
    ],
+   "Could not update Delay JavaScript.": [
+    "ডিলে জাভাস্ক্রিপ্ট আপডেট করা যায়নি।"
+   ],
    "Could not update Media Optimization.": [
     "মিডিয়া অপ্টিমাইজেশন আপডেট করা যায়নি।"
    ],
@@ -119,6 +122,15 @@
    ],
    "Default placement, out of the way of most site chrome.": [
     "ডিফল্ট অবস্থান, সাইটের বেশিরভাগ UI উপাদান থেকে দূরে।"
+   ],
+   "Delay JavaScript turned off.": [
+    "ডিলে জাভাস্ক্রিপ্ট বন্ধ করা হয়েছে।"
+   ],
+   "Delay JavaScript turned on.": [
+    "ডিলে জাভাস্ক্রিপ্ট চালু করা হয়েছে।"
+   ],
+   "Delay non-essential JavaScript until interaction": [
+    "মিথস্ক্রিয়া না হওয়া পর্যন্ত অপ্রয়োজনীয় জাভাস্ক্রিপ্ট বিলম্বিত করুন"
    ],
    "Delete Data on Uninstall": [
     "আনইনস্টলে ডেটা মুছে ফেলুন"
@@ -146,6 +158,9 @@
    ],
    "Hard reload": [
     "হার্ড রিলোড"
+   ],
+   "Holds third-party scripts (analytics, chat widgets, ad tags) until the visitor first scrolls, clicks, or taps -- or after 7 seconds either way. jQuery, this plugin's own scripts, and WordPress core bundles are never delayed. Off by default: test your site after turning this on, since a script that genuinely needs to run immediately would be affected too.": [
+    "ভিজিটর প্রথমবার স্ক্রল, ক্লিক বা ট্যাপ না করা পর্যন্ত — অথবা যেকোনোভাবে ৭ সেকেন্ড পর — থার্ড-পার্টি স্ক্রিপ্ট (অ্যানালিটিক্স, চ্যাট উইজেট, বিজ্ঞাপন ট্যাগ) আটকে রাখে। jQuery, এই প্লাগইনের নিজস্ব স্ক্রিপ্ট এবং ওয়ার্ডপ্রেসের মূল বান্ডেলগুলো কখনও বিলম্বিত করা হয় না। ডিফল্টভাবে বন্ধ: এটি চালু করার পর আপনার সাইট পরীক্ষা করুন, কারণ যে স্ক্রিপ্টের সত্যিকার অর্থে সাথে সাথে চলা প্রয়োজন, সেটিও প্রভাবিত হতে পারে।"
    ],
    "I understand this can crash PHP for the whole server, and I’m only doing this on a local development site I fully control.": [
     "আমি বুঝি এটি পুরো সার্ভারের PHP ক্র্যাশ করাতে পারে, এবং আমি শুধুমাত্র এমন একটি লোকাল ডেভেলপমেন্ট সাইটে এটি করছি যা আমি সম্পূর্ণভাবে নিয়ন্ত্রণ করি।"

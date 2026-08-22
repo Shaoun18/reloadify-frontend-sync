@@ -4,39 +4,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * "Speed Boost" — on by default the moment the plugin activates, unlike the
- * Server Performance panel (which stays strictly opt-in per directive).
- *
- * IMPORTANT — what this deliberately does NOT do: promise a fixed percentage
- * (e.g. "60-70% faster"). No plugin can honestly guarantee that — the real
- * number depends on the theme, other plugins, hosting, and traffic, and
- * varies per site. Advertising a made-up figure is exactly the kind of claim
- * WordPress.org's plugin review rejects, and it would be false. What's here
- * instead is a short list of changes that are genuinely safe, genuinely
- * always-beneficial (or neutral), and genuinely reversible with one toggle.
- *
- * On the backend (builder/editor) side specifically: this can't make a page
- * builder's own JavaScript render faster, or make its save request itself do
- * less work — that's the builder's code, out of reach for any other plugin.
- * What genuinely IS in reach, and is what actually causes a lot of the "the
- * builder feels slow / save hangs or fails" complaints on tight hosting (and
- * on local dev environments like Local, which often ship a low default
- * memory_limit): raising wp-admin's own memory_limit / max_execution_time
- * headroom, and only ever raising it, never lowering it below what the host
- * already allows. That's what ease_backend_load() below does, scoped to
- * is_admin() (which is also true for admin-ajax.php requests -- exactly
- * where Divi's, Elementor's, and most other builders' save actions go
- * through) so it never touches a plain frontend visitor's request.
- */
 class Reloadify_Speed {
 
 	const OPTION_KEY = 'reloadify_speed_boost_enabled';
+	const DELAY_JS_OPTION_KEY = 'reloadify_delay_js_enabled';
 
-	/**
-	 * Enabled by default for every install (new or upgrading) unless the
-	 * site owner has explicitly turned it off.
-	 */
+	const DELAY_JS_EXCLUDED_HANDLES = [ 'jquery', 'jquery-core', 'jquery-migrate', 'reloadify-reloader-js', 'reloadify-scroll-top' ];
+
+	public static function delay_js_enabled() {
+		return (bool) get_option( self::DELAY_JS_OPTION_KEY, false );
+	}
+
+	public static function set_delay_js_enabled( $enabled ) {
+		$enabled = (bool) $enabled;
+		add_option( self::DELAY_JS_OPTION_KEY, false );
+		update_option( self::DELAY_JS_OPTION_KEY, $enabled );
+		return self::delay_js_enabled();
+	}
+
 	public static function is_enabled() {
 		return (bool) get_option( self::OPTION_KEY, true );
 	}
@@ -44,25 +29,12 @@ class Reloadify_Speed {
 	public static function set_enabled( $enabled ) {
 		$enabled = (bool) $enabled;
 
-		// update_option() compares the new value against get_option()'s
-		// current value and skips the write if they look the same. The very
-		// first time this is ever turned off, get_option() returns `false`
-		// because the row doesn't exist yet -- which is indistinguishable
-		// from the boolean `false` we're trying to save, so the write was
-		// silently skipped. That's why it showed "on" again after a
-		// refresh. add_option() guarantees the row exists first, so the
-		// update_option() call below always has a real value to compare
-		// against and actually writes.
 		add_option( self::OPTION_KEY, true );
 		update_option( self::OPTION_KEY, $enabled );
 
 		return self::is_enabled();
 	}
 
-	/**
-	 * What's actually included, exposed to the UI so the toggle isn't a
-	 * black box — every line here is something the person can go verify.
-	 */
 	public static function items() {
 		return [
 			[
@@ -97,56 +69,77 @@ class Reloadify_Speed {
 	}
 
 	public static function init() {
-		if ( ! self::is_enabled() ) {
-			return;
+		if ( self::is_enabled() ) {
+			add_action( 'init', [ __CLASS__, 'disable_emojis' ] );
+			add_action( 'init', [ __CLASS__, 'trim_head_links' ] );
+
+			add_action( 'plugins_loaded', [ __CLASS__, 'ensure_opcache_on' ], 1 );
+
+			add_action( 'admin_init', [ __CLASS__, 'ease_backend_load' ] );
+
+			add_filter( 'heartbeat_settings', [ __CLASS__, 'throttle_heartbeat' ] );
+
+			add_action( 'wp_print_scripts', [ __CLASS__, 'dequeue_frontend_heartbeat' ], 100 );
+
+			add_filter( 'wp_revisions_to_keep', [ __CLASS__, 'cap_revisions' ], 10, 2 );
+			add_action( 'pre_ping', [ __CLASS__, 'remove_self_pingbacks' ] );
 		}
 
-		add_action( 'init', [ __CLASS__, 'disable_emojis' ] );
-		add_action( 'init', [ __CLASS__, 'trim_head_links' ] );
-
-		// plugins_loaded, same hook Reloadify_Performance uses, so this runs before
-		// most of WordPress and any theme/plugin code that might check it.
-		add_action( 'plugins_loaded', [ __CLASS__, 'ensure_opcache_on' ], 1 );
-
-		// admin_init covers admin-ajax.php requests too (WP_ADMIN is defined
-		// before plugins even load there), which is where builder save
-		// actions actually run -- so this is in effect before the heavy
-		// save callback itself fires.
-		add_action( 'admin_init', [ __CLASS__, 'ease_backend_load' ] );
-
-		add_filter( 'heartbeat_settings', [ __CLASS__, 'throttle_heartbeat' ] );
-
-		// wp_print_scripts (not wp_enqueue_scripts) runs after every plugin
-		// and theme has had its chance to enqueue 'heartbeat' as a dependency
-		// -- dequeuing here removes it from the frontend output without
-		// touching the registration itself, so nothing that depends on it
-		// breaks; wp-admin is left alone entirely.
-		add_action( 'wp_print_scripts', [ __CLASS__, 'dequeue_frontend_heartbeat' ], 100 );
-
-		add_filter( 'wp_revisions_to_keep', [ __CLASS__, 'cap_revisions' ], 10, 2 );
-		add_action( 'pre_ping', [ __CLASS__, 'remove_self_pingbacks' ] );
+		if ( self::delay_js_enabled() && ! is_admin() ) {
+			add_filter( 'script_loader_tag', [ __CLASS__, 'delay_script_tag' ], 10, 2 );
+			add_action( 'wp_footer', [ __CLASS__, 'print_delay_js_activator' ], 1 );
+		}
 	}
 
-	/**
-	 * A filter, not a WP_POST_REVISIONS constant define -- the constant has
-	 * to be set before wp-settings.php loads (too early for a plugin to
-	 * reach), and once set it can't be changed at runtime at all. This
-	 * filter runs every time WordPress is about to prune revisions and
-	 * simply caps the number kept going forward; it never touches revisions
-	 * already saved before this was turned on.
-	 */
+	public static function delay_script_tag( $tag, $handle ) {
+		if ( in_array( $handle, self::DELAY_JS_EXCLUDED_HANDLES, true ) ) {
+			return $tag;
+		}
+
+		if ( 0 === strpos( $handle, 'reloadify-' ) ) {
+			return $tag;
+		}
+
+		return str_replace( [ 'text/javascript', "type='text/javascript'" ], 'type="reloadify/delayed-js"', $tag );
+	}
+
+	public static function print_delay_js_activator() {
+		?>
+		<script>
+		(function () {
+			var activated = false;
+			function activate() {
+				if ( activated ) { return; }
+				activated = true;
+				document.querySelectorAll( 'script[type="reloadify/delayed-js"]' ).forEach( function ( oldScript ) {
+					var newScript = document.createElement( 'script' );
+					for ( var i = 0; i < oldScript.attributes.length; i++ ) {
+						var attr = oldScript.attributes[ i ];
+						if ( attr.name !== 'type' ) {
+							newScript.setAttribute( attr.name, attr.value );
+						}
+					}
+					newScript.text = oldScript.text;
+					oldScript.parentNode.replaceChild( newScript, oldScript );
+				} );
+				[ 'mousemove', 'scroll', 'touchstart', 'keydown', 'click' ].forEach( function ( evt ) {
+					window.removeEventListener( evt, activate, { passive: true } );
+				} );
+				clearTimeout( fallback );
+			}
+			var fallback = setTimeout( activate, 7000 );
+			[ 'mousemove', 'scroll', 'touchstart', 'keydown', 'click' ].forEach( function ( evt ) {
+				window.addEventListener( evt, activate, { passive: true, once: true } );
+			} );
+		})();
+		</script>
+		<?php
+	}
+
 	public static function cap_revisions( $num, $post ) {
 		return 5;
 	}
 
-	/**
-	 * WordPress pings itself over HTTP by default when a post links to
-	 * another post on the same site -- a real outbound request plus a
-	 * comments-table write for a "notification" you already know about
-	 * because you just wrote both posts yourself. This strips your own
-	 * site's URLs out of the list of links a save will ping, leaving pings
-	 * to genuinely external sites untouched.
-	 */
 	public static function remove_self_pingbacks( &$links ) {
 		$home = untrailingslashit( home_url() );
 
@@ -157,24 +150,11 @@ class Reloadify_Speed {
 		}
 	}
 
-	/**
-	 * Heartbeat's default interval is as low as 15 seconds on some admin
-	 * screens (post editor) and 60 elsewhere. Flooring everything at 60
-	 * cuts that traffic without turning Heartbeat off outright in wp-admin,
-	 * where some features (autosave conflict checks, session expiry
-	 * notices) still rely on it existing.
-	 */
 	public static function throttle_heartbeat( $settings ) {
 		$settings['interval'] = 60;
 		return $settings;
 	}
 
-	/**
-	 * A plain frontend visitor never needs Heartbeat at all -- it's a
-	 * wp-admin/editor mechanism. Removing it from the public side removes
-	 * a recurring background request per open tab with zero functional
-	 * loss for visitors.
-	 */
 	public static function dequeue_frontend_heartbeat() {
 		if ( is_admin() ) {
 			return;
@@ -207,6 +187,7 @@ class Reloadify_Speed {
 
 		return array_filter( $urls, function ( $url ) {
 			$url = is_array( $url ) ? ( isset( $url['href'] ) ? $url['href'] : '' ) : $url;
+			// phpcs:ignore PluginCheck.CodeAnalysis.Offloading -- Filters WordPress emoji CDN URLs, not offloading content.
 			return false === stripos( (string) $url, 's.w.org' );
 		} );
 	}
@@ -218,11 +199,6 @@ class Reloadify_Speed {
 		remove_action( 'wp_head', 'wp_generator' );
 	}
 
-	/**
-	 * Strictly additive: only flips OPcache on if it's compiled in and
-	 * currently off. Never touches a host that already has it configured
-	 * one way or the other on purpose.
-	 */
 	public static function ensure_opcache_on() {
 		if ( ! function_exists( 'opcache_get_status' ) ) {
 			return;
@@ -233,22 +209,10 @@ class Reloadify_Speed {
 			return;
 		}
 
-		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- opcache.enable is PHP_INI_ALL; only flips a currently-off value on.
+		// phpcs:ignore WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged -- Only flips OPcache on when it's already installed but disabled; no other opcache setting is touched.
 		@ini_set( 'opcache.enable', '1' );
 	}
 
-	/**
-	 * Raises wp-admin's own memory_limit / max_execution_time headroom --
-	 * and ONLY raises it, never lowers it below whatever the host already
-	 * has configured. Scoped to is_admin(), which is also true for
-	 * admin-ajax.php requests (where builder save actions run), so a plain
-	 * frontend visitor's request is never touched by this at all -- that
-	 * scoping is deliberate, not incidental: applying this kind of change
-	 * unconditionally on every request (frontend included) is exactly the
-	 * pattern WordPress.org's plugin review flags, and there's no reason a
-	 * visitor loading a page needs more memory/time than the host already
-	 * gives them.
-	 */
 	public static function ease_backend_load() {
 		if ( ! is_admin() ) {
 			return;
@@ -266,23 +230,19 @@ class Reloadify_Speed {
 		}
 
 		if ( self::limit_is_at_least( $directive, $current, $target ) ) {
-			return; // Host already allows at least this much (or is unlimited) -- leave it alone.
+			return;
 		}
 
-		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- wp-admin/admin-ajax.php only (see is_admin() guard above); only ever raises, never lowers, the host's own configured limit.
+		// phpcs:ignore WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged -- Admin-screen-only, raises the limit no higher than the fixed target above, never lowers it.
 		@ini_set( $directive, $target );
 
 		if ( 'max_execution_time' === $directive && function_exists( 'set_time_limit' ) ) {
-			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- companion to the max_execution_time override immediately above.
+
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_set_time_limit, Squiz.PHP.DiscouragedFunctions.Discouraged -- Admin-screen-only raise, capped at the fixed target above.
 			@set_time_limit( (int) $target );
 		}
 	}
 
-	/**
-	 * True if $current already meets or exceeds $target for the given
-	 * directive -- including "unlimited" (-1 for memory_limit, 0 for
-	 * max_execution_time), which always counts as "at least" any target.
-	 */
 	private static function limit_is_at_least( $directive, $current, $target ) {
 		$current_val = self::normalize_limit( $directive, $current );
 		$target_val  = self::normalize_limit( $directive, $target );
@@ -294,11 +254,6 @@ class Reloadify_Speed {
 		return $current_val >= $target_val;
 	}
 
-	/**
-	 * Converts a memory_limit string ("128M", "1G", "-1") or
-	 * max_execution_time string ("30", "0") into a plain integer -- bytes
-	 * for memory, seconds for time -- with -1 meaning "unlimited" for both.
-	 */
 	private static function normalize_limit( $directive, $value ) {
 		$value = trim( (string) $value );
 

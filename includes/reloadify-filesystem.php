@@ -4,12 +4,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Whether a path is writable, using the WordPress filesystem API.
- *
- * @param string $path Absolute filesystem path.
- * @return bool
- */
 function reloadify_path_is_writable( $path ) {
 	global $wp_filesystem;
 

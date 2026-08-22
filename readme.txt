@@ -2,9 +2,9 @@
 Contributors: shaounchandrashill
 Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,7 +25,7 @@ Reloadify Frontend Sync keeps every open browser automatically synchronized, all
 = Key Features =
 
 *   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, **WPBakery Page Builder**, and the classic WordPress editor.
-*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
+*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, UC Browser, Vivaldi, Yandex Browser, and Samsung Internet, normal and incognito/private alike.
 *   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
 *   Choice of soft reload or cache-busting hard reload.
 *   A **Last change detected** readout with a one-click **Check now** button, so you can confirm the plugin picked up a save without waiting for a frontend tab to reload.
@@ -99,11 +99,39 @@ Your feedback helps improve the plugin and supports future updates.
 
 == Screenshots ==
 
-1. Cross-Browser Reload tab — Developer Mode toggle, live browser/reload-mode status, soft vs hard reload choice, and per-browser normal/incognito controls for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser.
+1. Cross-Browser Reload tab — Developer Mode toggle, live browser/reload-mode status, soft vs hard reload choice, and per-browser normal/incognito controls for Chrome, Brave, Edge, Firefox, Safari, Opera, UC Browser, Vivaldi, Yandex Browser, and Samsung Internet.
 2. Server Performance tab — live PHP/OPcache values the plugin applies at runtime, plus the settings that require host-level changes, each clearly marked LIVE and AUTO-ATTEMPT.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
+== Upgrade Notice ==
+
+= 1.2.0 =
+Faster frontend reload checks, improved active-tab synchronization, production minified assets, improved cache-aware change detection, WordPress 7.1 compatibility, and optional delayed third-party JavaScript.
+
 == Changelog ==
+
+= 1.2.0 =
+* Faster frontend reloads: the default poll interval is now 500ms, with faster focus and visibility catch-up checks.
+* Faster All Tabs handoff with a 2-second heartbeat and 6-second stale window.
+* Existing installations migrate automatically when the previous poll interval was never customized.
+* Production CSS and JavaScript are now minified, while readable source files remain available for SCRIPT_DEBUG.
+* Active-tab detection now checks immediately when a tab regains focus or becomes visible.
+* Fixed Active Tab Only incorrectly reloading other tabs when the JavaScript setting was the string "0".
+* Fixed open tabs continuing to use old reload settings after changes in wp-admin.
+* Fixed active-tab detection across multiple browser windows and private/incognito windows.
+* Fixed plugin activation causing unnecessary reloads on already-open frontend tabs.
+* Fixed change detection on some cached live sites when an outdated security token was present.
+* Removed unnecessary Speed Boost and Media Optimization detail lists from the settings cards.
+* Refreshed Developer Mode and Reload All Tabs tooltip wording.
+* Completed Plugin Check cleanup with no behavior changes.
+* Verified REST route capability checks and nonces, WordPress API file writes, output escaping, and absence of direct database queries.
+* Verified WordPress 7.1 compatibility.
+* New: **Delay non-essential JavaScript until interaction**. Third-party scripts can be delayed until visitor interaction or 7 seconds. WordPress core, jQuery, and Reloadify scripts are excluded. Off by default.
+
+= 1.1.2 =
+*   Added a `blueprint.json` so the "Live Preview" (WordPress Playground) button on this plugin's WordPress.org page works — it was previously disabled with a "missing or invalid blueprint.json" notice.
+*   Added support for three more browsers in Cross-Browser Reload: Vivaldi, Yandex Browser, and Samsung Internet — each gets its own detection, toggle, and status card alongside the existing seven.
+*   Reviewed the request-path code that runs on every frontend visit for anything that could add load on a busy server; no changes were needed — Developer Mode already gates the reload script to editors only by default, and the one settings lookup that always runs is a single cached option read.
 
 = 1.1.1 =
 *   Fixed a video compression bug on Windows servers: the background ffmpeg command included `nice`, a Unix-only process-priority tool with no Windows equivalent, so the entire command failed to run there and video was silently never compressed (the original file was never at risk — this plugin only ever swaps a video if compression reports success — but Windows/local-dev users got zero benefit from the feature). Also hardened the success check so an implausibly small/truncated encode is rejected instead of accepted.
@@ -123,7 +151,7 @@ Your feedback helps improve the plugin and supports future updates.
 *   Changed: Developer Mode is now a plain on/off toggle with no automatic timeout — it previously auto-disabled itself after 12 hours as a safety net, but now stays exactly as you set it until you switch it off yourself. See the FAQ above for the tradeoff this involves.
 *   Replaced permanent help paragraphs under section titles with a small (i) icon you hover for the same explanation on demand — except the opcache **local dev only** danger warning, which is deliberately left as visible text since it's a safety warning, not optional detail.
 *   Speed Boost, Media Optimization, and Delete Data on Uninstall now sit side by side in one row instead of stacked full-width.
-*   Confirmed compatible with WordPress 7.0 ("Tested up to" header — WordPress.org's validator only accepts major.minor here, not the full 7.0.2 patch version, even though that's the actual release tested against).
+*   Confirmed compatible with WordPress 7.0 (Tested up to header).
 *   Updated the Bengali (bn_BD) translation to cover every new string introduced by Extra Features, Media Optimization, and the additional Speed Boost items.
 *   Fixed the same literal `\u2019`/`\u2014`/`\u201c`/`\u201d` escape-sequence bug from 1.0.1 recurring in the new Extra Features, Media Optimization, and Speed Boost messages — these display correctly as an apostrophe, dash, or curly quote now instead of the raw escape text.
 *   Code-quality fix: prefixed two global variables in uninstall.php flagged by the WordPress Coding Standards checker (this check runs on every release, since it's not something that stays fixed automatically when code is merged from elsewhere).
@@ -153,3 +181,9 @@ Your feedback helps improve the plugin and supports future updates.
 *   A local-development-only, explicitly-confirmed option to write the 3 truly PHP-startup-locked opcache directives directly to php.ini, with automatic backup.
 *   Modern tabbed settings dashboard with per-browser cards, live status, and a **Sync from server** action.
 *   Intelligent exclusion: never triggers a reload loop inside a page builder's own editing canvas.
+
+== Security ==
+
+For security vulnerabilities, please report directly to cse.engrshaounchandrashill@tutanota.de instead of the public issue tracker.
+
+See SECURITY.md in the plugin folder for detailed security policies, supported versions, and best practices.
