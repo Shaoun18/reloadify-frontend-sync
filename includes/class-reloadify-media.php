@@ -49,6 +49,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Reloadify_Media {
 
 	const OPTION_KEY        = 'reloadify_media_optimize_enabled';
+	const FORMAT_OPTION_KEY = 'reloadify_media_format_preference';
 	const CRON_HOOK_BACKFILL = 'reloadify_media_backfill_batch';
 	const CRON_HOOK_VIDEO_BACKFILL = 'reloadify_media_backfill_video_batch';
 	const CRON_HOOK_VIDEO    = 'reloadify_media_compress_video';
@@ -80,6 +81,22 @@ class Reloadify_Media {
 	}
 
 	/**
+	 * 'auto' (default) picks the best format this server actually
+	 * supports, AVIF first. 'webp' / 'avif' let the person pin a specific
+	 * format instead of leaving the choice to the plugin.
+	 */
+	public static function format_preference() {
+		$value = get_option( self::FORMAT_OPTION_KEY, 'auto' );
+		return in_array( $value, [ 'auto', 'webp', 'avif' ], true ) ? $value : 'auto';
+	}
+
+	public static function set_format_preference( $format ) {
+		$format = in_array( $format, [ 'auto', 'webp', 'avif' ], true ) ? $format : 'auto';
+		update_option( self::FORMAT_OPTION_KEY, $format );
+		return $format;
+	}
+
+	/**
 	 * What this server can actually do -- checked, never assumed. Feeds
 	 * both items() below and the actual behavior in init().
 	 */
@@ -101,12 +118,26 @@ class Reloadify_Media {
 
 	/**
 	 * AVIF compresses smaller than WebP at the same visual quality when a
-	 * host supports it; WebP is the safe, far more common fallback; if
-	 * neither is available, images are left in their original format
-	 * (still quality-capped, just not format-converted).
+	 * host supports it; WebP is the safe, far more common fallback. If the
+	 * person has pinned a specific format (format_preference()), that's
+	 * honored instead of the plugin choosing -- except AVIF pinned on a
+	 * server that can't actually do AVIF, which falls back to WebP rather
+	 * than silently converting nothing at all.
 	 */
 	public static function preferred_image_format() {
 		$caps = self::capabilities();
+		$pref = self::format_preference();
+
+		if ( 'webp' === $pref ) {
+			return ! empty( $caps['webp'] ) ? 'webp' : null;
+		}
+
+		if ( 'avif' === $pref ) {
+			if ( ! empty( $caps['avif'] ) ) {
+				return 'avif';
+			}
+			return ! empty( $caps['webp'] ) ? 'webp' : null;
+		}
 
 		if ( ! empty( $caps['avif'] ) ) {
 			return 'avif';
@@ -130,15 +161,24 @@ class Reloadify_Media {
 
 		$items = [];
 
+		$pref = self::format_preference();
+
 		if ( $preferred ) {
-			$items[] = [
-				'key'   => 'image_format',
-				'label' => sprintf(
-					/* translators: %s: AVIF or WEBP */
-					__( 'New image uploads automatically get %s versions generated alongside the original — your server supports it', 'reloadify-frontend-sync' ),
-					strtoupper( $preferred )
-				),
-			];
+			if ( 'avif' === $pref && 'webp' === $preferred ) {
+				$items[] = [
+					'key'   => 'image_format',
+					'label' => __( 'AVIF was selected, but this server can\'t produce it, so WebP is used instead — the safe fallback, still smaller than the original format', 'reloadify-frontend-sync' ),
+				];
+			} else {
+				$items[] = [
+					'key'   => 'image_format',
+					'label' => sprintf(
+						/* translators: %s: AVIF or WEBP */
+						__( 'New image uploads automatically get %s versions generated alongside the original — your server supports it', 'reloadify-frontend-sync' ),
+						strtoupper( $preferred )
+					),
+				];
+			}
 		} else {
 			$items[] = [
 				'key'   => 'image_format',
@@ -539,8 +579,15 @@ class Reloadify_Media {
 		// since this runs on the live server, not offline; +faststart
 		// moves metadata to the front of the file so it starts playing
 		// before it's fully downloaded.
-		$cmd = sprintf(
-			'nice -n 19 %s -y -i %s -c:v libx264 -crf 26 -preset veryfast -c:a aac -b:a 128k -movflags +faststart %s 2>&1',
+		// 'nice' lowers the OS process priority so this doesn't compete with
+		// real traffic -- but it's a Unix-only tool with no Windows
+		// equivalent. On Windows, prepending it made the whole command line
+		// fail to run at all (ffmpeg never even started), so it's only
+		// added on non-Windows systems.
+		$is_windows = ( 'WIN' === strtoupper( substr( PHP_OS, 0, 3 ) ) );
+		$cmd        = sprintf(
+			'%s%s -y -i %s -c:v libx264 -crf 26 -preset veryfast -c:a aac -b:a 128k -movflags +faststart %s 2>&1',
+			$is_windows ? '' : 'nice -n 19 ',
 			escapeshellcmd( $ffmpeg ),
 			escapeshellarg( $file ),
 			escapeshellarg( $tmp_out )
@@ -552,9 +599,15 @@ class Reloadify_Media {
 		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- exec() is required to invoke ffmpeg; guarded by ffmpeg_path()'s own feature/availability detection, runs only inside a deferred WP-Cron request, and only ever compresses this plugin's own uploaded video files with fully-escaped arguments.
 		@exec( $cmd, $output, $exit_code );
 
+		// A truncated/corrupt encode can still exit 0 in rare cases (process
+		// killed, disk full mid-write). Beyond the existing exit-code and
+		// size checks, also reject anything implausibly small -- a genuine
+		// CRF 26 re-encode of real video essentially never comes out under
+		// 2% of the original size; that shape means the output is broken,
+		// not well-compressed.
 		$succeeded = ( 0 === $exit_code )
 			&& file_exists( $tmp_out )
-			&& filesize( $tmp_out ) > 0
+			&& filesize( $tmp_out ) > ( $original_size * 0.02 )
 			&& filesize( $tmp_out ) < $original_size;
 
 		if ( $succeeded ) {

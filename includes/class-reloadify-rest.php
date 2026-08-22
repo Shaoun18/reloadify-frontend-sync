@@ -275,9 +275,15 @@ class Reloadify_Rest {
 	}
 
 	public static function get_media() {
+		$caps = Reloadify_Media::capabilities();
 		return rest_ensure_response( [
-			'enabled' => Reloadify_Media::is_enabled(),
-			'items'   => Reloadify_Media::items(),
+			'enabled'            => Reloadify_Media::is_enabled(),
+			'items'              => Reloadify_Media::items(),
+			'format_preference'  => Reloadify_Media::format_preference(),
+			'format_capabilities' => [
+				'webp' => (bool) $caps['webp'],
+				'avif' => (bool) $caps['avif'],
+			],
 		] );
 	}
 
@@ -286,9 +292,20 @@ class Reloadify_Rest {
 		$body    = is_array( $body ) ? $body : [];
 		$enabled = Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) );
 
+		if ( isset( $body['format_preference'] ) ) {
+			Reloadify_Media::set_format_preference( sanitize_key( $body['format_preference'] ) );
+		}
+
+		$caps = Reloadify_Media::capabilities();
+
 		return rest_ensure_response( [
-			'enabled' => $enabled,
-			'items'   => Reloadify_Media::items(),
+			'enabled'            => $enabled,
+			'items'              => Reloadify_Media::items(),
+			'format_preference'  => Reloadify_Media::format_preference(),
+			'format_capabilities' => [
+				'webp' => (bool) $caps['webp'],
+				'avif' => (bool) $caps['avif'],
+			],
 		] );
 	}
 

@@ -715,6 +715,47 @@
     margin-top: 12px;
 }
 
+.reloadify-media-format-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #d1fae5;
+}
+
+.reloadify-media-format-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #4b5563;
+    margin-bottom: 8px;
+}
+
+.reloadify-media-format-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.reloadify-media-format-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #1f2937;
+    cursor: pointer;
+}
+
+.reloadify-media-format-option.is-disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.reloadify-media-format-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+
 .reloadify-media-backfill-status {
     font-size: 12px;
     color: #6b7280;
@@ -730,8 +771,12 @@
     font-weight: 600;
 }
 
-/* Info icon -- replaces the permanent help paragraphs that used to sit
-   under every section title; hover or focus to read the same text. */
+.reloadify-info-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
 .reloadify-info-icon {
     display: inline-flex;
     align-items: center;
@@ -751,6 +796,43 @@
 .reloadify-info-icon:focus {
     background: #c7d2fe;
     outline: none;
+}
+
+/* Custom tooltip -- replaces the native browser title-attribute tooltip,
+   which can't be styled or positioned and was rendering at the raw mouse
+   cursor position, overlapping adjacent labels. This one anchors below
+   and to the right of its icon, never off the left edge of the screen. */
+.reloadify-tooltip {
+    position: absolute;
+    z-index: 100;
+    top: calc(100% + 8px);
+    left: 0;
+    width: max-content;
+    max-width: 320px;
+    background: #111827;
+    color: #f9fafb;
+    font-size: 12.5px;
+    line-height: 1.5;
+    font-weight: 400;
+    padding: 10px 12px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(17, 24, 39, 0.28);
+    pointer-events: none;
+}
+
+.reloadify-tooltip::before {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 10px;
+    border: 6px solid transparent;
+    border-bottom-color: #111827;
+}
+
+@media (max-width: 480px) {
+    .reloadify-tooltip {
+        max-width: 240px;
+    }
 }
 
 .reloadify-section-title-row {
