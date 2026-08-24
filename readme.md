@@ -5,7 +5,7 @@
 **Requires at least:** 6.4
 **Tested up to:** 7.0
 **Requires PHP:** 7.4
-**Stable tag:** 1.1.1
+**Stable tag:** 1.1.2
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,7 @@ Reloadify Frontend Sync keeps every open browser automatically synchronized, all
 ### Key Features
 
 *   Works with **Elementor**, **Divi**, **Bricks**, **Oxygen**, **Beaver Builder**, **WPBakery Page Builder**, and the classic WordPress editor.
-*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, and UC Browser, normal and incognito/private alike.
+*   Cross-browser, cross-window reload — enabled out of the box for Chrome, Brave, Edge, Firefox, Safari, Opera, UC Browser, Vivaldi, Yandex Browser, and Samsung Internet, normal and incognito/private alike.
 *   Reloads any frontend page (home, archives, search results — not just the exact post you're editing).
 *   Choice of soft reload or cache-busting hard reload (`_reloadify_ts` query param).
 *   A "Last change detected" readout with a one-click Check now button, so you can confirm the plugin picked up a save without waiting for a frontend tab to reload.
@@ -91,6 +91,11 @@ The frontend check is a small static file the webserver answers directly — no 
 No. For images, the original file you uploaded is never modified — only the generated thumbnail/medium/large sizes get WebP or AVIF versions alongside them, and only if your server's image library actually supports that format. Video compression only runs if the server has ffmpeg available; if it doesn't, video is left completely untouched. The whole feature is one toggle — turn it off any time to leave media exactly as WordPress would handle it by default.
 
 ## Changelog
+
+### 1.1.2
+*   Added a `blueprint.json` so the "Live Preview" (WordPress Playground) button on this plugin's WordPress.org page works — it was previously disabled with a "missing or invalid blueprint.json" notice.
+*   Added support for three more browsers in Cross-Browser Reload: Vivaldi, Yandex Browser, and Samsung Internet.
+*   Reviewed the request-path code that runs on every frontend visit for load concerns on busy servers; no changes were needed.
 
 ### 1.1.1
 *   Fixed a video compression bug on Windows servers: the background ffmpeg command included `nice`, a Unix-only process-priority tool with no Windows equivalent, so the entire command failed to run there and video was silently never compressed (the original file was never at risk — this plugin only ever swaps a video if compression reports success — but Windows/local-dev users got zero benefit from the feature). Also hardened the success check so an implausibly small/truncated encode is rejected instead of accepted.

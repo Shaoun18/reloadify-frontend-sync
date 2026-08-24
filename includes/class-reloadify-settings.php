@@ -12,7 +12,7 @@ class Reloadify_Settings {
 	 * The full list of browsers the settings panel exposes.
 	 */
 	public static function supported_browsers() {
-		return [ 'chrome', 'brave', 'edge', 'firefox', 'safari', 'opera', 'ucbrowser' ];
+		return [ 'chrome', 'brave', 'edge', 'firefox', 'safari', 'opera', 'ucbrowser', 'vivaldi', 'yandex', 'samsung' ];
 	}
 
 	public static function browser_labels() {
@@ -24,17 +24,14 @@ class Reloadify_Settings {
 			'safari'    => 'Safari',
 			'opera'     => 'Opera',
 			'ucbrowser' => 'UC Browser',
+			'vivaldi'   => 'Vivaldi',
+			'yandex'    => 'Yandex Browser',
+			'samsung'   => 'Samsung Internet',
 		];
 	}
 
-	/**
-	 * Default state: browsers are pre-enabled so cross-browser reload works the
-	 * moment Developer Mode is switched on -- but Developer Mode itself defaults
-	 * OFF. It makes every visitor's browser poll the server repeatedly for as
-	 * long as it's on; leaving that on by default was a real mistake that made
-	 * a live site slow. It's a "turn on while you're actively testing, then
-	 * turn off" tool, not an always-on default.
-	 */
+	/* ---------------- Settings ---------------- */
+
 	public static function default_settings() {
 		$browsers = [];
 
@@ -75,9 +72,6 @@ class Reloadify_Settings {
 	public static function update_settings( $incoming ) {
 		$clean = self::sanitize( $incoming );
 
-		// Stamp the moment Developer Mode is switched on (kept as plain info,
-		// not used for any auto-off logic anymore). Switching it off (or
-		// leaving it off) clears the stamp.
 		$previous = self::get_settings();
 		if ( $clean['dev_mode_enabled'] && ! $previous['dev_mode_enabled'] ) {
 			$clean['dev_mode_enabled_at'] = time();
@@ -154,17 +148,8 @@ class Reloadify_Settings {
 		return (int) get_option( 'reloadify_last_site_update', time() );
 	}
 
-	/**
-	 * Every poll originally hit admin-ajax.php, which boots the *entire* of
-	 * WordPress (all active plugins included) just to compare two integers.
-	 * At a couple of requests per second per open tab, across every visitor
-	 * once Developer Mode is on, that's real load on a live site. A static
-	 * JSON file in the uploads directory lets the frontend check for changes
-	 * with a plain file fetch the webserver can answer directly -- no PHP,
-	 * no WordPress bootstrap, effectively free. admin-ajax.php stays wired up
-	 * only as a fallback for hosts where the uploads directory somehow isn't
-	 * fetchable (see reloader.js).
-	 */
+	/* ---------------- Timestamp file ---------------- */
+
 	public static function write_timestamp_file( $ts ) {
 		$upload = wp_upload_dir();
 		if ( ! empty( $upload['error'] ) ) {
@@ -178,10 +163,7 @@ class Reloadify_Settings {
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
 		}
 
-		// Some hosts/CDNs apply far-future "cache everything static" rules that
-		// don't care about query strings. If timestamp.json ever gets caught by
-		// one of those, the frontend keeps polling a value that's stuck in the
-		// past -- this file asks Apache (where supported) not to do that.
+
 		$htaccess = $dir . '/.htaccess';
 		if ( ! file_exists( $htaccess ) ) {
 			@file_put_contents(

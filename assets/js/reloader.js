@@ -6,9 +6,7 @@
     }
 
     /**
-     * Best-effort browser fingerprint. UA strings can be spoofed, and Brave in
-     * particular reports itself as Chrome, so this isn't a security boundary —
-     * just enough to route the "which browsers are enabled" setting correctly.
+     * Best-effort browser fingerprint.
      */
     function detectBrowserName() {
         var ua = navigator.userAgent || '';
@@ -16,6 +14,9 @@
         if (/Edg\//.test(ua)) return 'edge';
         if (/OPR\//.test(ua) || /Opera/.test(ua)) return 'opera';
         if (/UCBrowser/i.test(ua)) return 'ucbrowser';
+        if (/Vivaldi\//.test(ua)) return 'vivaldi';
+        if (/YaBrowser\//.test(ua)) return 'yandex';
+        if (/SamsungBrowser\//.test(ua)) return 'samsung';
         if (/Firefox\//.test(ua) && !/Seamonkey/.test(ua)) return 'firefox';
         if (/Chrome\//.test(ua) && !/Edg\//.test(ua) && !/OPR\//.test(ua)) return 'chrome';
         if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'safari';
@@ -36,10 +37,7 @@
     }
 
     /**
-     * Private/incognito detection is a heuristic, not a guarantee — several
-     * browsers intentionally make storage quotas identical in normal and private
-     * mode. When it can't tell, it assumes "normal" so the reloader still runs
-     * rather than silently doing nothing.
+     * Private/incognito detection
      */
     function detectIncognito() {
         return new Promise(function (resolve) {
@@ -75,53 +73,23 @@
         var nonce = ReloadifySync.nonce;
         var reloadMode = ReloadifySync.reload_mode === 'hard' ? 'hard' : 'soft';
         var timestampUrl = ReloadifySync.timestamp_url;
-        // Whichever path answers, this is set once and reused -- no reason to
-        // keep retrying the heavier admin-ajax.php fallback every single tick
-        // once we know the lightweight static file works (or definitively
-        // doesn't, e.g. blocked by server config).
+  
         var useStaticFile = !!timestampUrl;
 
-        // IMPORTANT: the page markup itself (and the ReloadifySync.timestamp
-        // value baked into it) can be served from a full-page cache, a CDN edge
-        // cache, or a browser back-forward cache. If that's stale, trusting it
-        // as the comparison baseline makes literally every load look "changed"
-        // -- and since the reload just re-serves the same stale cached page,
-        // that becomes an infinite reload loop with no real edit involved. It
-        // also explains why a brand-new tab can miss the very next real save:
-        // whatever number happened to be baked into that particular cached
-        // copy is not reliably "now".
-        //
-        // The fix: never compare against the baked-in value. Use it only as a
-        // rough placeholder until the first LIVE response comes back, then
-        // adopt that live value as the real baseline. Everything after that
-        // point compares live-fetch vs. live-fetch, which is what makes the
-        // "did it change" check trustworthy in the first place.
         var currentTimestamp = parseInt(ReloadifySync.timestamp, 10) || 0;
         var hasSyncedBaseline = false;
 
-        // Belt-and-braces: even after the static file starts working, cross-check
-        // against admin-ajax.php every so often. admin-ajax.php always executes
-        // PHP fresh and is excluded from caching by virtually every caching
-        // plugin/CDN by convention, so if some layer of the stack is quietly
-        // serving a stale copy of timestamp.json forever, this cross-check is
-        // what still catches the real change instead of polling a dead value
-        // indefinitely.
+        
         var checksSinceAjaxVerify = 0;
         var AJAX_VERIFY_EVERY = 10; // roughly every 10 * checkInterval
 
-        // A self-scheduling loop (rather than setInterval) means the next check is
-        // always spaced out from when the *previous one finished*, not from when it
-        // started -- so a slow response never causes two checks to pile up and it
-        // never falls behind. The very first check fires immediately, with no wait.
         function scheduleNext(delay) {
             setTimeout(checkForUpdates, delay);
         }
 
         function handleTimestamp(newTimestamp) {
             if (!hasSyncedBaseline) {
-                // First live value we've ever seen this page-load: adopt it as
-                // truth instead of comparing against the (possibly stale,
-                // possibly cached) value the server rendered into the HTML.
+              
                 hasSyncedBaseline = true;
                 currentTimestamp = newTimestamp;
                 return false;
@@ -136,9 +104,7 @@
             return false;
         }
 
-        // The cheap path: a plain file fetch the webserver answers directly,
-        // no PHP or WordPress bootstrap involved. This is what keeps polling
-        // affordable on a live site with real traffic.
+      
         function checkViaStaticFile() {
             $.ajax({
                 url: timestampUrl + '?_=' + Date.now(),
@@ -167,19 +133,14 @@
                     scheduleNext(checkInterval);
                 },
                 error: function () {
-                    // The static file genuinely isn't reachable on this host
-                    // (permissions, a security rule blocking /uploads/*.json,
-                    // etc.) -- drop to the admin-ajax.php fallback from here on
-                    // instead of re-trying the failing request forever.
+                  
                     useStaticFile = false;
                     scheduleNext(checkInterval);
                 }
             });
         }
 
-        // The fallback path: heavier (boots all of WordPress per check), only
-        // used when the static file truly can't be reached on this host, and
-        // periodically as a cross-check while it can (see AJAX_VERIFY_EVERY).
+
         function checkViaAjax() {
             $.ajax({
                 url: ReloadifySync.ajax_url,

@@ -12,9 +12,8 @@
     var BROWSERS = ReloadifyAdmin.browsers || [];
     var LABELS = ReloadifyAdmin.browserLabels || {};
 
-    // Two-tone gradients + a distinct glyph per browser. These are original
-    // badges, not reproductions of any browser's actual trademarked logo --
-    // this plugin ships to WordPress.org, and brand marks aren't ours to use.
+    /* ---------------- Browser Theme ---------------- */
+
     var BROWSER_THEME = {
         chrome:    { from: '#4285F4', to: '#34A853', glyph: 'ring' },
         brave:     { from: '#FB542B', to: '#F97316', glyph: 'shield' },
@@ -22,7 +21,10 @@
         firefox:   { from: '#FF7139', to: '#FFB03A', glyph: 'flame' },
         safari:    { from: '#3F87F5', to: '#1D4ED8', glyph: 'compass' },
         opera:     { from: '#FF1B2D', to: '#E60039', glyph: 'circle' },
-        ucbrowser: { from: '#1FA3FF', to: '#0F6FD1', glyph: 'bolt' }
+        ucbrowser: { from: '#1FA3FF', to: '#0F6FD1', glyph: 'bolt' },
+        vivaldi:   { from: '#EF3939', to: '#B71C1C', glyph: 'diamond' },
+        yandex:    { from: '#FFCC00', to: '#FF3333', glyph: 'drop' },
+        samsung:   { from: '#1259A6', to: '#0D3E7A', glyph: 'star' }
     };
 
     function glyphPath(glyph) {
@@ -45,6 +47,12 @@
                 );
             case 'bolt':
                 return el('path', { d: 'M18 8 L11 18 h4 l-1 6 8-11 h-4 z', fill: '#fff', opacity: 0.92 });
+            case 'diamond':
+                return el('path', { d: 'M16 8 L23 16 L16 24 L9 16 Z', fill: 'none', stroke: '#fff', strokeWidth: 2.4 });
+            case 'drop':
+                return el('path', { d: 'M16 8c4 5 6 8 6 11a6 6 0 11-12 0c0-3 2-6 6-11z', fill: '#fff', opacity: 0.92 });
+            case 'star':
+                return el('path', { d: 'M16 8 L18.2 13.6 L24 14.2 L19.6 18 L21 23.8 L16 20.6 L11 23.8 L12.4 18 L8 14.2 L13.8 13.6 Z', fill: '#fff', opacity: 0.92 });
             default:
                 return el('circle', { cx: 16, cy: 16, r: 5, fill: '#fff', opacity: 0.85 });
         }
@@ -125,12 +133,8 @@
         );
     }
 
-    /**
-     * Small "i" badge next to a section title. Hover (or focus, for
-     * keyboard/screen-reader users) shows the explanation that used to sit
-     * as a permanent paragraph under every heading -- same information,
-     * available on demand instead of always taking up space.
-     */
+    /* ---------------- Info Icon ---------------- */
+    
     function InfoIcon(props) {
         var stateOpen = useState(false);
         var open = stateOpen[0], setOpen = stateOpen[1];
@@ -471,13 +475,8 @@
         );
     }
 
-    /**
-     * On by default the moment the plugin is activated -- unlike everything
-     * else in this tab, which stays opt-in. Deliberately does NOT show a
-     * fixed "X% faster" number: nobody can honestly promise one, since the
-     * real effect depends on the theme, other plugins, and hosting. What it
-     * shows instead is the exact, short list of what's actually switched on.
-     */
+    /* ---------------- Speed Boost Card ---------------- */
+
     function SpeedBoostCard(props) {
         var speed = props.speed;
         var stateSaving = useState(false);
@@ -512,12 +511,8 @@
         );
     }
 
-    /**
-     * On by default: deleting the plugin from the Plugins screen (not just
-     * deactivating it) also removes its settings and the uploads/reloadify-reload
-     * folder, for a clean uninstall. Turn off to keep settings around for a
-     * reinstall later.
-     */
+    /* ---------------- Delete Data on Uninstall Card ---------------- */
+
     function DeleteOnUninstallCard(props) {
         var cleanup = props.cleanup;
         var stateSaving = useState(false);
@@ -552,17 +547,9 @@
         );
     }
 
-    /**
-     * On by default. Backend/frontend media weight, not PHP settings: new
-     * image uploads get WebP/AVIF versions (whichever this server's image
-     * library actually supports), quality is capped at a visually-lossless
-     * level, existing library images are backfilled gradually in the
-     * background, and video gets compressed in the background too if
-     * ffmpeg is available on the server. Same minimal title+toggle style as
-     * Speed Boost -- the per-server specifics are in the REST payload
-     * (`items`) for anyone who wants to check exactly what's active here,
-     * without cluttering the card itself.
-     */
+  
+    /* ---------------- Media Optimization Card ---------------- */
+
     function MediaOptimizationCard(props) {
         var media = props.media;
         var stateSaving = useState(false);
@@ -610,11 +597,9 @@
                 });
         }
 
-        // WP-Cron only runs when something visits the site (or a real
-        // system cron is configured to hit wp-cron.php) -- on a quiet or
-        // local site, existing media can sit unprocessed for a long time
-        // waiting on that. This runs batches right now instead, looping
-        // until nothing's left, so it doesn't depend on traffic at all.
+    
+        /* ---------------- Optimize Now Button ---------------- */
+
         function optimizeNow() {
             setRunning(true);
             setProgress(null);
