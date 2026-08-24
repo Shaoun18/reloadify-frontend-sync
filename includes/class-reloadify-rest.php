@@ -370,13 +370,7 @@ class Reloadify_Rest {
 		$body   = is_array( $body ) ? $body : [];
 		$result = Reloadify_Performance::update_settings( $body );
 
-		// apply_runtime_overrides() already ran once for this request, at
-		// plugins_loaded -- before the settings above were saved. Without
-		// running it again here, the "live" values below would reflect the
-		// *previous* saved state, not what was just saved, making it look
-		// like Save did nothing even though the next page load would have
-		// picked it up correctly. Re-applying now makes the response the
-		// person sees immediately after clicking Save actually true.
+
 		Reloadify_Performance::apply_runtime_overrides();
 
 		return rest_ensure_response( [

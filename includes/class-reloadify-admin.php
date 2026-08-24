@@ -45,11 +45,12 @@ class Reloadify_Admin {
 			true
 		);
 
-		// Without this, every wp.i18n __() call in admin-settings.js still returns
-		// the raw English string even when a matching translation exists -- this
-		// is what actually points the script at /languages/reloadify-frontend-sync-{locale}-{handle}.json.
+		
+		/* ---------------- Set script translations. ---------------- */
+		
 		wp_set_script_translations( 'reloadify-admin-settings', 'reloadify-frontend-sync', RELOADIFY_PLUGIN_DIR . 'languages' );
 
+		/* ---------------- Localize script. ---------------- */
 		wp_localize_script( 'reloadify-admin-settings', 'ReloadifyAdmin', [
 			'restUrl'       => esc_url_raw( rest_url( 'reloadify/v1' ) ),
 			'nonce'         => wp_create_nonce( 'wp_rest' ),

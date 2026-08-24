@@ -4,50 +4,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * IMPORTANT — read before touching this file.
- *
- * A WordPress plugin runs *after* PHP has already started handling the request,
- * so it can only change directives that PHP classifies as PHP_INI_ALL / PHP_INI_USER
- * (changeable with ini_set() at runtime). Directives that PHP classifies as
- * PHP_INI_PERDIR or PHP_INI_SYSTEM are locked in before WordPress ever loads —
- * no plugin, on any host, can change them with ini_set().
- *
- * Runtime-overridable from here (PHP_INI_ALL): memory_limit, max_execution_time,
- * and — despite common assumption — opcache.enable, opcache.validate_timestamps,
- * and opcache.revalidate_freq too. Those three are a per-request check, not a
- * startup-fixed allocation, so the PHP manual lists them as PHP_INI_ALL.
- *
- * NOT overridable at runtime, ever, from a plugin (PHP_INI_PERDIR / PHP_INI_SYSTEM):
- * post_max_size, upload_max_filesize, max_input_time, realpath_cache_size,
- * realpath_cache_ttl, and specifically opcache.memory_consumption,
- * opcache.interned_strings_buffer, opcache.max_accelerated_files — those three
- * size OPcache's shared-memory pool once at PHP startup, before any plugin runs.
- *
- * For the truly-locked group, the honest and useful thing this plugin can do is
- * show the *current* live value, let the user record a *desired* value, and
- * either (a) attempt a best-effort .user.ini/.htaccess write for the ones that
- * mechanism can reach, or (b) generate a ready-to-paste php.ini snippet. It must
- * never claim to silently apply those site-wide by itself.
- */
+/* ---------------- Performance Boost ---------------- */
+
 class Reloadify_Performance {
 
 	const OPTION_KEY = 'reloadify_performance';
 
-	/**
-	 * key => [ live overridable via ini_set() from a plugin?, default desired value ]
-	 *
-	 * Correction worth flagging: opcache.enable, opcache.validate_timestamps, and
-	 * opcache.revalidate_freq are actually PHP_INI_ALL per the PHP manual (see
-	 * https://www.php.net/manual/en/opcache.configuration.php) — they're a runtime
-	 * check performed on every request, not a startup-fixed memory allocation, so
-	 * ini_set() genuinely works on them, same as memory_limit. (opcache.enable can
-	 * only be *disabled* at runtime, not re-enabled once off — PHP itself enforces
-	 * that, not this plugin.) Only opcache.memory_consumption,
-	 * opcache.interned_strings_buffer, and opcache.max_accelerated_files size a
-	 * shared-memory pool at OPcache's own startup, before any plugin runs — those
-	 * three are the ones that genuinely need the real php.ini + a restart.
-	 */
 	public static function directive_map() {
 		return [
 			'memory_limit'                     => [ 'runtime' => true,  'default' => '512M' ],
@@ -185,15 +147,7 @@ class Reloadify_Performance {
 
 	const MARKER = 'Reloadify Frontend Sync';
 
-	/**
-	 * Best-effort attempt to have the *server itself* pick up the desired
-	 * values, by writing a .user.ini (PHP-FPM/CGI — the common case on modern
-	 * hosting) and appending a marked block to .htaccess (Apache + mod_php).
-	 * Neither is guaranteed: file permissions, open_basedir, Nginx without
-	 * PHP-FPM per-directory ini support, or a host that simply ignores these
-	 * files can all mean nothing happens. Every outcome is reported back
-	 * honestly rather than assumed to have worked.
-	 */
+
 	public static function attempt_server_override( $desired ) {
 		$results = [
 			'user_ini'  => self::write_user_ini( $desired ),
@@ -203,26 +157,8 @@ class Reloadify_Performance {
 		return $results;
 	}
 
-	/**
-	 * DANGER ZONE. This only handles the three opcache directives that are
-	 * genuinely PHP_INI_SYSTEM (opcache.memory_consumption,
-	 * opcache.interned_strings_buffer, opcache.max_accelerated_files — they size
-	 * a shared-memory pool once at PHP startup). opcache.enable,
-	 * opcache.validate_timestamps, and opcache.revalidate_freq are PHP_INI_ALL
-	 * and handled safely via ini_set() in apply_runtime_overrides() instead —
-	 * they never reach this method. For the three that remain, the only file
-	 * that can ever affect them is the real php.ini PHP actually loaded, and
-	 * even a successful, syntactically valid write does nothing until PHP
-	 * itself is restarted (which this plugin has no way to trigger). On
-	 * shared/managed hosting, php.ini is almost never writable by the PHP
-	 * process, and that lockdown is a *good* thing — this will typically,
-	 * correctly, just fail there. Where it IS writable (a local dev stack you
-	 * fully control: Local, XAMPP, MAMP, Laragon, a Docker container with the
-	 * ini bind-mounted), a bad edit can break PHP for every site the server
-	 * hosts, not just this one, until it's fixed by hand — which is exactly
-	 * why $confirmed must be explicitly true and a backup is always written
-	 * first. This is never attempted implicitly.
-	 */
+	/* ---------------- DANGER ZONE ---------------- */
+
 	public static function attempt_opcache_override( $desired, $confirmed ) {
 		if ( true !== $confirmed ) {
 			return [
@@ -443,16 +379,10 @@ class Reloadify_Performance {
 
 			$value = $settings['desired'][ $key ];
 
-			// PHP only allows opcache.enable to be turned OFF at runtime, never
-			// back on once it starts disabled -- that's PHP enforcing it, not a
-			// bug here. ini_set() itself will just silently no-op the "enable"
-			// direction if that's the case.
-			// Intentional runtime PHP directive overrides for the Server Performance panel.
-			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Required to apply user-configured memory/time limits.
 			@ini_set( $key, $value );
 
 			if ( 'max_execution_time' === $key && function_exists( 'set_time_limit' ) ) {
-				// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Companion to max_execution_time override above.
+			
 				@set_time_limit( (int) $value );
 			}
 		}

@@ -1,23 +1,12 @@
 <?php
-/**
- * Uninstall handler.
- *
- * WordPress only ever runs this file when the plugin is deleted from the
- * Plugins screen (or via WP-CLI `wp plugin delete`) -- never on a plain
- * deactivate. WP_UNINSTALL_PLUGIN is only ever defined by WordPress right
- * before it includes this exact file, so this guard also blocks the file
- * from doing anything if it's ever loaded directly.
- */
+
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-/**
- * Deletes this plugin's options and its uploads/reloadify-reload folder on the
- * currently active site (main site, or -- inside a switch_to_blog() call --
- * whichever site is currently active).
- */
+/* ---------------- Uninstall Cleanup ---------------- */
+
 function reloadify_uninstall_cleanup_current_site() {
 	delete_option( 'reloadify_settings' );
 	delete_option( 'reloadify_last_site_update' );
@@ -55,9 +44,6 @@ function reloadify_uninstall_cleanup_current_site() {
 	}
 }
 
-// The toggle itself lives as a normal option, so it's still readable here
-// (this file runs before that option gets deleted below). Off means "leave
-// my settings and folder alone" -- stop before touching anything.
 if ( ! get_option( 'reloadify_delete_data_on_uninstall', true ) ) {
 	return;
 }
