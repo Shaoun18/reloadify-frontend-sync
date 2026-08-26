@@ -163,23 +163,35 @@ class Reloadify_Settings {
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
 		}
 
-
-		$htaccess = $dir . '/.htaccess';
-		if ( ! file_exists( $htaccess ) ) {
-			@file_put_contents(
-				$htaccess,
-				"<IfModule mod_headers.c>\n" .
-				"\tHeader set Cache-Control \"no-cache, no-store, must-revalidate\"\n" .
-				"\tHeader set Pragma \"no-cache\"\n" .
-				"\tHeader set Expires 0\n" .
-				"</IfModule>\n"
-			);
-		}
-
+		// FIXED: Check permissions BEFORE attempting to write anything
 		if ( ! reloadify_path_is_writable( $dir ) ) {
 			return false;
 		}
 
+		$htaccess = $dir . '/.htaccess';
+		
+		// FIXED: Only write .htaccess if it doesn't exist to avoid conflicts
+		if ( ! file_exists( $htaccess ) ) {
+			$htaccess_content = "# Reloadify Frontend Sync - Cache control for timestamp detection\n";
+			$htaccess_content .= "<IfModule mod_headers.c>\n";
+			$htaccess_content .= "\tHeader set Cache-Control \"no-cache, no-store, must-revalidate\"\n";
+			$htaccess_content .= "\tHeader set Pragma \"no-cache\"\n";
+			$htaccess_content .= "\tHeader set Expires \"0\"\n";
+			$htaccess_content .= "</IfModule>\n";
+			$htaccess_content .= "<IfModule mod_expires.c>\n";
+			$htaccess_content .= "\tExpiresActive On\n";
+			$htaccess_content .= "\tExpiresDefault \"now\"\n";
+			$htaccess_content .= "</IfModule>\n";
+			
+			// FIXED: Catch errors - don't crash if write fails
+			$written = @file_put_contents( $htaccess, $htaccess_content, LOCK_EX );
+			if ( false === $written ) {
+				// Log error but don't interrupt the rest of the function
+				error_log( '[Reloadify] Failed to write .htaccess in ' . $htaccess );
+			}
+		}
+
+		// Timestamp file write (this is the critical part - must succeed)
 		return false !== @file_put_contents( $dir . '/timestamp.json', wp_json_encode( [ 't' => $ts ] ), LOCK_EX );
 	}
 

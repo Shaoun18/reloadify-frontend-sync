@@ -292,6 +292,29 @@ class Reloadify_Performance {
 		];
 	}
 
+	/**
+	 * FIXED: Detect if server is Apache with mod_php
+	 * This prevents trying to write .htaccess on servers that don't support it
+	 */
+	private static function is_apache_mod_php() {
+		$server_software = isset( $_SERVER['SERVER_SOFTWARE'] ) 
+			? strtolower( $_SERVER['SERVER_SOFTWARE'] ) 
+			: '';
+		
+		// Must have "apache" in SERVER_SOFTWARE
+		if ( false === strpos( $server_software, 'apache' ) ) {
+			return false;
+		}
+
+		// Must have Apache SAPI (php_sapi_name contains 'apache')
+		$sapi = php_sapi_name();
+		if ( false === strpos( $sapi, 'apache' ) ) {
+			return false;
+		}
+
+		return true;
+	}
+
 	private static function write_htaccess( $desired ) {
 		$path = trailingslashit( ABSPATH ) . '.htaccess';
 
@@ -299,11 +322,28 @@ class Reloadify_Performance {
 			require_once ABSPATH . 'wp-admin/includes/misc.php';
 		}
 
+		// FIXED: Validate server type FIRST
+		if ( ! self::is_apache_mod_php() ) {
+			return [
+				'success' => false,
+				'path'    => $path,
+				'message' => __( 'This server doesn\'t appear to be running Apache with mod_php (detected via SERVER_SOFTWARE). .htaccess modifications only work on Apache with mod_php. Most managed hosts use Nginx or PHP-FPM now. Contact your host to confirm your setup.', 'reloadify-frontend-sync' ),
+			];
+		}
+
 		$lines = [];
 		foreach ( self::HTACCESS_KEYS as $key ) {
 			if ( ! empty( $desired[ $key ] ) ) {
 				$lines[] = 'php_value ' . $key . ' ' . $desired[ $key ];
 			}
+		}
+
+		if ( empty( $lines ) ) {
+			return [
+				'success' => false,
+				'path'    => $path,
+				'message' => __( 'No PHP configuration values to write to .htaccess.', 'reloadify-frontend-sync' ),
+			];
 		}
 
 		if ( ! file_exists( $path ) && ! reloadify_path_is_writable( dirname( $path ) ) ) {
@@ -322,20 +362,58 @@ class Reloadify_Performance {
 			];
 		}
 
+		// FIXED: Create backup BEFORE modifying existing .htaccess
+		$backup_path = '';
+		if ( file_exists( $path ) ) {
+			$backup_path = $path . '.reloadify-backup-' . time() . '.bak';
+			if ( ! @copy( $path, $backup_path ) ) {
+				return [
+					'success' => false,
+					'path'    => $path,
+					'message' => __( 'Couldn\'t create a backup of the existing .htaccess before modifying it. Aborted to prevent data loss.', 'reloadify-frontend-sync' ),
+				];
+			}
+		}
+
+		// Attempt to write
 		$result = insert_with_markers( $path, self::MARKER, $lines );
 
 		if ( ! $result ) {
+			// FIXED: More detailed error handling
+			if ( ! file_exists( $path ) ) {
+				$error_msg = __( 'Write failed: .htaccess couldn\'t be created. Check file permissions and disk space.', 'reloadify-frontend-sync' );
+			} else {
+				$current_content = @file_get_contents( $path );
+				if ( $current_content === false ) {
+					$error_msg = __( 'Write failed: Can\'t read back the .htaccess file after writing. This usually means a permissions issue.', 'reloadify-frontend-sync' );
+				} else {
+					$error_msg = __( 'Write failed: insert_with_markers() returned false. The .htaccess file may have invalid syntax or Apache rejected the changes. Check server error logs.', 'reloadify-frontend-sync' );
+				}
+			}
+
 			return [
 				'success' => false,
 				'path'    => $path,
-				'message' => __( 'Write failed. This is also a no-op on Nginx or PHP-FPM setups that don\'t use .htaccess at all — confirm your server actually uses Apache with mod_php.', 'reloadify-frontend-sync' ),
+				'message' => $error_msg,
+				'backup_path' => $backup_path,
+			];
+		}
+
+		// FIXED: Validate the write actually happened
+		if ( ! file_exists( $path ) ) {
+			return [
+				'success' => false,
+				'path'    => $path,
+				'message' => __( 'Write operation completed but .htaccess file doesn\'t exist afterward. Unknown error.', 'reloadify-frontend-sync' ),
+				'backup_path' => $backup_path,
 			];
 		}
 
 		return [
 			'success' => true,
 			'path'    => $path,
-			'message' => __( 'Written. Only takes effect on Apache with mod_php — has no effect on Nginx or PHP-FPM, which most managed hosts use today.', 'reloadify-frontend-sync' ),
+			'message' => __( 'Written to .htaccess successfully. This only takes effect on Apache with mod_php. If you\'re on Nginx or PHP-FPM and still see errors, your host doesn\'t support .htaccess modifications (which is normal).', 'reloadify-frontend-sync' ),
+			'backup_path' => $backup_path,
 		];
 	}
 

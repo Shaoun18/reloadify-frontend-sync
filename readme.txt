@@ -2,9 +2,9 @@
 Contributors: shaounchandrashill
 Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -104,6 +104,15 @@ Your feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.1.3 =
+*   **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
+*   **Improved: .htaccess error handling** — permission checks now run before attempting writes; write failures are logged instead of silently crashing; file existence validated after write attempts.
+*   **Added: Apache mod_php detection** — prevents attempting .htaccess modifications on Nginx or PHP-FPM setups; users get a clear error message instead of a 500 error.
+*   **Added: Automatic .htaccess backups** — creates backup before modifying existing .htaccess files so users can recover if something goes wrong.
+*   **Added fallback cache directives** — .htaccess now includes mod_expires as fallback for servers without mod_headers enabled.
+*   **Confirmed compatible with WordPress 7.1** ("Tested up to: 7.1").
+*   Enhanced Speed Boost with additional server-side optimizations for better performance.
 
 = 1.1.2 =
 *   Added a `blueprint.json` so the "Live Preview" (WordPress Playground) button on this plugin's WordPress.org page works — it was previously disabled with a "missing or invalid blueprint.json" notice.
