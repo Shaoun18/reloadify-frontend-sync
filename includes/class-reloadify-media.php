@@ -295,6 +295,7 @@ class Reloadify_Media {
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
 		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::BACKFILL_META_KEY,
@@ -329,6 +330,7 @@ class Reloadify_Media {
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
 		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => ( 'video' === $type ) ? self::VIDEO_BACKFILL_META_KEY : self::BACKFILL_META_KEY,
@@ -572,6 +574,7 @@ class Reloadify_Media {
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
 			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -587,6 +590,7 @@ class Reloadify_Media {
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
 			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -615,6 +619,7 @@ class Reloadify_Media {
 				'posts_per_page' => 1000, // Bulk "mark as checked" only, not per-page filtering -- capped so one click on a very large library can't load every video ID into memory at once; a second click picks up any remainder.
 				'fields'         => 'ids',
 				
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 				'meta_query'     => [
 					[
 						'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -637,6 +642,7 @@ class Reloadify_Media {
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
 		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -667,6 +673,7 @@ class Reloadify_Media {
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
 			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,

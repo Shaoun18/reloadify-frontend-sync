@@ -297,8 +297,9 @@ class Reloadify_Performance {
 	 * This prevents trying to write .htaccess on servers that don't support it
 	 */
 	private static function is_apache_mod_php() {
-		$server_software = isset( $_SERVER['SERVER_SOFTWARE'] ) 
-			? strtolower( $_SERVER['SERVER_SOFTWARE'] ) 
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- read-only server identity check, not stored or output.
+		$server_software = isset( $_SERVER['SERVER_SOFTWARE'] )
+			? strtolower( sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) )
 			: '';
 		
 		// Must have "apache" in SERVER_SOFTWARE
@@ -365,6 +366,7 @@ class Reloadify_Performance {
 		// FIXED: Create backup BEFORE modifying existing .htaccess
 		$backup_path = '';
 		if ( file_exists( $path ) ) {
+			// phpcs:ignore PluginCheck.CodeAnalysis.WriteFile.ABSPATHDetected -- .htaccess and its backup must live next to the original file in the web root; wp_upload_dir() is not a valid Apache config location.
 			$backup_path = $path . '.reloadify-backup-' . time() . '.bak';
 			if ( ! @copy( $path, $backup_path ) ) {
 				return [
@@ -457,10 +459,11 @@ class Reloadify_Performance {
 
 			$value = $settings['desired'][ $key ];
 
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- runtime override is the plugin's core Speed Boost feature; user opt-in, not a fixed setting.
 			@ini_set( $key, $value );
 
 			if ( 'max_execution_time' === $key && function_exists( 'set_time_limit' ) ) {
-			
+				// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- companion to the max_execution_time override immediately above.
 				@set_time_limit( (int) $value );
 			}
 		}

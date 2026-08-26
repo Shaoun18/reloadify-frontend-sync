@@ -185,8 +185,8 @@ class Reloadify_Settings {
 			
 			// FIXED: Catch errors - don't crash if write fails
 			$written = @file_put_contents( $htaccess, $htaccess_content, LOCK_EX );
-			if ( false === $written ) {
-				// Log error but don't interrupt the rest of the function
+			if ( false === $written && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- gated behind WP_DEBUG_LOG, only runs on write failure, never in normal production operation.
 				error_log( '[Reloadify] Failed to write .htaccess in ' . $htaccess );
 			}
 		}

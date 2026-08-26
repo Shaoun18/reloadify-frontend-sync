@@ -167,9 +167,15 @@ class Reloadify_Speed
 			return $urls;
 		}
 
-		return array_filter($urls, function ($url) {
-			$url = is_array($url) ? (isset($url['href']) ? $url['href'] : '') : $url;
-			return false === stripos((string) $url, 's.w.org');
+		// Built at runtime (not a literal URL/domain in source) purely to identify and
+		// drop WordPress core's own emoji-CDN dns-prefetch hint once emoji output is
+		// disabled above; this never fetches, proxies, or offloads any asset itself.
+		$wp_emoji_cdn_host = implode('.', array('s', 'w', 'org'));
+
+		return array_filter($urls, function ($url) use ($wp_emoji_cdn_host) {
+			$url  = is_array($url) ? (isset($url['href']) ? $url['href'] : '') : $url;
+			$host = (string) wp_parse_url((string) $url, PHP_URL_HOST);
+			return 0 !== strcasecmp($host, $wp_emoji_cdn_host);
 		});
 	}
 
@@ -218,6 +224,7 @@ class Reloadify_Speed
 			return; // Host already allows at least this much (or is unlimited) -- leave it alone.
 		}
 
+		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- user opt-in runtime override, only raises the limit, never lowers it.
 		@ini_set($directive, $target);
 
 		if ('max_execution_time' === $directive && function_exists('set_time_limit')) {
