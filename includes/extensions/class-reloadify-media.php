@@ -794,12 +794,12 @@ class Reloadify_Media {
 			$label   = ( 'video' === $stats['type'] )
 				? sprintf(
 					/* translators: %d: percent smaller */
-					__( 'Video compressed \u2013 %d%% smaller', 'reloadify-frontend-sync' ),
+					__( 'Video compressed – %d%% smaller', 'reloadify-frontend-sync' ),
 					max( 0, $percent )
 				)
 				: sprintf(
 					/* translators: 1: WEBP or AVIF, 2: percent smaller */
-					__( '%1$s \u2013 about %2$d%% smaller', 'reloadify-frontend-sync' ),
+					__( '%1$s – about %2$d%% smaller', 'reloadify-frontend-sync' ),
 					strtoupper( $stats['format'] ),
 					max( 0, $percent )
 				);
@@ -809,18 +809,18 @@ class Reloadify_Media {
 
 		if ( 0 === strpos( (string) $mime, 'image/jpeg' ) || 0 === strpos( (string) $mime, 'image/png' ) ) {
 			if ( ! self::preferred_image_format() ) {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Original kept \u2013 server has no WebP/AVIF support', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Original kept – server has no WebP/AVIF support', 'reloadify-frontend-sync' ) . '</span>';
 			} else {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending \u2013 optimizes in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending – optimizes in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
 			}
 			return;
 		}
 
 		if ( 0 === strpos( (string) $mime, 'video/' ) ) {
 			if ( ! self::ffmpeg_path() ) {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Not compressed \u2013 ffmpeg unavailable on this server', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Not compressed – ffmpeg unavailable on this server', 'reloadify-frontend-sync' ) . '</span>';
 			} else {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending \u2013 compresses in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending – compresses in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
 			}
 			return;
 		}

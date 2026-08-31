@@ -4,8 +4,14 @@
     var el = wp.element.createElement;
     var useState = wp.element.useState;
     var useEffect = wp.element.useEffect;
+    var useRef = wp.element.useRef;
     var render = wp.element.render;
     var __ = wp.i18n.__;
+
+    /* Debounce before firing an autosave request, so fast interactions
+       (dragging a color picker, typing a number) collapse into one save
+       instead of one request per keystroke. */
+    var AUTOSAVE_DEBOUNCE_MS = 700;
 
     wp.apiFetch.use(wp.apiFetch.createNonceMiddleware(ReloadifyAdmin.nonce));
 
@@ -67,12 +73,12 @@
         host: {
             title: __('Requires your host / server config', 'reloadify-frontend-sync'),
             hint: __('PHP locks these before WordPress loads. Auto-attempt below writes .user.ini / .htaccess.', 'reloadify-frontend-sync'),
-            keys: ['max_input_time', 'post_max_size', 'upload_max_filesize', 'realpath_cache_size', 'realpath_cache_ttl']
+            keys: ['max_input_time', 'post_max_size', 'upload_max_filesize']
         },
         opcache: {
-            title: __('opcache memory sizing — danger zone', 'reloadify-frontend-sync'),
-            hint: __('These size PHP\u2019s memory once at startup \u2014 only a real php.ini edit can change them.', 'reloadify-frontend-sync'),
-            keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files']
+            title: __('Startup-only PHP settings — danger zone', 'reloadify-frontend-sync'),
+            hint: __('opcache sizing and the realpath cache are both locked in once at PHP startup \u2014 .user.ini and .htaccess can\u2019t reach them at all, only a real php.ini edit can.', 'reloadify-frontend-sync'),
+            keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl']
         }
     };
 
@@ -122,6 +128,24 @@
             el('span', { className: 'reloadify-toast-dot' }),
             props.toast.message
         );
+    }
+
+    function AutoSaveStatus(props) {
+        var label;
+        var cls = 'reloadify-autosave-status';
+
+        if (props.state === 'saving') {
+            label = __('Saving\u2026', 'reloadify-frontend-sync');
+            cls += ' is-saving';
+        } else if (props.state === 'error') {
+            label = __('Couldn\u2019t save \u2014 will retry on your next change', 'reloadify-frontend-sync');
+            cls += ' is-error';
+        } else {
+            label = __('Saved automatically', 'reloadify-frontend-sync');
+            cls += ' is-saved';
+        }
+
+        return el('div', { className: cls }, el('span', { className: 'reloadify-autosave-dot' }), label);
     }
 
     function Switch(props) {
@@ -313,7 +337,7 @@
             el(
                 'div',
                 { className: 'reloadify-section' },
-                el(SectionTitle, { text: __('Browsers & windows', 'reloadify-frontend-sync'), hint: __('Incognito detection is best-effort, not a guarantee.', 'reloadify-frontend-sync') }),
+                el(SectionTitle, { text: __('Browsers & windows', 'reloadify-frontend-sync'), hint: __('Incognito detection is best-effort, not a guarantee \u2014 browsers keep patching the signals it relies on, so it can occasionally miss.', 'reloadify-frontend-sync') }),
                 el(
                     'div',
                     { className: 'reloadify-browser-grid' },
@@ -368,8 +392,8 @@
                     { className: 'reloadify-modal-body' },
                     el('p', { className: 'reloadify-hint' }, __('These values cannot be set by any WordPress plugin at runtime \u2014 PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host.', 'reloadify-frontend-sync')),
 
-                    el('h3', null, __('php.ini / .user.ini', 'reloadify-frontend-sync')),
-                    el('p', { className: 'reloadify-hint' }, __('Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM).', 'reloadify-frontend-sync')),
+                    el('h3', null, __('php.ini', 'reloadify-frontend-sync')),
+                    el('p', { className: 'reloadify-hint' }, __('Paste this whole block into your real php.ini and restart PHP. It\u2019s the only file that can set opcache.* and realpath_cache_* \u2014 if your host only gives you .user.ini access, ask them to apply the opcache / realpath_cache lines for you, since .user.ini can\u2019t set those either, only the three below it.', 'reloadify-frontend-sync')),
                     el('pre', { className: 'reloadify-code' }, ini),
                     el('button', { className: 'button', onClick: function () { copy(ini, 'php.ini'); } }, __('Copy', 'reloadify-frontend-sync')),
 
@@ -387,13 +411,13 @@
         );
     }
 
-    var AUTO_WRITE_KEYS = ['max_input_time', 'post_max_size', 'upload_max_filesize', 'realpath_cache_size', 'realpath_cache_ttl'];
-    var OPCACHE_KEYS = ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files'];
+    var AUTO_WRITE_KEYS = ['max_input_time', 'post_max_size', 'upload_max_filesize'];
+    var REAL_INI_KEYS = ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl'];
 
     function DirectiveCard(props) {
         var isRuntime = props.runtime;
         var isAutoWritable = !isRuntime && AUTO_WRITE_KEYS.indexOf(props.name) !== -1;
-        var isOpcache = OPCACHE_KEYS.indexOf(props.name) !== -1;
+        var isOpcache = REAL_INI_KEYS.indexOf(props.name) !== -1;
         var enabled = isRuntime ? !!props.runtimeEnabled : null;
 
         var badge;
@@ -851,7 +875,7 @@
                             'div',
                             { className: 'reloadify-danger-banner' },
                             el('strong', null, __('\u26a0 Local development only \u2014 do not use on a live/production site.', 'reloadify-frontend-sync')),
-                            el('p', null, __('These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync')),
+                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way, and .user.ini / .htaccess genuinely cannot reach them regardless of what\u2019s written there. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync')),
                             data.phpIniPath
                                 ? el('p', null, __('File this would write to: ', 'reloadify-frontend-sync'), el('code', null, data.phpIniPath))
                                 : el('p', null, __('This server reports no loaded php.ini file at all, so this action can\u2019t do anything here.', 'reloadify-frontend-sync')),
@@ -1020,14 +1044,14 @@
         });
         var extras = extrasState[0], setExtras = extrasState[1];
 
-        var savingState = useState(false);
-        var saving = savingState[0], setSaving = savingState[1];
-
         var syncingState = useState(false);
         var syncing = syncingState[0], setSyncing = syncingState[1];
 
         var toastState = useState(null);
         var toast = toastState[0], setToast = toastState[1];
+
+        var autosaveState = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+        var autosave = autosaveState[0], setAutosave = autosaveState[1];
 
         function showToast(type, message) {
             setToast({ type: type, message: message });
@@ -1035,13 +1059,15 @@
         }
 
         function refreshSettings() {
+            settingsSkipNext.current = true;
             wp.apiFetch({ path: '/reloadify/v1/settings', method: 'GET' })
                 .then(function (data) { setSettings(data); })
-                .catch(function () { /* next manual save will still correct this */ });
+                .catch(function () { settingsSkipNext.current = false; });
         }
 
         function syncPerformance() {
             setSyncing(true);
+            perfSkipNext.current = true;
             wp.apiFetch({ path: '/reloadify/v1/performance/sync', method: 'POST' })
                 .then(function (data) {
                     setPerf(data);
@@ -1049,31 +1075,78 @@
                     showToast('success', __('Synced with the server\u2019s current values.', 'reloadify-frontend-sync'));
                 })
                 .catch(function () {
+                    perfSkipNext.current = false;
                     setSyncing(false);
                     showToast('error', __('Could not sync from the server.', 'reloadify-frontend-sync'));
                 });
         }
 
-        function save() {
-            setSaving(true);
+        /* ---------------- Autosave: Reload tab (settings) ---------------- */
+        var settingsSkipNext = useRef(true); // true on mount and right after a programmatic (non-user) update
 
-            var request;
-            if (tab === 'reload') {
-                request = wp.apiFetch({ path: '/reloadify/v1/settings', method: 'POST', data: settings }).then(function (data) { setSettings(data); });
-            } else if (tab === 'extras') {
-                request = wp.apiFetch({ path: '/reloadify/v1/extras', method: 'POST', data: extras }).then(function (data) { setExtras(data); });
-            } else {
-                request = wp.apiFetch({ path: '/reloadify/v1/performance', method: 'POST', data: perf.settings }).then(function (data) { setPerf(data); });
-            }
+        useEffect(function () {
+            if (settingsSkipNext.current) { settingsSkipNext.current = false; return; }
 
-            request.then(function () {
-                setSaving(false);
-                showToast('success', __('Settings saved successfully.', 'reloadify-frontend-sync'));
-            }).catch(function () {
-                setSaving(false);
-                showToast('error', __('Failed to save settings.', 'reloadify-frontend-sync'));
-            });
-        }
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/settings', method: 'POST', data: settings })
+                    .then(function (data) {
+                        settingsSkipNext.current = true;
+                        setSettings(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [settings]);
+
+        /* ---------------- Autosave: Extensions tab ---------------- */
+        var extrasSkipNext = useRef(true);
+
+        useEffect(function () {
+            if (extrasSkipNext.current) { extrasSkipNext.current = false; return; }
+
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/extras', method: 'POST', data: extras })
+                    .then(function (data) {
+                        extrasSkipNext.current = true;
+                        setExtras(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [extras]);
+
+        /* ---------------- Autosave: Server Performance tab (editable directives) ---------------- */
+        var perfSkipNext = useRef(true);
+
+        useEffect(function () {
+            if (perfSkipNext.current) { perfSkipNext.current = false; return; }
+            if (!perf || !perf.settings) { return; }
+
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/performance', method: 'POST', data: perf.settings })
+                    .then(function (data) {
+                        perfSkipNext.current = true;
+                        setPerf(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [perf && perf.settings]);
 
         if (!settings || !perf) {
             return el('div', { className: 'reloadify-loading' }, __('Loading\u2026', 'reloadify-frontend-sync'));
@@ -1092,7 +1165,12 @@
                     el('h1', null, __('Reloadify Frontend Sync', 'reloadify-frontend-sync')),
                     el('p', null, __('Cross-browser live reload for page-builder QA \u2014 and a clear picture of which server settings this plugin can and can\u2019t change for you.', 'reloadify-frontend-sync'))
                 ),
-                el('span', { className: 'reloadify-version-badge' }, 'v' + ReloadifyAdmin.version)
+                el(
+                    'div',
+                    { className: 'reloadify-hero-meta' },
+                    el(AutoSaveStatus, { state: autosave }),
+                    el('span', { className: 'reloadify-version-badge' }, 'v' + ReloadifyAdmin.version)
+                )
             ),
             el(
                 'div',
@@ -1109,11 +1187,6 @@
                     : tab === 'extras'
                         ? el(ExtrasTab, { extras: extras, onChange: setExtras })
                         : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup })
-            ),
-            el(
-                'div',
-                { className: 'reloadify-save-bar' },
-                el('button', { className: 'button button-primary button-hero', onClick: save, disabled: saving }, saving ? __('Saving\u2026', 'reloadify-frontend-sync') : __('Save Changes', 'reloadify-frontend-sync'))
             )
         );
     }

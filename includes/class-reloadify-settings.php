@@ -32,13 +32,25 @@ class Reloadify_Settings {
 
 	/* ---------------- Settings ---------------- */
 
+	/**
+	 * Browsers that ship enabled out of the box. Kept small and mainstream;
+	 * everything else starts off and the site owner turns it on only if
+	 * they actually need to test in it.
+	 */
+	public static function default_enabled_browsers() {
+		return [ 'chrome', 'edge', 'safari' ];
+	}
+
 	public static function default_settings() {
-		$browsers = [];
+		$browsers        = [];
+		$default_enabled = self::default_enabled_browsers();
 
 		foreach ( self::supported_browsers() as $browser ) {
+			$is_default_on = in_array( $browser, $default_enabled, true );
+
 			$browsers[ $browser ] = [
-				'normal'    => true,
-				'incognito' => true,
+				'normal'    => $is_default_on,
+				'incognito' => $is_default_on,
 			];
 		}
 

@@ -56,6 +56,51 @@
     white-space: nowrap;
 }
 
+.reloadify-hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Autosave status — every field saves itself, so this is a quiet status
+   pill rather than an action the user has to take. */
+.reloadify-autosave-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: nowrap;
+}
+
+.reloadify-autosave-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex-shrink: 0;
+}
+
+.reloadify-autosave-status.is-saving .reloadify-autosave-dot {
+    background: #fbbf24;
+    animation: reloadify-autosave-pulse 1s ease-in-out infinite;
+}
+
+.reloadify-autosave-status.is-error .reloadify-autosave-dot {
+    background: #f87171;
+}
+
+@keyframes reloadify-autosave-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
 /* Tabs */
 .reloadify-tabs {
     display: flex;
@@ -608,28 +653,8 @@
     transform: translateX(20px);
 }
 
-/* Save bar — sticky within the content column, so it always spans the full
-   width of the dashboard regardless of whether the wp-admin sidebar is
-   expanded, collapsed, or the viewport is narrow. No fixed left/right offsets
-   to get wrong. */
 .reloadify-tab-panel {
     padding-bottom: 24px;
-}
-
-.reloadify-save-bar {
-    position: sticky;
-    bottom: 0;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(6px);
-    border: 1px solid #e2e2e6;
-    border-radius: 12px;
-    padding: 14px 20px;
-    display: flex;
-    justify-content: flex-end;
-    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
-    margin-top: 4px;
-    z-index: 500;
 }
 
 /* Toasts */
@@ -832,6 +857,64 @@
 @media (max-width: 480px) {
     .reloadify-tooltip {
         max-width: 240px;
+    }
+}
+
+/* Small-screen layout: WP admin drops to its mobile chrome around 782px,
+   and on top of that the plugin's own column can be as narrow as a phone
+   in portrait (~360-390px). Below that, stack what was side-by-side and
+   trim padding so nothing overflows the viewport or forces a horizontal
+   scrollbar on the whole page. */
+@media (max-width: 600px) {
+    .reloadify-admin-wrap {
+        margin: 12px 12px 12px 0;
+    }
+
+    .reloadify-hero {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 20px;
+        gap: 14px;
+    }
+
+    .reloadify-hero-meta {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .reloadify-tabs {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .reloadify-tab {
+        flex: 1 0 auto;
+        white-space: nowrap;
+    }
+
+    .reloadify-section {
+        padding: 16px;
+    }
+
+    .reloadify-perf-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .reloadify-perf-header .button {
+        width: 100%;
+    }
+
+    .reloadify-modal-overlay {
+        padding: 16px;
+    }
+
+    .reloadify-modal-header,
+    .reloadify-modal-body,
+    .reloadify-modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
     }
 }
 

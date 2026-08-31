@@ -30,16 +30,18 @@ class Reloadify_Admin {
 			return;
 		}
 
+		$suffix = reloadify_asset_suffix();
+
 		wp_enqueue_style(
 			'reloadify-admin-settings',
-			RELOADIFY_PLUGIN_URL . 'assets/css/admin-settings.css',
+			RELOADIFY_PLUGIN_URL . 'assets/css/admin-settings' . $suffix . '.css',
 			[],
 			RELOADIFY_VERSION
 		);
 
 		wp_enqueue_script(
 			'reloadify-admin-settings',
-			RELOADIFY_PLUGIN_URL . 'assets/js/admin-settings.js',
+			RELOADIFY_PLUGIN_URL . 'assets/js/admin-settings' . $suffix . '.js',
 			[ 'wp-element', 'wp-api-fetch', 'wp-i18n' ],
 			RELOADIFY_VERSION,
 			true

@@ -55,7 +55,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'heartbeat',
-				'label' => __('Caps the Heartbeat API to once every 60 seconds in wp-admin (instead of every 15\u201360s) and removes it from the frontend entirely for visitors — fewer background requests hitting the server on both sides', 'reloadify-frontend-sync'),
+				'label' => __('Caps the Heartbeat API to once every 60 seconds in wp-admin (instead of every 15–60s) and removes it from the frontend entirely for visitors — fewer background requests hitting the server on both sides', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'revisions',
@@ -76,6 +76,14 @@ class Reloadify_Speed
 			[
 				'key' => 'query_strings',
 				'label' => __('Removes query strings from static resources (CSS, JS) so they can be served by CDN and proxies more efficiently — speeds up repeat visitor loads', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'embeds',
+				'label' => __('Stops wp-embed.min.js from loading on the frontend for visitors — it only resizes embedded-post iframes, which most sites never use, so it\'s one less script on every page', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'minified_assets',
+				'label' => __('Serves this plugin\'s own CSS/JS pre-minified on real requests (roughly half the bytes) — automatic, and only switches back to the readable originals when SCRIPT_DEBUG or WP_DEBUG is on, so nothing changes for local development', 'reloadify-frontend-sync'),
 			],
 		];
 	}
@@ -100,6 +108,7 @@ class Reloadify_Speed
 		add_filter('heartbeat_settings', [__CLASS__, 'throttle_heartbeat']);
 
 		add_action('wp_print_scripts', [__CLASS__, 'dequeue_frontend_heartbeat'], 100);
+		add_action('wp_enqueue_scripts', [__CLASS__, 'dequeue_frontend_embeds'], 100);
 
 		add_filter('wp_revisions_to_keep', [__CLASS__, 'cap_revisions'], 10, 2);
 		add_action('pre_ping', [__CLASS__, 'remove_self_pingbacks']);
@@ -140,6 +149,21 @@ class Reloadify_Speed
 		}
 
 		wp_dequeue_script('heartbeat');
+	}
+
+	/**
+	 * wp-embed.min.js only handles client-side resizing of iframes when this
+	 * site's own posts get embedded elsewhere -- oEmbed responses themselves
+	 * are still generated server-side and unaffected. Dropping the script is
+	 * one less request/parse on every frontend pageview for visitors.
+	 */
+	public static function dequeue_frontend_embeds()
+	{
+		if (is_admin()) {
+			return;
+		}
+
+		wp_deregister_script('wp-embed');
 	}
 
 	public static function disable_emojis()
