@@ -15,14 +15,14 @@ class Reloadify_Performance {
 			'memory_limit'                     => [ 'runtime' => true,  'default' => '512M' ],
 			'max_execution_time'               => [ 'runtime' => true,  'default' => '300' ],
 			'opcache.enable'                   => [ 'runtime' => true,  'default' => '1' ],
-			'opcache.validate_timestamps'      => [ 'runtime' => true,  'default' => '1' ],
-			'opcache.revalidate_freq'          => [ 'runtime' => true,  'default' => '2' ],
+			'opcache.validate_timestamps'      => [ 'runtime' => true,  'default' => '0' ],
+			'opcache.revalidate_freq'          => [ 'runtime' => true,  'default' => '0' ],
 			'max_input_time'                   => [ 'runtime' => false, 'default' => '300' ],
-			'post_max_size'                    => [ 'runtime' => false, 'default' => '128M' ],
-			'upload_max_filesize'              => [ 'runtime' => false, 'default' => '128M' ],
-			'opcache.memory_consumption'       => [ 'runtime' => false, 'default' => '128' ],
+			'post_max_size'                    => [ 'runtime' => false, 'default' => '256M' ],
+			'upload_max_filesize'              => [ 'runtime' => false, 'default' => '256M' ],
+			'opcache.memory_consumption'       => [ 'runtime' => false, 'default' => '512' ],
 			'opcache.interned_strings_buffer'  => [ 'runtime' => false, 'default' => '16' ],
-			'opcache.max_accelerated_files'    => [ 'runtime' => false, 'default' => '10000' ],
+			'opcache.max_accelerated_files'    => [ 'runtime' => false, 'default' => '20000' ],
 			'realpath_cache_size'              => [ 'runtime' => false, 'default' => '4096K' ],
 			'realpath_cache_ttl'               => [ 'runtime' => false, 'default' => '600' ],
 		];
@@ -131,19 +131,26 @@ class Reloadify_Performance {
 
 	/**
 	 * Directives .user.ini / .htaccess can genuinely carry (per-directory PHP
-	 * config). opcache.* is handled separately below -- it's PHP_INI_SYSTEM,
-	 * which .user.ini and .htaccess cannot reach at all. The only file that can
-	 * ever affect it is the real, loaded php.ini itself.
+	 * config). realpath_cache_* and opcache.* are handled separately below --
+	 * they're PHP_INI_SYSTEM, which .user.ini and .htaccess cannot reach at
+	 * all, no matter how the write itself is phrased. The only file that can
+	 * ever affect them is the real, loaded php.ini itself.
 	 */
-	const AUTO_WRITE_KEYS = [ 'max_input_time', 'post_max_size', 'upload_max_filesize', 'realpath_cache_size', 'realpath_cache_ttl' ];
+	const AUTO_WRITE_KEYS = [ 'max_input_time', 'post_max_size', 'upload_max_filesize' ];
 
 	/**
 	 * Of those, the subset Apache's mod_php actually allows via .htaccess
-	 * "php_value". realpath_cache_* is PHP_INI_SYSTEM even for .htaccess.
+	 * "php_value".
 	 */
 	const HTACCESS_KEYS = [ 'max_input_time', 'post_max_size', 'upload_max_filesize' ];
 
-	const OPCACHE_KEYS = [ 'opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files' ];
+	/**
+	 * PHP_INI_SYSTEM directives: locked in when PHP itself starts, before
+	 * .user.ini or .htaccess are ever read. The real php.ini (plus a PHP
+	 * restart) is the only file capable of changing any of these -- that's
+	 * why they all live behind the danger-zone confirmation together.
+	 */
+	const REAL_INI_KEYS = [ 'opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl' ];
 
 	const MARKER = 'Reloadify Frontend Sync';
 
@@ -202,7 +209,7 @@ class Reloadify_Performance {
 		}
 
 		$lines = [];
-		foreach ( self::OPCACHE_KEYS as $key ) {
+		foreach ( self::REAL_INI_KEYS as $key ) {
 			if ( isset( $desired[ $key ] ) && '' !== $desired[ $key ] ) {
 				$lines[] = $key . '=' . $desired[ $key ];
 			}
@@ -212,7 +219,7 @@ class Reloadify_Performance {
 			return [
 				'success'     => false,
 				'path'        => $path,
-				'message'     => __( 'No opcache values to write. Did you set values for memory_consumption, interned_strings_buffer, and/or max_accelerated_files?', 'reloadify-frontend-sync' ),
+				'message'     => __( 'No values to write. Did you set values for opcache.memory_consumption, opcache.interned_strings_buffer, opcache.max_accelerated_files, realpath_cache_size, and/or realpath_cache_ttl?', 'reloadify-frontend-sync' ),
 				'backup_path' => $backup_path,
 			];
 		}
@@ -366,8 +373,8 @@ class Reloadify_Performance {
 		// FIXED: Create backup BEFORE modifying existing .htaccess
 		$backup_path = '';
 		if ( file_exists( $path ) ) {
-			// phpcs:ignore PluginCheck.CodeAnalysis.WriteFile.ABSPATHDetected -- .htaccess and its backup must live next to the original file in the web root; wp_upload_dir() is not a valid Apache config location.
 			$backup_path = $path . '.reloadify-backup-' . time() . '.bak';
+			// phpcs:ignore PluginCheck.CodeAnalysis.WriteFile.ABSPATHDetected -- .htaccess and its backup must live next to the original file in the web root; wp_upload_dir() is not a valid Apache config location.
 			if ( ! @copy( $path, $backup_path ) ) {
 				return [
 					'success' => false,

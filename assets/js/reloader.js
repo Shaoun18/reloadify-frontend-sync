@@ -37,21 +37,92 @@
     }
 
     /**
-     * Private/incognito detection
+     * Private/incognito detection.
+     *
+     * There's no official "am I private?" flag; every technique here infers
+     * it from a side-effect, and browser vendors keep patching those closed.
+     * This used to be a single check (storage.estimate() reporting a small
+     * quota) -- but Chrome now deliberately reports the SAME quota in normal
+     * and Incognito windows for most sites (its "predictable reported
+     * storage quota" mitigation), and quota-based detection never worked on
+     * Firefox private windows to begin with. That single check silently
+     * failing closed is exactly why this was firing wrong: every session,
+     * private or not, was resolving to "normal" and only ever consulting
+     * the Normal toggle -- which is why turning Incognito off didn't stop a
+     * reload, and turning it on didn't start one.
+     *
+     * Fix: run several independent signals and go with the majority,
+     * so no single patched API can flip the result on its own. Any probe
+     * that isn't supported (or gives an inconclusive answer) abstains
+     * rather than voting, instead of being silently forced to "false" like
+     * before.
      */
     function detectIncognito() {
-        return new Promise(function (resolve) {
-            if (navigator.storage && typeof navigator.storage.estimate === 'function') {
-                navigator.storage.estimate()
-                    .then(function (estimate) {
-                        var quotaMB = (estimate.quota || 0) / (1024 * 1024);
-                        resolve(quotaMB > 0 && quotaMB < 120);
-                    })
-                    .catch(function () { resolve(false); });
-                return;
-            }
-            resolve(false);
-        });
+        function probeQuota() {
+            return new Promise(function (resolve) {
+                if (!navigator.storage || typeof navigator.storage.estimate !== 'function') {
+                    resolve(null);
+                    return;
+                }
+                navigator.storage.estimate().then(function (estimate) {
+                    var quotaMB = (estimate.quota || 0) / (1024 * 1024);
+                    if (quotaMB <= 0) {
+                        resolve(null);
+                        return;
+                    }
+                    // Where available, weigh quota against device memory rather than
+                    // a flat 120MB cut-off -- that flat cut-off is the exact check
+                    // Chrome's mitigation was built to defeat.
+                    if (navigator.deviceMemory) {
+                        resolve((quotaMB / (navigator.deviceMemory * 1024)) < 0.2);
+                        return;
+                    }
+                    resolve(quotaMB < 120);
+                }).catch(function () { resolve(null); });
+            });
+        }
+
+        function probeIndexedDB() {
+            return new Promise(function (resolve) {
+                if (!window.indexedDB) {
+                    resolve(null);
+                    return;
+                }
+                try {
+                    var req = indexedDB.open('__reloadify_probe__');
+                    req.onerror = function () { resolve(true); };
+                    req.onsuccess = function () {
+                        try { req.result.close(); } catch (e) {}
+                        try { indexedDB.deleteDatabase('__reloadify_probe__'); } catch (e) {}
+                        resolve(false);
+                    };
+                } catch (e) {
+                    resolve(true);
+                }
+            });
+        }
+
+        function probeLocalStorage() {
+            return new Promise(function (resolve) {
+                try {
+                    window.localStorage.setItem('__reloadify_probe__', '1');
+                    window.localStorage.removeItem('__reloadify_probe__');
+                    resolve(false);
+                } catch (e) {
+                    resolve(e && e.code === 22 /* QUOTA_EXCEEDED_ERR */ ? true : null);
+                }
+            });
+        }
+
+        return Promise.all([probeQuota(), probeIndexedDB(), probeLocalStorage()])
+            .then(function (results) {
+                var votes = results.filter(function (r) { return r !== null; });
+                if (!votes.length) {
+                    return false; // nothing conclusive — same safe default as before
+                }
+                var privateVotes = votes.filter(Boolean).length;
+                return privateVotes > votes.length / 2;
+            });
     }
 
     function doReload(mode) {
@@ -187,12 +258,13 @@
     }
 
     function init() {
-        // The signed-in editor's own tab always polls — no settings dependency.
-        if (ReloadifySync.is_editor_viewer === '1') {
-            startPolling(true);
-            return;
-        }
-
+        // NOTE: this used to unconditionally start polling for any signed-in
+        // editor/admin, bypassing the per-browser Enable/Disable toggles
+        // entirely ("no settings dependency"). That's why turning a browser
+        // off did nothing while testing logged in — the toggle was never
+        // even being read. Every visitor, editor or not, now goes through
+        // the same browser_settings check below, so Enable/Disable actually
+        // controls whether this tab polls.
         var settings = ReloadifySync.browser_settings || {};
 
         resolveBrowserName(detectBrowserName()).then(function (browserName) {

@@ -154,7 +154,7 @@ class Reloadify_Extras {
 
 		wp_enqueue_script(
 			'reloadify-scroll-top',
-			RELOADIFY_PLUGIN_URL . 'assets/js/scroll-top.js',
+			RELOADIFY_PLUGIN_URL . 'assets/js/scroll-top' . reloadify_asset_suffix() . '.js',
 			[],
 			RELOADIFY_VERSION,
 			true

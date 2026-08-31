@@ -4,7 +4,7 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
- * Version:           1.1.3
+ * Version:           1.1.4
  * Author:            Programmershaoun
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -20,20 +20,20 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.1.3');
+define('RELOADIFY_VERSION', '1.1.4');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once RELOADIFY_PLUGIN_DIR . 'includes/reloadify-filesystem.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-settings.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-performance.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-speed.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-cleanup.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-media.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-extras.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-performance.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-speed.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-cleanup.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-media.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-extras.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-rest.php';
-require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-admin.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/admin/class-reloadify-admin-loader.php';
 
 class Reloadify_Frontend_Sync
 {
@@ -87,7 +87,7 @@ class Reloadify_Frontend_Sync
 		add_action('wp_ajax_nopriv_reloadify_reloader_check', [$this, 'check_for_updates']);
 
 		Reloadify_Rest::init();
-		Reloadify_Admin::init();
+		Reloadify_Admin_Loader::init();
 	}
 
 
@@ -203,9 +203,11 @@ class Reloadify_Frontend_Sync
 			return;
 		}
 
+		$suffix = reloadify_asset_suffix();
+
 		wp_enqueue_script(
 			'reloadify-reloader-js',
-			RELOADIFY_PLUGIN_URL . 'assets/js/reloader.js',
+			RELOADIFY_PLUGIN_URL . 'assets/js/reloader' . $suffix . '.js',
 			['jquery'],
 			RELOADIFY_VERSION,
 			true

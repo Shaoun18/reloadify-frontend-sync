@@ -4,7 +4,7 @@ Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -104,6 +104,10 @@ Your feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.1.4 =
+*   **Changed: Settings now save automatically.** Every toggle, radio, and field on the Cross-Browser Reload, Server Performance, and Extensions tabs saves itself the moment you change it — no more "Save Changes" button and no risk of losing changes by navigating away before clicking it.
+*   **Changed: Default enabled browsers.** New installs now enable only Chrome, Edge, and Safari out of the box instead of all ten supported browsers. Enable any of the rest (Brave, Firefox, Opera, UC Browser, Vivaldi, Yandex Browser, Samsung Internet) from the Browsers & windows section whenever you need to test in them. Existing installs keep whatever browsers you already had enabled.
 
 = 1.1.3 =
 *   **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
