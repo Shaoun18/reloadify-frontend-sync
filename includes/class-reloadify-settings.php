@@ -38,7 +38,7 @@ class Reloadify_Settings {
 	 * they actually need to test in it.
 	 */
 	public static function default_enabled_browsers() {
-		return [ 'chrome', 'edge', 'safari' ];
+		return [ 'chrome', 'brave', 'edge', 'firefox', 'safari' ];
 	}
 
 	public static function default_settings() {
@@ -55,11 +55,14 @@ class Reloadify_Settings {
 		}
 
 		return [
-			'dev_mode_enabled'    => false,
-			'dev_mode_enabled_at' => 0,
-			'poll_interval'       => 2000,
-			'reload_mode'         => 'soft', // 'soft' or 'hard'
-			'browsers'            => $browsers,
+			'dev_mode_enabled'        => false,
+			'dev_mode_enabled_at'     => 0,
+			'poll_interval'           => 2000,
+			'reload_mode'             => 'soft', // 'soft' or 'hard'
+			// Off by default: only the tab you're actually looking at reloads.
+			// Turn it on to reload every open tab/window at once.
+			'all_tabs_reload_enabled' => false,
+			'browsers'                => $browsers,
 		];
 	}
 
@@ -71,7 +74,9 @@ class Reloadify_Settings {
 			add_option( 'reloadify_last_site_update', time(), '', false );
 		}
 		if ( false === get_option( 'reloadify_delete_data_on_uninstall', false ) ) {
-			add_option( 'reloadify_delete_data_on_uninstall', true );
+			// Opt-in since 1.2.0 -- deleting a plugin should never silently take
+			// the site owner's saved settings with it unless they asked for it.
+			add_option( 'reloadify_delete_data_on_uninstall', false );
 		}
 		self::write_timestamp_file( time() );
 	}
@@ -94,6 +99,13 @@ class Reloadify_Settings {
 		}
 
 		update_option( self::OPTION_KEY, $clean );
+
+		// Keep the static timestamp file's embedded settings (reload mode,
+		// all-tabs flag) in step with what was just saved, so already-open
+		// frontend tabs pick the change up on their next poll without
+		// needing a full page load first.
+		self::write_timestamp_file( self::get_site_updated_at() );
+
 		return $clean;
 	}
 
@@ -114,6 +126,7 @@ class Reloadify_Settings {
 		}
 
 		$merged['dev_mode_enabled'] = ! empty( $merged['dev_mode_enabled'] );
+		$merged['all_tabs_reload_enabled'] = ! empty( $merged['all_tabs_reload_enabled'] );
 		$merged['dev_mode_enabled_at'] = (int) ( isset( $merged['dev_mode_enabled_at'] ) ? $merged['dev_mode_enabled_at'] : 0 );
 		$merged['poll_interval']    = max( 300, (int) $merged['poll_interval'] );
 		$merged['reload_mode']      = in_array( $merged['reload_mode'], [ 'soft', 'hard' ], true ) ? $merged['reload_mode'] : 'soft';
@@ -129,6 +142,7 @@ class Reloadify_Settings {
 			'dev_mode_enabled_at' => 0, // update_settings() fills this in with the correct stamp
 			'poll_interval'       => isset( $incoming['poll_interval'] ) ? max( 300, (int) $incoming['poll_interval'] ) : $defaults['poll_interval'],
 			'reload_mode'         => ( isset( $incoming['reload_mode'] ) && 'hard' === $incoming['reload_mode'] ) ? 'hard' : 'soft',
+			'all_tabs_reload_enabled' => ! empty( $incoming['all_tabs_reload_enabled'] ),
 			'browsers'            => [],
 		];
 
@@ -204,7 +218,30 @@ class Reloadify_Settings {
 		}
 
 		// Timestamp file write (this is the critical part - must succeed)
-		return false !== @file_put_contents( $dir . '/timestamp.json', wp_json_encode( [ 't' => $ts ] ), LOCK_EX );
+		return false !== @file_put_contents( $dir . '/timestamp.json', wp_json_encode( self::timestamp_payload( $ts ) ), LOCK_EX );
+	}
+
+	/**
+	 * What actually lands in timestamp.json.
+	 *
+	 * 't' is the change clock the reloader compares against; 'atr' and 'rm'
+	 * ride along so an open tab can pick up an all-tabs / reload-mode change
+	 * from the static file alone, with no extra admin-ajax round trip.
+	 *
+	 * Keys are deliberately short -- this file is fetched every couple of
+	 * seconds by every open tab.
+	 */
+	private static function timestamp_payload( $ts ) {
+		$settings = get_option( self::OPTION_KEY, [] );
+		$settings = is_array( $settings ) ? $settings : [];
+
+		$reload_mode = isset( $settings['reload_mode'] ) && 'hard' === $settings['reload_mode'] ? 'hard' : 'soft';
+
+		return [
+			't'   => (int) $ts,
+			'atr' => empty( $settings['all_tabs_reload_enabled'] ) ? 0 : 1,
+			'rm'  => $reload_mode,
+		];
 	}
 
 	public static function get_timestamp_file_url() {

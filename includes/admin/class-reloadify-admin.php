@@ -15,8 +15,8 @@ class Reloadify_Admin {
 
 	public static function register_page() {
 		add_menu_page(
-			__( 'Auto Reloader', 'reloadify-frontend-sync' ),
-			__( 'Auto Reloader', 'reloadify-frontend-sync' ),
+			__('Reloadify Sync', 'reloadify-frontend-sync' ),
+			__('Reloadify Sync', 'reloadify-frontend-sync' ),
 			'manage_options',
 			self::PAGE_SLUG,
 			[ __CLASS__, 'render_page' ],
@@ -70,8 +70,10 @@ class Reloadify_Admin {
 					'phpIniPath' => Reloadify_Performance::get_php_ini_path(),
 				],
 				'speed'       => [
-					'enabled' => Reloadify_Speed::is_enabled(),
-					'items'   => Reloadify_Speed::items(),
+					'enabled'      => Reloadify_Speed::is_enabled(),
+					'items'        => Reloadify_Speed::items(),
+					'options'      => Reloadify_Speed::get_options(),
+					'optionLabels' => Reloadify_Speed::option_labels(),
 				],
 				'media'       => [
 					'enabled'            => Reloadify_Media::is_enabled(),

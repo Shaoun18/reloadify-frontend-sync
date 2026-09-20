@@ -4,7 +4,7 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
- * Version:           1.1.4
+ * Version:           1.2.0
  * Author:            Programmershaoun
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -20,7 +20,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.1.4');
+define('RELOADIFY_VERSION', '1.2.0');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -28,6 +28,7 @@ define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
 require_once RELOADIFY_PLUGIN_DIR . 'includes/reloadify-filesystem.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-settings.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-performance.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-minify.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-speed.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-cleanup.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-media.php';
@@ -221,6 +222,7 @@ class Reloadify_Frontend_Sync
 			'nonce'            => wp_create_nonce('reloadify_reloader_nonce'),
 			'is_editor_viewer' => $is_editor_viewer ? '1' : '0',
 			'reload_mode'      => $settings['reload_mode'],
+			'all_tabs_reload_enabled' => empty($settings['all_tabs_reload_enabled']) ? '0' : '1',
 			'browser_settings' => $settings['browsers'],
 		]);
 	}
@@ -261,18 +263,17 @@ class Reloadify_Frontend_Sync
 
 		$client_ts = isset($_POST['timestamp']) ? intval($_POST['timestamp']) : 0;
 		$server_ts = Reloadify_Settings::get_site_updated_at();
+		$settings  = Reloadify_Settings::get_settings();
 
-		if ($server_ts > $client_ts) {
-			wp_send_json_success([
-				'reload'        => true,
-				'new_timestamp' => $server_ts,
-			]);
-		} else {
-			wp_send_json_success([
-				'reload'        => false,
-				'new_timestamp' => $server_ts,
-			]);
-		}
+		// The two reload-behaviour settings ride along on every check so an
+		// already-open tab picks up a change to them without needing a manual
+		// refresh first.
+		wp_send_json_success([
+			'reload'                  => $server_ts > $client_ts,
+			'new_timestamp'           => $server_ts,
+			'reload_mode'             => $settings['reload_mode'],
+			'all_tabs_reload_enabled' => empty($settings['all_tabs_reload_enabled']) ? 0 : 1,
+		]);
 	}
 }
 

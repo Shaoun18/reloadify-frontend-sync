@@ -18,15 +18,29 @@ class Reloadify_Media {
 	const STATS_META_KEY     = '_reloadify_media_stats';
 	const BACKFILL_BATCH_SIZE = 3;
 
+	/**
+	 * How long one click of "Optimize existing media now" is allowed to keep
+	 * working before it hands control back to the browser. The button used to
+	 * convert three images per HTTP round trip, which on a library of any real
+	 * size meant hundreds of sequential requests and a wait measured in
+	 * minutes. Now each request keeps converting until this budget is spent,
+	 * so the same library finishes in a fraction of the round trips.
+	 */
+	const MANUAL_TIME_BUDGET = 15;
+
+	/**
+	 * Opt-in since 1.2.0 -- conversion rewrites real files in the uploads
+	 * folder, so nothing starts running until the site owner turns it on.
+	 */
 	public static function is_enabled() {
-		return (bool) get_option( self::OPTION_KEY, true );
+		return (bool) get_option( self::OPTION_KEY, false );
 	}
 
 	public static function set_enabled( $enabled ) {
 		$enabled = (bool) $enabled;
 
 
-		add_option( self::OPTION_KEY, true );
+		add_option( self::OPTION_KEY, false );
 		update_option( self::OPTION_KEY, $enabled );
 
 		if ( self::is_enabled() ) {
@@ -277,10 +291,12 @@ class Reloadify_Media {
 		return min( (int) $quality, 82 );
 	}
 
-	public static function backfill_existing_images() {
+	public static function backfill_existing_images( $batch_size = 0 ) {
 		if ( ! self::is_enabled() ) {
 			return 0;
 		}
+
+		$batch_size = $batch_size > 0 ? (int) $batch_size : self::BACKFILL_BATCH_SIZE;
 
 		if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -290,10 +306,12 @@ class Reloadify_Media {
 			'post_type'      => 'attachment',
 			'post_mime_type' => [ 'image/jpeg', 'image/png' ],
 			'post_status'    => 'inherit',
-			'posts_per_page' => self::BACKFILL_BATCH_SIZE,
+			'posts_per_page' => $batch_size,
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
+			'no_found_rows'  => true,
+			'cache_results'  => false,
 		
 			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
@@ -367,15 +385,44 @@ class Reloadify_Media {
 			];
 		}
 
-		$images_processed = self::backfill_existing_images();
-		self::backfill_one_video_now();
+		// Image conversion is CPU- and memory-hungry; give this request as much
+		// headroom as the host will allow before starting.
+		if ( function_exists( 'wp_raise_memory_limit' ) ) {
+			wp_raise_memory_limit( 'image' );
+		}
+
+		if ( function_exists( 'set_time_limit' ) ) {
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- explicit admin-triggered batch job; without this a long batch dies mid-conversion.
+			@set_time_limit( 0 );
+		}
+
+		$started          = microtime( true );
+		$images_processed = 0;
+
+		// Keep converting for as long as the budget allows instead of stopping
+		// after a single small batch -- far fewer HTTP round trips for the same
+		// number of images.
+		do {
+			$converted = self::backfill_existing_images( self::BACKFILL_BATCH_SIZE );
+			$images_processed += $converted;
+
+			$elapsed = microtime( true ) - $started;
+		} while ( $converted > 0 && $elapsed < self::MANUAL_TIME_BUDGET );
+
+		$images_remaining = self::count_pending( 'image' );
+
+		// Video compression is much slower again, so it only starts once the
+		// images are done -- otherwise a single video stalls the whole run.
+		if ( 0 === $images_remaining ) {
+			self::backfill_one_video_now();
+		}
 
 		$video_status = self::video_backfill_status();
 
 		return [
 			'enabled'            => true,
 			'images_processed'   => $images_processed,
-			'images_remaining'   => self::count_pending( 'image' ),
+			'images_remaining'   => $images_remaining,
 			'videos_remaining'   => $video_status['remaining'],
 			'videos_unavailable' => $video_status['unavailable'],
 			'ffmpeg_available'   => (bool) self::ffmpeg_path(),
@@ -672,6 +719,8 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
+			'no_found_rows'  => true,
+			'cache_results'  => false,
 			
 			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [

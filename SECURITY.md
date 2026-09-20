@@ -2,91 +2,96 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Reloadify Frontend Sync, please report it responsibly by emailing **security@shaoun18.github.io** instead of using the public issue tracker.
+If you discover a security vulnerability in Reloadify Frontend Sync, please report it privately by email rather than using the public issue tracker.
 
-**Please include:**
+**Security contact:** cse.engrchandrashill@tutanota.de
+
+Please include:
 
 - A clear description of the vulnerability
 - Steps to reproduce the issue
-- Potential impact assessment
-- Any proof-of-concept code (if applicable)
+- Potential impact
+- Proof-of-concept code or screenshots, if applicable
 
-We will acknowledge your report within 48 hours and work on a fix as quickly as possible.
+We aim to acknowledge security reports within 48 hours and will investigate confirmed vulnerabilities as quickly as possible.
 
 ## Security Practices
 
-### Code Security
+### Input Validation and Sanitization
 
-- **Input Validation & Sanitization**: All user input is sanitized using WordPress functions (`sanitize_text_field()`, `wp_kses_post()`, etc.)
-- **Output Escaping**: All output to HTML/JavaScript is properly escaped using appropriate functions
-- **CSRF Protection**: All admin forms use WordPress nonces via `wp_nonce_field()` and `wp_verify_nonce()`
-- **Capability Checks**: All admin functionality is protected with WordPress capability checks (`current_user_can()`)
-- **Prepared Statements**: Database queries use proper escaping and prepared statements where applicable
+User-supplied settings and input are validated and sanitized using appropriate WordPress APIs where applicable.
+
+### Output Escaping
+
+Dynamic values are escaped using appropriate WordPress escaping functions before being rendered in HTML or JavaScript contexts.
+
+### CSRF Protection
+
+Administrative actions and applicable AJAX requests use WordPress nonce verification.
+
+### Capability Checks
+
+Administrative functionality is restricted using WordPress capability checks.
+
+### Database Security
+
+Database queries use WordPress APIs and prepared statements where applicable.
 
 ### Frontend Script Security
 
-- Reloader script validates timestamps before triggering page reloads
-- AJAX requests include nonce verification
-- No eval() or dynamic script injection
-- Cross-origin requests handled securely via established WordPress practices
+- The frontend reloader validates change timestamps before triggering reloads.
+- Applicable AJAX requests use nonce verification.
+- The plugin does not use `eval()` for its reloader functionality.
+- Reload checks use established WordPress and same-site mechanisms.
 
 ### File Upload Security
 
-- **SVG Upload Protection**: SVG files are scanned for embedded scripts and malicious HTML before acceptance
-- Uploads are validated against file type whitelists
-- Uploaded files are moved to secure upload directories
+- SVG upload support is optional and disabled by default.
+- When SVG support is enabled, uploaded SVG content is checked for potentially executable content before acceptance.
+- Uploads are validated using appropriate WordPress file-handling APIs.
 
 ### Admin Panel Security
 
-- All admin settings pages require appropriate user capabilities
-- Settings are validated and sanitized before storage
-- Direct file access is prevented via index.php files in plugin directories
-
-## Supported Versions
-
-| Version | Status              | Security Updates |
-| ------- | ------------------- | ---------------- |
-| 1.1.4   | ✅ Current          | Yes              |
-| 1.1.2   | ⚠️ End of Support | Limited          |
-| 1.0.2   | ❌ Deprecated       | No               |
+- Administrative settings require appropriate WordPress capabilities.
+- Settings are validated and sanitized before storage.
+- Plugin-generated files are protected using appropriate WordPress/server mechanisms.
 
 ## WordPress & PHP Compatibility
 
-- **Minimum WordPress**: 6.4
-- **Tested up to**: 7.1
-- **Minimum PHP**: 7.4
-- **Recommended PHP**: 8.0+
+- **Minimum WordPress:** 6.4
+- **Tested with:** WordPress 7.1.1
+- **Minimum PHP:** 7.4
+- **Recommended PHP:** 8.0+
 
-We recommend keeping WordPress and PHP versions up to date for security patches.
+Users should keep WordPress, PHP, themes, and plugins updated to receive security fixes.
 
 ## Dependency Security
 
-This plugin uses only core WordPress functions. No external dependencies or third-party libraries are included.
+Reloadify Frontend Sync is designed to use WordPress core APIs and does not bundle external runtime libraries for its core functionality.
 
 ## Data Privacy
 
-- Settings are stored securely in WordPress options table
-- Timestamps are logged to a cache-busting JSON file in wp-content/uploads
-- No personal user data is collected or transmitted
-- All data is deleted on plugin uninstallation (if enabled in settings)
-
-## Security Audit History
-
-- **v1.1.4** (Sep 2026): Enhanced validation, WordPress 7.1 compatibility testing
-- **v1.1.0** (July 2026): SVG security scanning added, AJAX security hardened
-- **v1.0.0** (June 2026): Initial release with core security measures
+- Plugin settings are stored locally in the WordPress options table.
+- Reload timestamps are stored locally in a cache-busting JSON file under the WordPress uploads directory.
+- The plugin does not intentionally collect or transmit personal user data or telemetry.
+- Plugin data generated by Reloadify can be removed during uninstall when "Delete Data on Uninstall" is enabled.
 
 ## Best Practices for Users
 
-1. **Update Regularly**: Keep the plugin updated to receive security patches
-2. **Use Latest WordPress**: Run the latest stable WordPress version
-3. **Strong Admin Passwords**: Use strong passwords for WordPress admin accounts
-4. **Limit Developer Access**: Only enable Developer Mode for development environments
-5. **Regular Backups**: Maintain regular WordPress backups
-6. **Security Plugins**: Consider running WordPress security plugins alongside this plugin
+1. **Update Regularly:** Keep Reloadify Frontend Sync updated.
+2. **Use Current WordPress:** Keep WordPress and PHP updated.
+3. **Use Strong Credentials:** Protect administrator accounts with strong passwords.
+4. **Limit Developer Mode:** Enable Developer Mode only while actively developing or testing.
+5. **Maintain Backups:** Keep regular backups of your WordPress site.
+6. **Review Extensions:** Enable optional features such as SVG uploads only when needed.
+7. **Use Security Tools:** Consider using established WordPress security and monitoring solutions.
 
 ## Contact
 
-For security concerns, contact: **Shaoun Chandra Shill**
-Email: cse.engrshaounchandrashill@tutanota.de
+For security concerns:
+
+**Shaoun Chandra Shill**
+
+Email: cse.engrchandrashill@tutanota.de
+
 Website: https://shaoun18.github.io/

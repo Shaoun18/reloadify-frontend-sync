@@ -660,32 +660,162 @@
 /* Toasts */
 .reloadify-toast {
     position: fixed;
-    top: 40px;
+    top: 48px;
     right: 24px;
     z-index: 100001;
-    padding: 12px 18px;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 13.5px;
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+    max-width: 420px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    border-left-width: 4px;
+    background: #fff;
+    color: #1f2937;
+    font-size: 13px;
+    line-height: 1.5;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 12px;
+    animation: reloadify-toast-in 0.22s ease-out;
 }
 
-.reloadify-toast-dot {
-    width: 7px;
-    height: 7px;
+@keyframes reloadify-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reloadify-toast {
+        animation: none;
+    }
+}
+
+.reloadify-toast-icon {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
     border-radius: 50%;
-    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.reloadify-toast-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.reloadify-toast-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.reloadify-toast-message {
+    color: #4b5563;
+}
+
+.reloadify-toast-close {
+    flex: 0 0 auto;
+    margin: -4px -4px 0 4px;
+    padding: 0 5px;
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 18px;
+    line-height: 1.2;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.reloadify-toast-close:hover,
+.reloadify-toast-close:focus {
+    color: #374151;
+    background: #f3f4f6;
 }
 
 .reloadify-toast--success {
+    border-left-color: #16a34a;
+}
+
+.reloadify-toast--success .reloadify-toast-icon {
     background-color: #16a34a;
 }
 
 .reloadify-toast--error {
+    border-left-color: #dc2626;
+}
+
+.reloadify-toast--error .reloadify-toast-icon {
     background-color: #dc2626;
+}
+
+.reloadify-toast--warning {
+    border-left-color: #d97706;
+}
+
+.reloadify-toast--warning .reloadify-toast-icon {
+    background-color: #d97706;
+}
+
+.reloadify-toast--info {
+    border-left-color: #4f46e5;
+}
+
+.reloadify-toast--info .reloadify-toast-icon {
+    background-color: #4f46e5;
+}
+
+@media (max-width: 782px) {
+    .reloadify-toast {
+        left: 16px;
+        right: 16px;
+        max-width: none;
+    }
+}
+
+/* Speed Boost sub-options */
+.reloadify-speed-options {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #d9f2e3;
+}
+
+.reloadify-speed-options-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 9px;
+}
+
+.reloadify-speed-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+}
+
+.reloadify-speed-option input[type="checkbox"] {
+    margin: 2px 0 0;
 }
 
 /* Speed Boost / Media Optimization / Delete on Uninstall -- side by side */

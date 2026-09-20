@@ -1,20 +1,36 @@
 ## Changelog
 
+### 1.2.0
+
+* **Added: Reload all tabs.** A new toggle on the Cross-Browser Reload tab decides whether a change refreshes every open tab and window at once, or only the tab you're actually looking at. "Active tab only" is the default, so background tabs keep their scroll position and form state instead of resetting every time you save. Tabs coordinate through a shared active-tab claim plus BroadcastChannel, with a fallback for private windows where storage is blocked.
+* **Added: Live settings propagation.** Reload mode and the all-tabs flag now ride along on every poll response (both the static timestamp file and the admin-ajax check), so changing either takes effect on tabs that are already open instead of only after their next full page load.
+* **Added: CSS, JavaScript and HTML minification under Speed Boost.** Five new passes — Minify JavaScript, Minify CSS, Minify HTML output, Remove HTML comments, Remove unnecessary whitespace — each individually switchable. Minified CSS/JS are cached in `uploads/reloadify-minify/` and keyed by file size, modification time and plugin version; your original files are never modified, and anything already minified, remote, or over 1 MB is skipped. The JavaScript pass is deliberately conservative and returns the original file untouched whenever it isn't completely confident.
+* **Added: Delayed JavaScript, bundled into Speed Boost.** Non-essential scripts now wait for the first interaction (scroll, tap, key, mouse move) or 7 seconds, whichever comes first. There's no separate switch to find — enabling Speed Boost is all it takes. jQuery, this plugin's own scripts, module scripts, and anything served to a logged-in editor always load immediately, and `reloadify_delay_js_excluded_handles` lets you rescue any other handle.
+* **Changed: Speed Boost, Media Optimization and Delete Data on Uninstall now start switched off.** All three change real output or real files, so they're opt-in on new installs. Existing sites keep whatever you already had set.
+* **Changed: Deleting the plugin keeps your data unless you ask otherwise.** Delete Data on Uninstall defaults to off, and its confirmation now spells out exactly what would be removed and that deactivating alone changes nothing.
+* **Improved: "Optimize existing media now" is dramatically faster.** It used to convert three images per HTTP round trip, which on a real library meant hundreds of sequential requests. Each request now keeps converting for up to 15 seconds, raises the memory and time limits first, and leaves video compression until the images are finished so one slow video can't stall the run.
+* **Fixed: "Active tab only" stopped working after the first reload.** The tab released its active-tab claim on the way out of a reload, then came back with the user's focus still over in wp-admin, so it never re-claimed the slot — leaving that browser with no active tab and nothing to refresh on the next save. The claim now survives a self-initiated reload and is released only on a real close or navigation.
+* **Added: Confirmation toasts on every switch.** Developer Mode, the all-tabs / active-tab mode, each browser's Normal and Incognito window, SVG uploads and the Scroll To Top button all confirm what just changed.
+* **Changed: Shorter notifications.** Speed Boost, Media Optimization and Delete Data on Uninstall now confirm the change in a single line instead of a paragraph.
+* **Improved: Notifications.** Toasts now carry an icon, a dismiss button and a clean single-line layout.
+* **Fixed: Translation template.** JavaScript strings containing `\uXXXX` escapes were being written into the .pot with the escape intact, so those msgids could never match what `wp.i18n` looks up at runtime and translations for them silently did nothing. The .pot is regenerated for 1.2.0 with real characters (189 strings).
+
 ### 1.1.4
 
-*   **Changed: Settings now save automatically.** Every toggle, radio, and field on the Cross-Browser Reload, Server Performance, and Extensions tabs saves itself the moment you change it — no more "Save Changes" button and no risk of losing changes by navigating away before clicking it.
-*   **Changed: Default enabled browsers.** New installs now enable only Chrome, Edge, and Safari out of the box instead of all ten supported browsers. Enable any of the rest (Brave, Firefox, Opera, UC Browser, Vivaldi, Yandex Browser, Samsung Internet) from the Browsers & windows section whenever you need to test in them. Existing installs keep whatever browsers you already had enabled.
-*   **Fixed: Broken dash characters in Media Optimization badges and the Heartbeat label.** Several UI strings used a `\u2013`-style escape inside single-quoted PHP strings, which PHP doesn't interpret — so the badges literally showed the text `\u2013` instead of an en dash. Replaced with real UTF-8 characters.
-*   **Updated: Translation template (.pot) regenerated** — it was still tagged 1.1.1 and pointed at pre-reorg file paths (`includes/class-*.php` instead of `includes/extensions/` and `includes/admin/`), so translators using it would get stale source references and miss newer strings (e.g. the wp-embed toggle). Now in sync with the current source tree.
+* **Changed: Settings now save automatically.** Every toggle, radio, and field on the Cross-Browser Reload, Server Performance, and Extensions tabs saves itself the moment you change it — no more "Save Changes" button and no risk of losing changes by navigating away before clicking it.
+* **Changed: Default enabled browsers.** New installs now enable only Chrome, Edge, and Safari out of the box instead of all ten supported browsers. Enable any of the rest (Brave, Firefox, Opera, UC Browser, Vivaldi, Yandex Browser, Samsung Internet) from the Browsers & windows section whenever you need to test in them. Existing installs keep whatever browsers you already had enabled.
+* **Fixed: Broken dash characters in Media Optimization badges and the Heartbeat label.** Several UI strings used a `\u2013`-style escape inside single-quoted PHP strings, which PHP doesn't interpret — so the badges literally showed the text `\u2013` instead of an en dash. Replaced with real UTF-8 characters.
+* **Updated: Translation template (.pot) regenerated** — it was still tagged 1.1.1 and pointed at pre-reorg file paths (`includes/class-*.php` instead of `includes/extensions/` and `includes/admin/`), so translators using it would get stale source references and miss newer strings (e.g. the wp-embed toggle). Now in sync with the current source tree.
 
-### 1.1.3 
-*   **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
-*   **Improved: .htaccess error handling** — permission checks now run before attempting writes; write failures are logged instead of silently crashing; file existence validated after write attempts.
-*   **Added: Apache mod_php detection** — prevents attempting .htaccess modifications on Nginx or PHP-FPM setups; users get a clear error message instead of a 500 error.
-*   **Added: Automatic .htaccess backups** — creates backup before modifying existing .htaccess files so users can recover if something goes wrong.
-*   **Added fallback cache directives** — .htaccess now includes mod_expires as fallback for servers without mod_headers enabled.
-*   **Confirmed compatible with WordPress 7.1** ("Tested up to: 7.1").
-*   Enhanced Speed Boost with additional server-side optimizations for better performance.
+### 1.1.3
+
+* **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
+* **Improved: .htaccess error handling** — permission checks now run before attempting writes; write failures are logged instead of silently crashing; file existence validated after write attempts.
+* **Added: Apache mod_php detection** — prevents attempting .htaccess modifications on Nginx or PHP-FPM setups; users get a clear error message instead of a 500 error.
+* **Added: Automatic .htaccess backups** — creates backup before modifying existing .htaccess files so users can recover if something goes wrong.
+* **Added fallback cache directives** — .htaccess now includes mod_expires as fallback for servers without mod_headers enabled.
+* **Confirmed compatible with WordPress 7.1** ("Tested up to: 7.1").
+* Enhanced Speed Boost with additional server-side optimizations for better performance.
 
 ### 1.1.2
 

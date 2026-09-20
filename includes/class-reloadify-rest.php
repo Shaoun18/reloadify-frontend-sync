@@ -252,21 +252,31 @@ class Reloadify_Rest {
 	}
 
 	public static function get_speed() {
-		return rest_ensure_response( [
-			'enabled' => Reloadify_Speed::is_enabled(),
-			'items'   => Reloadify_Speed::items(),
-		] );
+		return rest_ensure_response( self::speed_payload() );
 	}
 
 	public static function update_speed( WP_REST_Request $request ) {
-		$body    = $request->get_json_params();
-		$body    = is_array( $body ) ? $body : [];
-		$enabled = Reloadify_Speed::set_enabled( ! empty( $body['enabled'] ) );
+		$body = $request->get_json_params();
+		$body = is_array( $body ) ? $body : [];
 
-		return rest_ensure_response( [
-			'enabled' => $enabled,
-			'items'   => Reloadify_Speed::items(),
-		] );
+		if ( array_key_exists( 'enabled', $body ) ) {
+			Reloadify_Speed::set_enabled( ! empty( $body['enabled'] ) );
+		}
+
+		if ( isset( $body['options'] ) && is_array( $body['options'] ) ) {
+			Reloadify_Speed::set_options( $body['options'] );
+		}
+
+		return rest_ensure_response( self::speed_payload() );
+	}
+
+	private static function speed_payload() {
+		return [
+			'enabled'      => Reloadify_Speed::is_enabled(),
+			'items'        => Reloadify_Speed::items(),
+			'options'      => Reloadify_Speed::get_options(),
+			'optionLabels' => Reloadify_Speed::option_labels(),
+		];
 	}
 
 	public static function run_media_backfill_now() {
