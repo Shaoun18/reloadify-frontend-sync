@@ -52,6 +52,7 @@
     var ACTIVE_TAB_STALE_MS = 6000;
     var ACTIVE_TAB_HEARTBEAT_MS = 2000;
     var lastFocusTime = 0;
+    var lastActiveTabId = null;  // BUG FIX: Track last active tab for incognito support
 
     var TAB_ID = (function () {
         try {
@@ -106,11 +107,11 @@
     }
 
     function thisTabHasActiveClaim() {
-
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-            return true;
-        }
-
+        // BUG FIX: Removed flawed document.visibilityState check
+        // That check was returning true for ANY visible window, not just active tab
+        // Result: All visible tabs thought they were "active"
+        
+        // Only check localStorage claim
         var claim = readActiveClaim();
         if (claim && claim.id === TAB_ID) {
             return true;
@@ -154,6 +155,7 @@
         var wasActive = isTabActive;
         isTabActive = true;
         lastFocusTime = Date.now();
+        lastActiveTabId = TAB_ID;  // BUG FIX: Track this tab as last active for incognito fallback
         writeActiveClaim();
         if (!wasActive) {
             startHeartbeat();
@@ -335,6 +337,13 @@
                 currentTimestamp = newTimestamp;
 
                 var shouldReload = isTabActive || thisTabHasActiveClaim();
+                
+                // BUG FIX: Incognito fallback
+                // If not active via normal methods and this is the last active tab, reload anyway
+                // This handles incognito windows where localStorage is unavailable
+                if ( !shouldReload && lastActiveTabId === TAB_ID ) {
+                    shouldReload = true;
+                }
 
                 if (!allTabsReload && !shouldReload) {
                     return false;
