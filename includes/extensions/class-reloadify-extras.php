@@ -4,6 +4,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+
+/* ---------------- "Extensions" tab ---------------- */
+
 class Reloadify_Extras {
 
 	const OPTION_KEY = 'reloadify_extras_settings';
@@ -15,9 +18,9 @@ class Reloadify_Extras {
 			],
 			'scroll_top' => [
 				'enabled'    => false,
-				'position'   => 'right',
+				'position'   => 'right', // 'left' or 'right'
 				'bg_color'   => '#4f46e5',
-				'show_after' => 300,
+				'show_after' => 300, // pixels scrolled before the button appears
 			],
 		];
 	}
@@ -68,6 +71,8 @@ class Reloadify_Extras {
 		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'maybe_enqueue_scroll_top' ] );
 	}
 
+	/* ---------------- SVG upload support ---------------- */
+
 	private static function init_svg_support() {
 		add_filter( 'upload_mimes', [ __CLASS__, 'allow_svg_mime' ] );
 		add_filter( 'wp_check_filetype_and_ext', [ __CLASS__, 'fix_svg_filetype' ], 10, 5 );
@@ -81,6 +86,7 @@ class Reloadify_Extras {
 		return $mimes;
 	}
 
+	
 	public static function fix_svg_filetype( $data, $file, $filename, $mimes, $real_mime = '' ) {
 		if ( empty( $data['ext'] ) && empty( $data['type'] ) && preg_match( '/\.svg$/i', (string) $filename ) ) {
 			$data['ext']  = 'svg';
@@ -114,6 +120,7 @@ class Reloadify_Extras {
 		return $file;
 	}
 
+
 	public static function svg_media_thumbnail_css() {
 		echo '<style>.media-icon img[src$=".svg"], td.media-icon img[src$=".svg"], .attachment-preview img[src$=".svg"] { width: 100% !important; height: auto !important; }</style>';
 	}
@@ -132,6 +139,8 @@ class Reloadify_Extras {
 		return $response;
 	}
 
+	/* ---------------- Scroll to top ---------------- */
+
 	public static function maybe_enqueue_scroll_top() {
 		if ( is_admin() ) {
 			return;
@@ -143,11 +152,9 @@ class Reloadify_Extras {
 			return;
 		}
 
-		$suffix = ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) ? '' : '.min';
-
 		wp_enqueue_script(
 			'reloadify-scroll-top',
-			RELOADIFY_PLUGIN_URL . 'assets/js/scroll-top' . $suffix . '.js',
+			RELOADIFY_PLUGIN_URL . 'assets/js/scroll-top' . reloadify_asset_suffix() . '.js',
 			[],
 			RELOADIFY_VERSION,
 			true

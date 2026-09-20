@@ -4,13 +4,21 @@
     var el = wp.element.createElement;
     var useState = wp.element.useState;
     var useEffect = wp.element.useEffect;
+    var useRef = wp.element.useRef;
     var render = wp.element.render;
     var __ = wp.i18n.__;
+
+    /* Debounce before firing an autosave request, so fast interactions
+       (dragging a color picker, typing a number) collapse into one save
+       instead of one request per keystroke. */
+    var AUTOSAVE_DEBOUNCE_MS = 700;
 
     wp.apiFetch.use(wp.apiFetch.createNonceMiddleware(ReloadifyAdmin.nonce));
 
     var BROWSERS = ReloadifyAdmin.browsers || [];
     var LABELS = ReloadifyAdmin.browserLabels || {};
+
+    /* ---------------- Browser Theme ---------------- */
 
     var BROWSER_THEME = {
         chrome:    { from: '#4285F4', to: '#34A853', glyph: 'ring' },
@@ -65,12 +73,12 @@
         host: {
             title: __('Requires your host / server config', 'reloadify-frontend-sync'),
             hint: __('PHP locks these before WordPress loads. Auto-attempt below writes .user.ini / .htaccess.', 'reloadify-frontend-sync'),
-            keys: ['max_input_time', 'post_max_size', 'upload_max_filesize', 'realpath_cache_size', 'realpath_cache_ttl']
+            keys: ['max_input_time', 'post_max_size', 'upload_max_filesize']
         },
         opcache: {
-            title: __('opcache memory sizing — danger zone', 'reloadify-frontend-sync'),
-            hint: __('These size PHP\u2019s memory once at startup \u2014 only a real php.ini edit can change them.', 'reloadify-frontend-sync'),
-            keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files']
+            title: __('Startup-only PHP settings — danger zone', 'reloadify-frontend-sync'),
+            hint: __('opcache sizing and the realpath cache are both locked in once at PHP startup \u2014 .user.ini and .htaccess can\u2019t reach them at all, only a real php.ini edit can.', 'reloadify-frontend-sync'),
+            keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl']
         }
     };
 
@@ -113,13 +121,54 @@
         );
     }
 
+    var TOAST_GLYPHS = {
+        success: '\u2713',
+        error: '\u2717',
+        info: '\u24d8',
+        warning: '\u26a0'
+    };
+
     function Toast(props) {
         if (!props.toast) return null;
-        var cls = 'reloadify-toast reloadify-toast--' + (props.toast.type === 'error' ? 'error' : 'success');
-        return el('div', { className: cls, role: 'status' },
-            el('span', { className: 'reloadify-toast-dot' }),
-            props.toast.message
+
+        var type = TOAST_GLYPHS[props.toast.type] ? props.toast.type : 'success';
+        var cls = 'reloadify-toast reloadify-toast--' + type;
+
+        return el(
+            'div',
+            { className: cls, role: 'status', 'aria-live': 'polite' },
+            el('span', { className: 'reloadify-toast-icon', 'aria-hidden': 'true' }, TOAST_GLYPHS[type]),
+            el(
+                'div',
+                { className: 'reloadify-toast-body' },
+                props.toast.title && el('strong', { className: 'reloadify-toast-title' }, props.toast.title),
+                el('span', { className: 'reloadify-toast-message' }, props.toast.message)
+            ),
+            el('button', {
+                type: 'button',
+                className: 'reloadify-toast-close',
+                'aria-label': __('Dismiss', 'reloadify-frontend-sync'),
+                onClick: props.onDismiss
+            }, '\u00d7')
         );
+    }
+
+    function AutoSaveStatus(props) {
+        var label;
+        var cls = 'reloadify-autosave-status';
+
+        if (props.state === 'saving') {
+            label = __('Saving\u2026', 'reloadify-frontend-sync');
+            cls += ' is-saving';
+        } else if (props.state === 'error') {
+            label = __('Couldn\u2019t save \u2014 will retry on your next change', 'reloadify-frontend-sync');
+            cls += ' is-error';
+        } else {
+            label = __('Saved automatically', 'reloadify-frontend-sync');
+            cls += ' is-saved';
+        }
+
+        return el('div', { className: cls }, el('span', { className: 'reloadify-autosave-dot' }), label);
     }
 
     function Switch(props) {
@@ -131,6 +180,8 @@
         );
     }
 
+    /* ---------------- Info Icon ---------------- */
+    
     function InfoIcon(props) {
         var stateOpen = useState(false);
         var open = stateOpen[0], setOpen = stateOpen[1];
@@ -164,6 +215,8 @@
         );
     }
 
+        /* ---------------- Reload tab ---------------- */
+
     function BrowserCard(props) {
         var row = props.value || { normal: false, incognito: false };
 
@@ -171,6 +224,25 @@
             var next = { normal: row.normal, incognito: row.incognito };
             next[field] = val;
             props.onChange(props.name, next);
+
+            if (props.onToast) {
+                var browserLabel = LABELS[props.name] || props.name;
+                var windowLabel = 'incognito' === field
+                    ? __('Incognito', 'reloadify-frontend-sync')
+                    : __('Normal', 'reloadify-frontend-sync');
+
+                props.onToast(
+                    val ? 'success' : 'info',
+                    wp.i18n.sprintf(
+                        // translators: 1: browser name, 2: window type (Normal or Incognito).
+                        val
+                            ? __('%1$s %2$s window enabled', 'reloadify-frontend-sync')
+                            : __('%1$s %2$s window disabled', 'reloadify-frontend-sync'),
+                        browserLabel,
+                        windowLabel
+                    )
+                );
+            }
         }
 
         var enabled = row.normal || row.incognito;
@@ -239,28 +311,43 @@
                         'div',
                         { className: 'reloadify-stat-label-row' },
                         el('div', { className: 'reloadify-stat-label' }, __('Developer Mode', 'reloadify-frontend-sync')),
-                        el(InfoIcon, { text: __('OFF reloads just your active window. ON syncs every open window — normal and incognito included.', 'reloadify-frontend-sync') })
+                        el(InfoIcon, { text: __('Off by default \u2014 leaving it on adds real load to a live site. Now stays on until you switch it off yourself.', 'reloadify-frontend-sync') })
                     ),
                     el('div', { className: 'reloadify-stat-value' }, settings.dev_mode_enabled ? __('On', 'reloadify-frontend-sync') : __('Off', 'reloadify-frontend-sync')),
                     el(Switch, {
                         large: true,
                         checked: settings.dev_mode_enabled,
-                        onChange: function () { props.onChange(Object.assign({}, settings, { dev_mode_enabled: !settings.dev_mode_enabled })); }
+                        onChange: function () {
+                            var next = !settings.dev_mode_enabled;
+                            props.onChange(Object.assign({}, settings, { dev_mode_enabled: next }));
+                            props.onToast(next ? 'success' : 'info', next
+                                ? __('Developer Mode enabled', 'reloadify-frontend-sync')
+                                : __('Developer Mode disabled', 'reloadify-frontend-sync'));
+                        }
                     })
                 ),
                 el(
                     'div',
-                    { className: 'reloadify-stat-card' },
+                    { className: 'reloadify-stat-card reloadify-stat-card--accent' },
                     el(
                         'div',
                         { className: 'reloadify-stat-label-row' },
                         el('div', { className: 'reloadify-stat-label' }, __('Reload all tabs', 'reloadify-frontend-sync')),
-                        el(InfoIcon, { text: __('OFF reloads only your active tab. ON syncs every open frontend tab.', 'reloadify-frontend-sync') })
+                        el(InfoIcon, { text: __('Off by default: only the tab you are actually looking at reloads, so background tabs keep their scroll position and form state. Turn it on to refresh every open tab and window at once.', 'reloadify-frontend-sync') })
                     ),
                     el('div', { className: 'reloadify-stat-value' }, settings.all_tabs_reload_enabled ? __('All tabs', 'reloadify-frontend-sync') : __('Active tab only', 'reloadify-frontend-sync')),
                     el(Switch, {
-                        checked: settings.all_tabs_reload_enabled,
-                        onChange: function () { props.onChange(Object.assign({}, settings, { all_tabs_reload_enabled: !settings.all_tabs_reload_enabled })); }
+                        large: true,
+                        checked: !!settings.all_tabs_reload_enabled,
+                        onChange: function () {
+                            var next = !settings.all_tabs_reload_enabled;
+                            props.onChange(Object.assign({}, settings, { all_tabs_reload_enabled: next }));
+                            // One switch, two modes: turning all-tabs off is the
+                            // same action as turning active-tab-only on.
+                            props.onToast('success', next
+                                ? __('All tab mode enabled', 'reloadify-frontend-sync')
+                                : __('Active tab mode enabled', 'reloadify-frontend-sync'));
+                        }
                     })
                 ),
                 el(
@@ -281,7 +368,8 @@
                     el(
                         'div',
                         { className: 'reloadify-stat-label-row' },
-                        el('div', { className: 'reloadify-stat-label' }, __('Last change detected', 'reloadify-frontend-sync'))
+                        el('div', { className: 'reloadify-stat-label' }, __('Last change detected', 'reloadify-frontend-sync')),
+                        el(InfoIcon, { text: __('Ticks up on any wp-admin save. Not resetting on Check now usually means the save didn\u2019t submit.', 'reloadify-frontend-sync') })
                     ),
                     el('div', { className: 'reloadify-stat-value', style: { fontSize: 15 } }, settings.last_change_detected ? timeAgo(settings.last_change_detected) : '\u2014'),
                     el('button', {
@@ -321,17 +409,19 @@
             el(
                 'div',
                 { className: 'reloadify-section' },
-                el(SectionTitle, { text: __('Browsers & windows', 'reloadify-frontend-sync'), hint: __('Multi-browser reload sync across windows and incognito modes.', 'reloadify-frontend-sync') }),
+                el(SectionTitle, { text: __('Browsers & windows', 'reloadify-frontend-sync'), hint: __('Incognito detection is best-effort, not a guarantee \u2014 browsers keep patching the signals it relies on, so it can occasionally miss.', 'reloadify-frontend-sync') }),
                 el(
                     'div',
                     { className: 'reloadify-browser-grid' },
                     BROWSERS.map(function (name) {
-                        return el(BrowserCard, { key: name, name: name, value: settings.browsers[name], onChange: updateBrowser });
+                        return el(BrowserCard, { key: name, name: name, value: settings.browsers[name], onChange: updateBrowser, onToast: props.onToast });
                     })
                 )
             )
         );
     }
+
+    /* ---------------- Performance tab ---------------- */
 
     function buildIniSnippet(desired) {
         return Object.keys(desired).map(function (key) {
@@ -374,8 +464,8 @@
                     { className: 'reloadify-modal-body' },
                     el('p', { className: 'reloadify-hint' }, __('These values cannot be set by any WordPress plugin at runtime \u2014 PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host.', 'reloadify-frontend-sync')),
 
-                    el('h3', null, __('php.ini / .user.ini', 'reloadify-frontend-sync')),
-                    el('p', { className: 'reloadify-hint' }, __('Works for every directive below, including opcache and realpath cache. Use this if you manage php.ini directly, or your host supports .user.ini (common on PHP-FPM).', 'reloadify-frontend-sync')),
+                    el('h3', null, __('php.ini', 'reloadify-frontend-sync')),
+                    el('p', { className: 'reloadify-hint' }, __('Paste this whole block into your real php.ini and restart PHP. It\u2019s the only file that can set opcache.* and realpath_cache_* \u2014 if your host only gives you .user.ini access, ask them to apply the opcache / realpath_cache lines for you, since .user.ini can\u2019t set those either, only the three below it.', 'reloadify-frontend-sync')),
                     el('pre', { className: 'reloadify-code' }, ini),
                     el('button', { className: 'button', onClick: function () { copy(ini, 'php.ini'); } }, __('Copy', 'reloadify-frontend-sync')),
 
@@ -393,13 +483,13 @@
         );
     }
 
-    var AUTO_WRITE_KEYS = ['max_input_time', 'post_max_size', 'upload_max_filesize', 'realpath_cache_size', 'realpath_cache_ttl'];
-    var OPCACHE_KEYS = ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files'];
+    var AUTO_WRITE_KEYS = ['max_input_time', 'post_max_size', 'upload_max_filesize'];
+    var REAL_INI_KEYS = ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl'];
 
     function DirectiveCard(props) {
         var isRuntime = props.runtime;
         var isAutoWritable = !isRuntime && AUTO_WRITE_KEYS.indexOf(props.name) !== -1;
-        var isOpcache = OPCACHE_KEYS.indexOf(props.name) !== -1;
+        var isOpcache = REAL_INI_KEYS.indexOf(props.name) !== -1;
         var enabled = isRuntime ? !!props.runtimeEnabled : null;
 
         var badge;
@@ -481,24 +571,25 @@
         );
     }
 
+    /* ---------------- Speed Boost Card ---------------- */
+
+    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace'];
+
     function SpeedBoostCard(props) {
         var speed = props.speed;
         var stateSaving = useState(false);
         var saving = stateSaving[0], setSaving = stateSaving[1];
 
-        var stateDelaySaving = useState(false);
-        var delaySaving = stateDelaySaving[0], setDelaySaving = stateDelaySaving[1];
+        var options = speed.options || {};
+        var labels = speed.optionLabels || {};
 
-        function toggle() {
-            var next = !speed.enabled;
+        function save(data, onDone) {
             setSaving(true);
-            wp.apiFetch({ path: '/reloadify/v1/speed', method: 'POST', data: { enabled: next, delay_js_enabled: speed.delay_js_enabled } })
+            wp.apiFetch({ path: '/reloadify/v1/speed', method: 'POST', data: data })
                 .then(function (response) {
                     setSaving(false);
                     props.onChange(response);
-                    props.onToast('success', response.enabled
-                        ? __('Speed Boost turned on.', 'reloadify-frontend-sync')
-                        : __('Speed Boost turned off.', 'reloadify-frontend-sync'));
+                    if (onDone) { onDone(response); }
                 })
                 .catch(function () {
                     setSaving(false);
@@ -506,22 +597,39 @@
                 });
         }
 
-        function toggleDelayJs() {
-            var next = !speed.delay_js_enabled;
-            setDelaySaving(true);
-            wp.apiFetch({ path: '/reloadify/v1/speed', method: 'POST', data: { enabled: speed.enabled, delay_js_enabled: next } })
-                .then(function (response) {
-                    setDelaySaving(false);
-                    props.onChange(response);
-                    props.onToast('success', response.delay_js_enabled
-                        ? __('Delay JavaScript turned on.', 'reloadify-frontend-sync')
-                        : __('Delay JavaScript turned off.', 'reloadify-frontend-sync'));
-                })
-                .catch(function () {
-                    setDelaySaving(false);
-                    props.onToast('error', __('Could not update Delay JavaScript.', 'reloadify-frontend-sync'));
-                });
+        function toggle() {
+            save({ enabled: !speed.enabled }, function (response) {
+                props.onToast(response.enabled ? 'success' : 'info', response.enabled
+                    ? __('Speed Boost enabled', 'reloadify-frontend-sync')
+                    : __('Speed Boost disabled', 'reloadify-frontend-sync'));
+            });
         }
+
+        function toggleOption(key) {
+            var next = Object.assign({}, options);
+            next[key] = !next[key];
+            save({ options: next });
+        }
+
+        var optionList = speed.enabled && el(
+            'div',
+            { className: 'reloadify-speed-options' },
+            el('div', { className: 'reloadify-speed-options-label' }, __('Optimization passes', 'reloadify-frontend-sync')),
+            SPEED_OPTION_ORDER.map(function (key) {
+                if (!Object.prototype.hasOwnProperty.call(labels, key)) { return null; }
+                return el(
+                    'label',
+                    { key: key, className: 'reloadify-speed-option' },
+                    el('input', {
+                        type: 'checkbox',
+                        checked: !!options[key],
+                        disabled: saving,
+                        onChange: function () { toggleOption(key); }
+                    }),
+                    el('span', null, labels[key])
+                );
+            })
+        );
 
         return el(
             'div',
@@ -532,19 +640,11 @@
                 el('h2', null, __('Speed Boost', 'reloadify-frontend-sync')),
                 el(Switch, { large: true, checked: speed.enabled, onChange: toggle, disabled: saving })
             ),
-            el(
-                'div',
-                { className: 'reloadify-delay-js-row' },
-                el(
-                    'div',
-                    { className: 'reloadify-delay-js-label-row' },
-                    el('span', { className: 'reloadify-delay-js-label' }, __('Delay non-essential JavaScript until interaction', 'reloadify-frontend-sync')),
-                    el(InfoIcon, { text: __('Defers third-party scripts (analytics, ads, chat) until visitor interaction. Core WordPress and plugin scripts load normally.', 'reloadify-frontend-sync') })
-                ),
-                el(Switch, { checked: !!speed.delay_js_enabled, onChange: toggleDelayJs, disabled: delaySaving })
-            )
+            optionList
         );
     }
+
+    /* ---------------- Delete Data on Uninstall Card ---------------- */
 
     function DeleteOnUninstallCard(props) {
         var cleanup = props.cleanup;
@@ -558,13 +658,13 @@
                 .then(function (response) {
                     setSaving(false);
                     props.onChange(response);
-                    props.onToast('success', response.enabled
-                        ? __('Will delete settings & the reloadify-reload folder if the plugin is deleted.', 'reloadify-frontend-sync')
-                        : __('Settings & the reloadify-reload folder will be kept if the plugin is deleted.', 'reloadify-frontend-sync'));
+                    props.onToast(response.enabled ? 'warning' : 'info', response.enabled
+                        ? __('Data removal on uninstall enabled', 'reloadify-frontend-sync')
+                        : __('Delete Data on Uninstall disabled', 'reloadify-frontend-sync'));
                 })
                 .catch(function () {
                     setSaving(false);
-                    props.onToast('error', __('Could not update this setting.', 'reloadify-frontend-sync'));
+                    props.onToast('error', __('Couldn\u2019t save that setting', 'reloadify-frontend-sync'));
                 });
         }
 
@@ -579,6 +679,9 @@
             )
         );
     }
+
+  
+    /* ---------------- Media Optimization Card ---------------- */
 
     function MediaOptimizationCard(props) {
         var media = props.media;
@@ -601,9 +704,9 @@
                 .then(function (response) {
                     setSaving(false);
                     props.onChange(response);
-                    props.onToast('success', response.enabled
-                        ? __('Media Optimization turned on.', 'reloadify-frontend-sync')
-                        : __('Media Optimization turned off.', 'reloadify-frontend-sync'));
+                    props.onToast(response.enabled ? 'success' : 'info', response.enabled
+                        ? __('Media Optimization enabled', 'reloadify-frontend-sync')
+                        : __('Media Optimization disabled', 'reloadify-frontend-sync'));
                 })
                 .catch(function () {
                     setSaving(false);
@@ -626,6 +729,9 @@
                     props.onToast('error', __('Could not update Media Optimization.', 'reloadify-frontend-sync'));
                 });
         }
+
+    
+        /* ---------------- Optimize Now Button ---------------- */
 
         function optimizeNow() {
             setRunning(true);
@@ -878,7 +984,7 @@
                             'div',
                             { className: 'reloadify-danger-banner' },
                             el('strong', null, __('\u26a0 Local development only \u2014 do not use on a live/production site.', 'reloadify-frontend-sync')),
-                            el('p', null, __('These three settings are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync')),
+                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way, and .user.ini / .htaccess genuinely cannot reach them regardless of what\u2019s written there. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync')),
                             data.phpIniPath
                                 ? el('p', null, __('File this would write to: ', 'reloadify-frontend-sync'), el('code', null, data.phpIniPath))
                                 : el('p', null, __('This server reports no loaded php.ini file at all, so this action can\u2019t do anything here.', 'reloadify-frontend-sync')),
@@ -920,6 +1026,8 @@
         );
     }
 
+    /* ---------------- Extra Features tab ---------------- */
+
     function ExtrasTab(props) {
         var extras = props.extras;
 
@@ -950,7 +1058,12 @@
                     el(Switch, {
                         large: true,
                         checked: extras.svg_support.enabled,
-                        onChange: function (e) { updateSvg({ enabled: e.target.checked }); }
+                        onChange: function (e) {
+                            updateSvg({ enabled: e.target.checked });
+                            props.onToast(e.target.checked ? 'success' : 'info', e.target.checked
+                                ? __('SVG Upload enabled', 'reloadify-frontend-sync')
+                                : __('SVG Upload disabled', 'reloadify-frontend-sync'));
+                        }
                     })
                 )
             ),
@@ -967,7 +1080,12 @@
                     el(Switch, {
                         large: true,
                         checked: extras.scroll_top.enabled,
-                        onChange: function (e) { updateScrollTop({ enabled: e.target.checked }); }
+                        onChange: function (e) {
+                            updateScrollTop({ enabled: e.target.checked });
+                            props.onToast(e.target.checked ? 'success' : 'info', e.target.checked
+                                ? __('Scroll To Top Button enabled', 'reloadify-frontend-sync')
+                                : __('Scroll To Top Button disabled', 'reloadify-frontend-sync'));
+                        }
                     })
                 ),
                 el(
@@ -1016,6 +1134,8 @@
         );
     }
 
+    /* ---------------- App ---------------- */
+
     function App() {
         var tabState = useState('reload');
         var tab = tabState[0], setTab = tabState[1];
@@ -1028,13 +1148,13 @@
         var perfState = useState(initial.performance || null);
         var perf = perfState[0], setPerf = perfState[1];
 
-        var speedState = useState(initial.speed || { enabled: true, items: [], delay_js_enabled: false });
+        var speedState = useState(initial.speed || { enabled: false, items: [], options: {}, optionLabels: {} });
         var speed = speedState[0], setSpeed = speedState[1];
 
-        var mediaState = useState(initial.media || { enabled: true, items: [], format_preference: 'auto', format_capabilities: { webp: false, avif: false } });
+        var mediaState = useState(initial.media || { enabled: false, items: [], format_preference: 'auto', format_capabilities: { webp: false, avif: false } });
         var media = mediaState[0], setMedia = mediaState[1];
 
-        var cleanupState = useState(initial.cleanup || { enabled: true });
+        var cleanupState = useState(initial.cleanup || { enabled: false });
         var cleanup = cleanupState[0], setCleanup = cleanupState[1];
 
         var extrasState = useState(initial.extras || {
@@ -1043,28 +1163,39 @@
         });
         var extras = extrasState[0], setExtras = extrasState[1];
 
-        var savingState = useState(false);
-        var saving = savingState[0], setSaving = savingState[1];
-
         var syncingState = useState(false);
         var syncing = syncingState[0], setSyncing = syncingState[1];
 
         var toastState = useState(null);
         var toast = toastState[0], setToast = toastState[1];
 
-        function showToast(type, message) {
-            setToast({ type: type, message: message });
-            setTimeout(function () { setToast(null); }, 3500);
+        var autosaveState = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+        var autosave = autosaveState[0], setAutosave = autosaveState[1];
+
+        var toastTimer = useRef(null);
+
+        function showToast(type, message, title) {
+            if (toastTimer.current) { clearTimeout(toastTimer.current); }
+            setToast({ type: type, message: message, title: title || null });
+            // Titled toasts carry more to read, so they linger a little longer.
+            toastTimer.current = setTimeout(function () { setToast(null); }, title ? 6000 : 3500);
+        }
+
+        function dismissToast() {
+            if (toastTimer.current) { clearTimeout(toastTimer.current); }
+            setToast(null);
         }
 
         function refreshSettings() {
+            settingsSkipNext.current = true;
             wp.apiFetch({ path: '/reloadify/v1/settings', method: 'GET' })
                 .then(function (data) { setSettings(data); })
-                .catch(function () {  });
+                .catch(function () { settingsSkipNext.current = false; });
         }
 
         function syncPerformance() {
             setSyncing(true);
+            perfSkipNext.current = true;
             wp.apiFetch({ path: '/reloadify/v1/performance/sync', method: 'POST' })
                 .then(function (data) {
                     setPerf(data);
@@ -1072,31 +1203,78 @@
                     showToast('success', __('Synced with the server\u2019s current values.', 'reloadify-frontend-sync'));
                 })
                 .catch(function () {
+                    perfSkipNext.current = false;
                     setSyncing(false);
                     showToast('error', __('Could not sync from the server.', 'reloadify-frontend-sync'));
                 });
         }
 
-        function save() {
-            setSaving(true);
+        /* ---------------- Autosave: Reload tab (settings) ---------------- */
+        var settingsSkipNext = useRef(true); // true on mount and right after a programmatic (non-user) update
 
-            var request;
-            if (tab === 'reload') {
-                request = wp.apiFetch({ path: '/reloadify/v1/settings', method: 'POST', data: settings }).then(function (data) { setSettings(data); });
-            } else if (tab === 'extras') {
-                request = wp.apiFetch({ path: '/reloadify/v1/extras', method: 'POST', data: extras }).then(function (data) { setExtras(data); });
-            } else {
-                request = wp.apiFetch({ path: '/reloadify/v1/performance', method: 'POST', data: perf.settings }).then(function (data) { setPerf(data); });
-            }
+        useEffect(function () {
+            if (settingsSkipNext.current) { settingsSkipNext.current = false; return; }
 
-            request.then(function () {
-                setSaving(false);
-                showToast('success', __('Settings saved successfully.', 'reloadify-frontend-sync'));
-            }).catch(function () {
-                setSaving(false);
-                showToast('error', __('Failed to save settings.', 'reloadify-frontend-sync'));
-            });
-        }
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/settings', method: 'POST', data: settings })
+                    .then(function (data) {
+                        settingsSkipNext.current = true;
+                        setSettings(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [settings]);
+
+        /* ---------------- Autosave: Extensions tab ---------------- */
+        var extrasSkipNext = useRef(true);
+
+        useEffect(function () {
+            if (extrasSkipNext.current) { extrasSkipNext.current = false; return; }
+
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/extras', method: 'POST', data: extras })
+                    .then(function (data) {
+                        extrasSkipNext.current = true;
+                        setExtras(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [extras]);
+
+        /* ---------------- Autosave: Server Performance tab (editable directives) ---------------- */
+        var perfSkipNext = useRef(true);
+
+        useEffect(function () {
+            if (perfSkipNext.current) { perfSkipNext.current = false; return; }
+            if (!perf || !perf.settings) { return; }
+
+            setAutosave('saving');
+            var handle = setTimeout(function () {
+                wp.apiFetch({ path: '/reloadify/v1/performance', method: 'POST', data: perf.settings })
+                    .then(function (data) {
+                        perfSkipNext.current = true;
+                        setPerf(data);
+                        setAutosave('saved');
+                    })
+                    .catch(function () {
+                        setAutosave('error');
+                    });
+            }, AUTOSAVE_DEBOUNCE_MS);
+
+            return function () { clearTimeout(handle); };
+        }, [perf && perf.settings]);
 
         if (!settings || !perf) {
             return el('div', { className: 'reloadify-loading' }, __('Loading\u2026', 'reloadify-frontend-sync'));
@@ -1105,7 +1283,7 @@
         return el(
             'div',
             { className: 'reloadify-app' },
-            el(Toast, { toast: toast }),
+            el(Toast, { toast: toast, onDismiss: dismissToast }),
             el(
                 'div',
                 { className: 'reloadify-hero' },
@@ -1115,7 +1293,12 @@
                     el('h1', null, __('Reloadify Frontend Sync', 'reloadify-frontend-sync')),
                     el('p', null, __('Cross-browser live reload for page-builder QA \u2014 and a clear picture of which server settings this plugin can and can\u2019t change for you.', 'reloadify-frontend-sync'))
                 ),
-                el('span', { className: 'reloadify-version-badge' }, 'v' + ReloadifyAdmin.version)
+                el(
+                    'div',
+                    { className: 'reloadify-hero-meta' },
+                    el(AutoSaveStatus, { state: autosave }),
+                    el('span', { className: 'reloadify-version-badge' }, 'v' + ReloadifyAdmin.version)
+                )
             ),
             el(
                 'div',
@@ -1128,15 +1311,10 @@
                 'div',
                 { className: 'reloadify-tab-panel' },
                 tab === 'reload'
-                    ? el(ReloadTab, { settings: settings, onChange: setSettings, onExpire: refreshSettings })
+                    ? el(ReloadTab, { settings: settings, onChange: setSettings, onExpire: refreshSettings, onToast: showToast })
                     : tab === 'extras'
-                        ? el(ExtrasTab, { extras: extras, onChange: setExtras })
+                        ? el(ExtrasTab, { extras: extras, onChange: setExtras, onToast: showToast })
                         : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup })
-            ),
-            el(
-                'div',
-                { className: 'reloadify-save-bar' },
-                el('button', { className: 'button button-primary button-hero', onClick: save, disabled: saving }, saving ? __('Saving\u2026', 'reloadify-frontend-sync') : __('Save Changes', 'reloadify-frontend-sync'))
             )
         );
     }

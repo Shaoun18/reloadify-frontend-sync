@@ -4,6 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/* ---------------- Media Optimization ---------------- */
+
 class Reloadify_Media {
 
 	const OPTION_KEY        = 'reloadify_media_optimize_enabled';
@@ -16,14 +18,29 @@ class Reloadify_Media {
 	const STATS_META_KEY     = '_reloadify_media_stats';
 	const BACKFILL_BATCH_SIZE = 3;
 
+	/**
+	 * How long one click of "Optimize existing media now" is allowed to keep
+	 * working before it hands control back to the browser. The button used to
+	 * convert three images per HTTP round trip, which on a library of any real
+	 * size meant hundreds of sequential requests and a wait measured in
+	 * minutes. Now each request keeps converting until this budget is spent,
+	 * so the same library finishes in a fraction of the round trips.
+	 */
+	const MANUAL_TIME_BUDGET = 15;
+
+	/**
+	 * Opt-in since 1.2.0 -- conversion rewrites real files in the uploads
+	 * folder, so nothing starts running until the site owner turns it on.
+	 */
 	public static function is_enabled() {
-		return (bool) get_option( self::OPTION_KEY, true );
+		return (bool) get_option( self::OPTION_KEY, false );
 	}
 
 	public static function set_enabled( $enabled ) {
 		$enabled = (bool) $enabled;
 
-		add_option( self::OPTION_KEY, true );
+
+		add_option( self::OPTION_KEY, false );
 		update_option( self::OPTION_KEY, $enabled );
 
 		if ( self::is_enabled() ) {
@@ -35,6 +52,11 @@ class Reloadify_Media {
 		return self::is_enabled();
 	}
 
+	/**
+	 * 'auto' (default) picks the best format this server actually
+	 * supports, AVIF first. 'webp' / 'avif' let the person pin a specific
+	 * format instead of leaving the choice to the plugin.
+	 */
 	public static function format_preference() {
 		$value = get_option( self::FORMAT_OPTION_KEY, 'auto' );
 		return in_array( $value, [ 'auto', 'webp', 'avif' ], true ) ? $value : 'auto';
@@ -46,6 +68,10 @@ class Reloadify_Media {
 		return $format;
 	}
 
+	/**
+	 * What this server can actually do -- checked, never assumed. Feeds
+	 * both items() below and the actual behavior in init().
+	 */
 	public static function capabilities() {
 		static $caps = null;
 
@@ -62,6 +88,10 @@ class Reloadify_Media {
 		return $caps;
 	}
 
+	/**
+	 * AVIF compresses smaller than WebP at the same visual quality when a
+	 * host supports it; WebP is the safe, far more common fallback.
+	 */
 	public static function preferred_image_format() {
 		$caps = self::capabilities();
 		$pref = self::format_preference();
@@ -88,6 +118,11 @@ class Reloadify_Media {
 		return null;
 	}
 
+	/**
+	 * What's actually included, exposed to the UI so the toggle isn't a
+	 * black box -- and honestly reflects what THIS server can do, not a
+	 * generic feature list.
+	 */
 	public static function items() {
 		$caps      = self::capabilities();
 		$preferred = self::preferred_image_format();
@@ -106,7 +141,7 @@ class Reloadify_Media {
 				$items[] = [
 					'key'   => 'image_format',
 					'label' => sprintf(
-						/* translators: %s: uppercase image format name, e.g. WEBP or AVIF. */
+						/* translators: %s: AVIF or WEBP */
 						__( 'New image uploads automatically get %s versions generated alongside the original — your server supports it', 'reloadify-frontend-sync' ),
 						strtoupper( $preferred )
 					),
@@ -170,10 +205,12 @@ class Reloadify_Media {
 		add_action( self::CRON_HOOK_BACKFILL, [ __CLASS__, 'backfill_existing_images' ] );
 		add_action( self::CRON_HOOK_VIDEO_BACKFILL, [ __CLASS__, 'backfill_existing_videos' ] );
 
+		// Lazy loading.
 		add_filter( 'wp_lazy_loading_enabled', '__return_true', 20 );
 		add_filter( 'the_content', [ __CLASS__, 'lazy_load_iframes' ], 20 );
 		add_filter( 'embed_oembed_html', [ __CLASS__, 'lazy_load_iframes' ] );
 
+		// Media Library "Optimization" column.
 		add_filter( 'manage_media_columns', [ __CLASS__, 'add_media_column' ] );
 		add_action( 'manage_media_custom_column', [ __CLASS__, 'render_media_column' ], 10, 2 );
 		add_action( 'admin_head-upload.php', [ __CLASS__, 'media_column_css' ] );
@@ -216,6 +253,14 @@ class Reloadify_Media {
 		return $schedules;
 	}
 
+	/* ---------------- Images ---------------- */
+
+	/**
+	 * Only remaps the source mimes WordPress already knows how to generate
+	 * intermediate sizes for. Leaves the original uploaded file's own mime
+	 * type alone -- this only affects the extra generated sizes (thumbnail,
+	 * medium, large, etc.), never the original.
+	 */
 	public static function set_output_format( $formats ) {
 		$preferred = self::preferred_image_format();
 
@@ -231,6 +276,11 @@ class Reloadify_Media {
 		return $formats;
 	}
 
+	/**
+	 * Caps quality at 82 -- WordPress's own long-standing default JPEG
+	 * quality, and a level broadly considered visually indistinguishable
+	 * from higher settings. 
+	 */
 	public static function cap_quality( $quality, $mime_type ) {
 		$capped_mimes = [ 'image/jpeg', 'image/webp', 'image/avif' ];
 
@@ -241,10 +291,12 @@ class Reloadify_Media {
 		return min( (int) $quality, 82 );
 	}
 
-	public static function backfill_existing_images() {
+	public static function backfill_existing_images( $batch_size = 0 ) {
 		if ( ! self::is_enabled() ) {
 			return 0;
 		}
+
+		$batch_size = $batch_size > 0 ? (int) $batch_size : self::BACKFILL_BATCH_SIZE;
 
 		if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -254,12 +306,14 @@ class Reloadify_Media {
 			'post_type'      => 'attachment',
 			'post_mime_type' => [ 'image/jpeg', 'image/png' ],
 			'post_status'    => 'inherit',
-			'posts_per_page' => self::BACKFILL_BATCH_SIZE,
+			'posts_per_page' => $batch_size,
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+			'no_found_rows'  => true,
+			'cache_results'  => false,
+		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::BACKFILL_META_KEY,
@@ -284,14 +338,17 @@ class Reloadify_Media {
 		return count( $query->posts );
 	}
 
+	/**
+	 * How many existing images are still waiting on the background job.
+	 */
 	public static function count_pending( $type ) {
 		$args = [
 			'post_type'      => 'attachment',
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => ( 'video' === $type ) ? self::VIDEO_BACKFILL_META_KEY : self::BACKFILL_META_KEY,
@@ -306,6 +363,16 @@ class Reloadify_Media {
 		return (int) $query->found_posts;
 	}
 
+	/**
+	 * Runs one batch right now instead of waiting for WP-Cron's next tick --
+	 * WP-Cron only fires on real site traffic (or a configured system cron),
+	 * so a low-traffic or local site can sit with existing media
+	 * unprocessed for a long time otherwise. Triggered only by an explicit
+	 * admin click (the "Optimize existing media now" button), never
+	 * automatically. Runs one video synchronously too (see
+	 * backfill_one_video_now()) rather than only scheduling it, for the
+	 * same reason.
+	 */
 	public static function run_backfill_batch_now() {
 		if ( ! self::is_enabled() ) {
 			return [
@@ -318,15 +385,44 @@ class Reloadify_Media {
 			];
 		}
 
-		$images_processed = self::backfill_existing_images();
-		self::backfill_one_video_now();
+		// Image conversion is CPU- and memory-hungry; give this request as much
+		// headroom as the host will allow before starting.
+		if ( function_exists( 'wp_raise_memory_limit' ) ) {
+			wp_raise_memory_limit( 'image' );
+		}
+
+		if ( function_exists( 'set_time_limit' ) ) {
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- explicit admin-triggered batch job; without this a long batch dies mid-conversion.
+			@set_time_limit( 0 );
+		}
+
+		$started          = microtime( true );
+		$images_processed = 0;
+
+		// Keep converting for as long as the budget allows instead of stopping
+		// after a single small batch -- far fewer HTTP round trips for the same
+		// number of images.
+		do {
+			$converted = self::backfill_existing_images( self::BACKFILL_BATCH_SIZE );
+			$images_processed += $converted;
+
+			$elapsed = microtime( true ) - $started;
+		} while ( $converted > 0 && $elapsed < self::MANUAL_TIME_BUDGET );
+
+		$images_remaining = self::count_pending( 'image' );
+
+		// Video compression is much slower again, so it only starts once the
+		// images are done -- otherwise a single video stalls the whole run.
+		if ( 0 === $images_remaining ) {
+			self::backfill_one_video_now();
+		}
 
 		$video_status = self::video_backfill_status();
 
 		return [
 			'enabled'            => true,
 			'images_processed'   => $images_processed,
-			'images_remaining'   => self::count_pending( 'image' ),
+			'images_remaining'   => $images_remaining,
 			'videos_remaining'   => $video_status['remaining'],
 			'videos_unavailable' => $video_status['unavailable'],
 			'ffmpeg_available'   => (bool) self::ffmpeg_path(),
@@ -380,13 +476,13 @@ class Reloadify_Media {
 
 		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! file_exists( $saved['path'] ) ) {
 			if ( file_exists( $comparison_path ) ) {
-				wp_delete_file( $comparison_path );
+				wp_delete_file( $comparison_path ); // In case a partial file was left behind.
 			}
 			return $metadata;
 		}
 
 		$comparison_bytes = filesize( $saved['path'] );
-		wp_delete_file( $saved['path'] );
+		wp_delete_file( $saved['path'] ); // Comparison file only ever existed to be measured -- never kept or served.
 
 		if ( $comparison_bytes <= 0 ) {
 			return $metadata;
@@ -407,6 +503,8 @@ class Reloadify_Media {
 		return $metadata;
 	}
 
+	/* ---------------- Video ---------------- */
+
 	public static function maybe_schedule_video_compression( $attachment_id ) {
 		$mime = get_post_mime_type( $attachment_id );
 
@@ -415,7 +513,10 @@ class Reloadify_Media {
 		}
 
 		if ( ! self::ffmpeg_path() ) {
-
+			// Not available on this server -- leave the video file alone
+			// (don't fake it), but DO mark it as checked so it stops
+			// showing up as "pending" forever. Nothing about re-checking
+			// it will change unless the server itself changes.
 			if ( '' === get_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, true ) ) {
 				update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 'unavailable' );
 			}
@@ -427,6 +528,12 @@ class Reloadify_Media {
 		}
 	}
 
+	/**
+	 * Compresses one video, deferred to WP-Cron so it never runs inside the
+	 * person's actual upload request. Only ever swaps the file if ffmpeg
+	 * reports success AND the result is a valid, smaller file -- otherwise
+	 * the original is left exactly as it was.
+	 */
 	public static function compress_video( $attachment_id ) {
 		$ffmpeg = self::ffmpeg_path();
 
@@ -448,6 +555,7 @@ class Reloadify_Media {
 
 		$tmp_out       = $file . '.reloadify-optimized.mp4';
 
+	
 		$is_windows = ( 'WIN' === strtoupper( substr( PHP_OS, 0, 3 ) ) );
 		$cmd        = sprintf(
 			'%s%s -y -i %s -c:v libx264 -crf 26 -preset veryfast -c:a aac -b:a 128k -movflags +faststart %s 2>&1',
@@ -462,6 +570,7 @@ class Reloadify_Media {
 
 		@exec( $cmd, $output, $exit_code );
 
+	
 		$succeeded = ( 0 === $exit_code )
 			&& file_exists( $tmp_out )
 			&& filesize( $tmp_out ) > ( $original_size * 0.02 )
@@ -487,7 +596,7 @@ class Reloadify_Media {
 					'measured_at'       => time(),
 				] );
 			} elseif ( file_exists( $tmp_out ) ) {
-
+				
 				wp_delete_file( $tmp_out );
 			}
 		} elseif ( file_exists( $tmp_out ) ) {
@@ -497,6 +606,13 @@ class Reloadify_Media {
 		update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 1 );
 	}
 
+	/**
+	 * Splits video backfill state into two real, distinguishable numbers
+	 * instead of one ambiguous "remaining" count: videos still waiting to
+	 * be checked, vs. videos already checked where this specific server
+	 * genuinely can't compress them (no ffmpeg). The UI uses this to show
+	 * green ("done") vs red ("blocked, here's why") instead of guessing.
+	 */
 	public static function video_backfill_status() {
 		$remaining = new WP_Query( [
 			'post_type'      => 'attachment',
@@ -504,8 +620,8 @@ class Reloadify_Media {
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -520,8 +636,8 @@ class Reloadify_Media {
 			'post_status'    => 'inherit',
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -537,17 +653,20 @@ class Reloadify_Media {
 		];
 	}
 
+	
 	private static function backfill_one_video_now() {
 		if ( ! self::ffmpeg_path() ) {
-
+			// Mark any still-pending videos as checked (not endlessly
+			// "pending") so the count reflects reality: not possible here,
+			// not "still working on it".
 			$query = new WP_Query( [
 				'post_type'      => 'attachment',
 				'post_mime_type' => 'video',
 				'post_status'    => 'inherit',
-				'posts_per_page' => 1000,
+				'posts_per_page' => 1000, // Bulk "mark as checked" only, not per-page filtering -- capped so one click on a very large library can't load every video ID into memory at once; a second click picks up any remainder.
 				'fields'         => 'ids',
-
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+				
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 				'meta_query'     => [
 					[
 						'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -569,8 +688,8 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+		
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -600,8 +719,10 @@ class Reloadify_Media {
 			'fields'         => 'ids',
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
-
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Small, capped, background-only lookup for attachments missing/matching a backfill marker; there's no other way to query that.
+			'no_found_rows'  => true,
+			'cache_results'  => false,
+			
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
 			'meta_query'     => [
 				[
 					'key'     => self::VIDEO_BACKFILL_META_KEY,
@@ -615,6 +736,13 @@ class Reloadify_Media {
 		}
 	}
 
+	/**
+	 * Feature-detects ffmpeg itself: whether the PHP functions needed to
+	 * run it are even callable (a lot of shared hosts disable exec/
+	 * shell_exec outright), and if so, whether the binary can actually be
+	 * found. Returns false rather than guessing the moment either check
+	 * fails.
+	 */
 	public static function ffmpeg_path() {
 		static $checked = false;
 		static $path    = false;
@@ -646,6 +774,9 @@ class Reloadify_Media {
 			}
 		}
 
+		// `command -v` only works on Unix-like shells; Windows needs `where`.
+		// Try both rather than assuming the OS -- some Windows local-dev
+		// stacks (WSL-backed ones especially) still run a Unix-style shell.
 		$lookup_commands = $is_windows
 			? [ 'where ffmpeg 2>NUL', 'command -v ffmpeg 2>/dev/null' ]
 			: [ 'command -v ffmpeg 2>/dev/null', 'which ffmpeg 2>/dev/null' ];
@@ -653,7 +784,7 @@ class Reloadify_Media {
 		foreach ( $lookup_commands as $lookup ) {
 			$output    = [];
 			$exit_code = 1;
-
+		
 			@exec( $lookup, $output, $exit_code );
 
 			if ( 0 === $exit_code && ! empty( $output[0] ) ) {
@@ -665,6 +796,8 @@ class Reloadify_Media {
 		return $path;
 	}
 
+	/* ---------------- Lazy loading ---------------- */
+	
 	public static function lazy_load_iframes( $html ) {
 		if ( empty( $html ) || false === stripos( $html, '<iframe' ) ) {
 			return $html;
@@ -674,13 +807,15 @@ class Reloadify_Media {
 			'/<iframe\b([^>]*)>/i',
 			function ( $matches ) {
 				if ( preg_match( '/\bloading\s*=/i', $matches[1] ) ) {
-					return $matches[0];
+					return $matches[0]; // Already has its own loading attribute -- leave it alone.
 				}
 				return '<iframe' . $matches[1] . ' loading="lazy">';
 			},
 			$html
 		);
 	}
+
+	/* ---------------- Media Library visibility ---------------- */
 
 	public static function add_media_column( $columns ) {
 		$columns['reloadify_media_optimize'] = __( 'Optimization', 'reloadify-frontend-sync' );
@@ -707,13 +842,13 @@ class Reloadify_Media {
 			$percent = (int) $stats['percent_saved'];
 			$label   = ( 'video' === $stats['type'] )
 				? sprintf(
-					/* translators: %d: percentage the compressed video is smaller than the original. */
-					__( 'Video compressed \u2013 %d%% smaller', 'reloadify-frontend-sync' ),
+					/* translators: %d: percent smaller */
+					__( 'Video compressed – %d%% smaller', 'reloadify-frontend-sync' ),
 					max( 0, $percent )
 				)
 				: sprintf(
-					/* translators: %1$s: uppercase image format name (e.g. WEBP). %2$d: percentage smaller than the original. */
-					__( '%1$s \u2013 about %2$d%% smaller', 'reloadify-frontend-sync' ),
+					/* translators: 1: WEBP or AVIF, 2: percent smaller */
+					__( '%1$s – about %2$d%% smaller', 'reloadify-frontend-sync' ),
 					strtoupper( $stats['format'] ),
 					max( 0, $percent )
 				);
@@ -723,18 +858,18 @@ class Reloadify_Media {
 
 		if ( 0 === strpos( (string) $mime, 'image/jpeg' ) || 0 === strpos( (string) $mime, 'image/png' ) ) {
 			if ( ! self::preferred_image_format() ) {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Original kept \u2013 server has no WebP/AVIF support', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Original kept – server has no WebP/AVIF support', 'reloadify-frontend-sync' ) . '</span>';
 			} else {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending \u2013 optimizes in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending – optimizes in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
 			}
 			return;
 		}
 
 		if ( 0 === strpos( (string) $mime, 'video/' ) ) {
 			if ( ! self::ffmpeg_path() ) {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Not compressed \u2013 ffmpeg unavailable on this server', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Not compressed – ffmpeg unavailable on this server', 'reloadify-frontend-sync' ) . '</span>';
 			} else {
-				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending \u2013 compresses in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
+				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending – compresses in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
 			}
 			return;
 		}
