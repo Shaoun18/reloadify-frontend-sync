@@ -300,7 +300,12 @@ class Reloadify_Rest {
 	public static function update_media( WP_REST_Request $request ) {
 		$body    = $request->get_json_params();
 		$body    = is_array( $body ) ? $body : [];
-		$enabled = Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) );
+		// Only touch the on/off switch when the request actually carries it. A
+		// request that only changes the image format used to switch Media
+		// Optimization off (and clear its schedule) as a side effect.
+		$enabled = array_key_exists( 'enabled', $body )
+			? Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) )
+			: Reloadify_Media::is_enabled();
 
 		if ( isset( $body['format_preference'] ) ) {
 			Reloadify_Media::set_format_preference( sanitize_key( $body['format_preference'] ) );
@@ -328,7 +333,9 @@ class Reloadify_Rest {
 	public static function update_cleanup( WP_REST_Request $request ) {
 		$body    = $request->get_json_params();
 		$body    = is_array( $body ) ? $body : [];
-		$enabled = Reloadify_Cleanup::set_enabled( ! empty( $body['enabled'] ) );
+		$enabled = array_key_exists( 'enabled', $body )
+			? Reloadify_Cleanup::set_enabled( ! empty( $body['enabled'] ) )
+			: Reloadify_Cleanup::is_enabled();
 
 		return rest_ensure_response( [
 			'enabled' => $enabled,

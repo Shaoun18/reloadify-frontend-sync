@@ -8,6 +8,12 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 /* ---------------- Uninstall Cleanup ---------------- */
 
 function reloadify_uninstall_cleanup_current_site() {
+	// Checked per site: on multisite each site has its own choice, and the
+	// main site's setting must not decide for every other site.
+	if ( ! get_option( 'reloadify_delete_data_on_uninstall', false ) ) {
+		return;
+	}
+
 	delete_option( 'reloadify_settings' );
 	delete_option( 'reloadify_last_site_update' );
 	delete_option( 'reloadify_performance' );
@@ -18,13 +24,16 @@ function reloadify_uninstall_cleanup_current_site() {
 	delete_option( 'reloadify_delete_data_on_uninstall' );
 	delete_option( 'reloadify_extras_settings' );
 
-	wp_clear_scheduled_hook( 'reloadify_media_backfill_batch' );
-	wp_clear_scheduled_hook( 'reloadify_media_backfill_video_batch' );
-	$timestamp = wp_next_scheduled( 'reloadify_media_compress_video' );
-	while ( $timestamp ) {
-		wp_unschedule_event( $timestamp, 'reloadify_media_compress_video' );
-		$timestamp = wp_next_scheduled( 'reloadify_media_compress_video' );
-	}
+	// wp_unschedule_hook() also removes the per-video events, which carry an
+	// attachment ID argument that wp_next_scheduled( $hook ) can't match.
+	wp_unschedule_hook( 'reloadify_media_backfill_batch' );
+	wp_unschedule_hook( 'reloadify_media_backfill_video_batch' );
+	wp_unschedule_hook( 'reloadify_media_compress_video' );
+
+	// Per-attachment bookkeeping written by Media Optimization.
+	delete_post_meta_by_key( '_reloadify_media_optimized' );
+	delete_post_meta_by_key( '_reloadify_media_video_optimized' );
+	delete_post_meta_by_key( '_reloadify_media_stats' );
 
 	$upload = wp_upload_dir();
 	if ( empty( $upload['basedir'] ) ) {
@@ -51,11 +60,6 @@ function reloadify_uninstall_cleanup_current_site() {
 			$wp_filesystem->delete( $dir, true );
 		}
 	}
-}
-
-// Opt-in since 1.2.0: no stored option means keep the data.
-if ( ! get_option( 'reloadify_delete_data_on_uninstall', false ) ) {
-	return;
 }
 
 if ( is_multisite() ) {

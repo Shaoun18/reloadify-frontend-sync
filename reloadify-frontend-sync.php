@@ -4,8 +4,8 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
- * Version:           1.2.0
- * Author:            Programmershaoun
+ * Version:           1.2.1
+ * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
  * Domain Path:       /languages
@@ -13,14 +13,13 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Requires at least: 6.4
  * Requires PHP:      7.4
- * Tested up to:      7.1
  */
 
 if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.2.0');
+define('RELOADIFY_VERSION', '1.2.1');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -79,7 +78,6 @@ class Reloadify_Frontend_Sync
 		add_action('woocommerce_new_order', [$this, 'record_site_update_now']);
 		add_action('woocommerce_update_order', [$this, 'record_site_update_now']);
 		add_action('woocommerce_order_status_changed', [$this, 'record_site_update_now']);
-		add_action('added_option', [$this, 'maybe_record_option_change'], 10, 2);
 		add_action('updated_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('added_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('deleted_option', [$this, 'maybe_record_option_change'], 10, 1);
@@ -144,6 +142,17 @@ class Reloadify_Frontend_Sync
 
 		if (! $is_admin_context || ! $is_write_method) {
 			return;
+		}
+
+		// Background admin-ajax chatter (Heartbeat, post-lock refresh) writes
+		// options on its own and is not a content change -- don't let it
+		// trigger a frontend reload.
+		if (function_exists('wp_doing_ajax') && wp_doing_ajax()) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only comparison against a fixed allow-list; nothing is processed or saved.
+			$ajax_action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
+			if (in_array($ajax_action, ['heartbeat', 'wp-remove-post-lock', 'reloadify_reloader_check'], true)) {
+				return;
+			}
 		}
 
 		if (0 === strpos($option, 'reloadify_')) {

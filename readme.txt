@@ -4,7 +4,7 @@ Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,19 @@ Your feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.2.1 =
+* Fixed **Active Tab** incorrectly switching to **All Tabs**.
+* Fixed duplicated tabs sharing the same tab ID.
+* Fixed tab ownership and newly focused tab synchronization.
+* Fixed private-window reload behavior.
+* Fixed **Heartbeat** and post-lock AJAX requests being detected as content changes.
+* Fixed **CSS/JS minification** edge cases.
+* Fixed **Delayed JavaScript** execution order and event replay.
+* Fixed page-builder frame handling and cache issues.
+* Fixed **Speed Boost** autosave, revisions, and Heartbeat behavior.
+* Fixed **Media Optimization** and video processing issues.
+* Fixed **Delete Data on Uninstall** cleanup on multisite.
 
 = 1.2.0 =
 * Added **Reload All Tabs** for synchronizing multiple frontend tabs and windows.

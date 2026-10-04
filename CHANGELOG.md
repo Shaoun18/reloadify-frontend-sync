@@ -1,5 +1,34 @@
 ## Changelog
 
+### 1.2.1
+
+*   **Fixed: "Active tab only" turned into "all tabs" after a while.** A tab that had been backgrounded, frozen or throttled by the browser could miss the message telling it to give up the active-tab slot, wake up still believing it was active, and reload together with the real active tab. The shared active-tab claim is now the single source of truth: whenever a claim exists, only its owner reloads, and a stale tab corrects itself instead of reloading.
+*   **Fixed: Duplicated tabs shared one tab ID.** The ID was stored in sessionStorage, which "Duplicate tab" and window.open copy, so two tabs could both look like the claim holder. Every page load now gets its own ID.
+*   **Fixed: Tabs fighting over the active slot.** The heartbeat no longer overwrites a newer claim written by another tab; it lets go instead.
+*   **Fixed: Private windows without storage reloaded every touched tab.** The fallback now reloads only the visible tab.
+*   **Fixed: A freshly opened, focused tab now claims the active slot immediately** instead of waiting for the first click.
+*   **Fixed: Background admin-ajax requests (Heartbeat, post-lock refresh) could count as a content change** and trigger a reload.
+*   **Fixed: Duplicate `added_option` hook registration** removed.
+*   **Fixed (Speed Boost): minified CSS lost its images and fonts.** The cached copy is served from the uploads folder, so every relative `url()` and `@import` in it pointed at the wrong place. They are now rewritten to absolute URLs.
+*   **Fixed (Speed Boost): CSS minifier broke `calc(a + b)`** and rewrote text inside strings and `url()` values. Strings and `url()` are now left untouched, `+` is never tightened, and `a :hover` keeps its meaning.
+*   **Fixed (Speed Boost): JS minifier** could glue `a + +b` into `a++b`, join words across a comment, and mis-read a regex after `return`/`typeof` or nested template literals.
+*   **Fixed (Speed Boost): delayed JavaScript ran out of order.** Scripts are now started one after another, so an inline block never runs before its external file has loaded, and `DOMContentLoaded` / `load` listeners added by delayed scripts are replayed instead of never firing.
+*   **Fixed (Speed Boost): delayed JavaScript missed inline blocks** when a script tag mixed attribute styles; every `<script>` in the tag is now parked reliably, while JSON-LD and templates keep their type.
+*   **Fixed (Speed Boost): scripts that locate themselves by their own URL** (webpack chunks, `document.currentScript`, workers, dynamic imports) are no longer relocated into the cache folder.
+*   **Fixed (Speed Boost): stale cache after a fix.** Cached files now carry a minifier revision, and files that were skipped are remembered instead of being re-read on every request.
+*   **Fixed (Speed Boost): fatal error on hosts without `GLOB_BRACE`** (Alpine/musl) when turning Speed Boost off.
+*   **Fixed (Speed Boost): page-builder frames** (Divi `et_fb`, Elementor, Beaver, Bricks, etc.) and the Customizer are no longer rewritten.
+*   **Fixed (Speed Boost): version query strings** are only removed for visitors, so editors and wp-admin always get fresh files after an update.
+*   **Fixed (Speed Boost): the autosave interval never changed.** WordPress already defines the constant before admin_init, so the old `define()` did nothing; the block and classic editors are now adjusted directly.
+*   **Fixed (Speed Boost): the revision cap could raise a stricter limit** (e.g. `WP_POST_REVISIONS = 3` became 5).
+*   **Fixed (Speed Boost): the front-end Heartbeat was removed for logged-in users**, not just visitors; embeds/emoji CSS handling updated for WordPress 6.4+.
+*   **Fixed (Media Optimization): the "about X% smaller" figure compared WebP with WebP** and showed ~0%; it now measures against the original format.
+*   **Fixed (Media Optimization): disabling it left per-video cron events queued**, and an uploaded video that wasn't an MP4 could be overwritten with MP4 data under its old extension. Non-MP4 videos are now skipped, and unusable attachments no longer block the backfill queue.
+*   **Fixed (Media Optimization): ffmpeg paths containing spaces** (common on Windows) failed to run.
+*   **Fixed (Media Optimization): the backfill regenerated every thumbnail** even when the server cannot produce WebP/AVIF.
+*   **Fixed: changing only the image format via the REST API switched Media Optimization off.** The on/off switch is only touched when the request includes it.
+*   **Fixed (Delete Data on Uninstall): on multisite the main site's choice decided for every site;** each site now uses its own setting. Per-video cron events and Media Optimization post meta are now removed too.
+
 ### 1.2.0
 
 *   **Added: Reload all tabs.** A new toggle on the Cross-Browser Reload tab decides whether a change refreshes every open tab and window at once, or only the tab you're actually looking at. "Active tab only" is the default, so background tabs keep their scroll position and form state instead of resetting every time you save. Tabs coordinate through a shared active-tab claim plus BroadcastChannel, with a fallback for private windows where storage is blocked.

@@ -14,6 +14,13 @@ class Reloadify_Speed
 	const CACHE_DIR   = 'reloadify-minify';
 
 	/**
+	 * Bump whenever the minifier's output changes, so cached files built by an
+	 * older revision are never served again (the version number alone isn't
+	 * enough when a fix ships without one).
+	 */
+	const CACHE_REV   = 2;
+
+	/**
 	 * Script handles that must never be deferred until first interaction.
 	 * jQuery stays eager because an enormous amount of theme/plugin code
 	 * assumes it is already there, and this plugin's own scripts stay eager
@@ -165,7 +172,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'query_strings',
-				'label' => __('Removes query strings from static resources (CSS, JS) so they can be served by CDN and proxies more efficiently — speeds up repeat visitor loads', 'reloadify-frontend-sync'),
+				'label' => __('Removes version query strings from static resources (CSS, JS) for visitors so they can be served by CDN and proxies more efficiently — speeds up repeat visitor loads (logged-in editors always get the versioned URLs)', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'embeds',
@@ -176,6 +183,31 @@ class Reloadify_Speed
 				'label' => __('Serves this plugin\'s own CSS/JS pre-minified on real requests (roughly half the bytes) — automatic, and only switches back to the readable originals when SCRIPT_DEBUG or WP_DEBUG is on, so nothing changes for local development', 'reloadify-frontend-sync'),
 			],
 		];
+	}
+
+	/**
+	 * Page builders render the real front end inside their editor frame, with
+	 * their own scripts and inline JSON. Rewriting those (minifying, delaying,
+	 * stripping versions) is exactly the kind of thing that makes a builder
+	 * silently misbehave, so every front-end pass stands down for them.
+	 */
+	public static function is_builder_request()
+	{
+		$flags = ['et_fb', 'et_pb_preview', 'elementor-preview', 'fl_builder', 'ct_builder', 'brizy-edit', 'brizy-edit-iframe', 'bricks', 'tve', 'vc_editable', 'customize_changeset_uuid', 'preview'];
+
+		foreach ($flags as $flag) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only detection of a builder/preview flag in the URL; nothing is processed or saved.
+			if (isset($_GET[$flag])) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function is_editor_session()
+	{
+		return function_exists('is_user_logged_in') && is_user_logged_in() && current_user_can('edit_posts');
 	}
 
 	public static function init()
@@ -203,15 +235,18 @@ class Reloadify_Speed
 		add_filter('wp_revisions_to_keep', [__CLASS__, 'cap_revisions'], 10, 2);
 		add_action('pre_ping', [__CLASS__, 'remove_self_pingbacks']);
 
-		// Remove query strings from static resources
-		add_filter('script_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
-		add_filter('style_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
-
 		$options = self::get_options();
 
-		// Asset minification -- frontend only, so wp-admin keeps loading the
-		// exact files WordPress shipped.
-		if (! is_admin()) {
+		// Everything below changes front-end output -- never in wp-admin, and
+		// never inside a page builder's editor frame.
+		if (! is_admin() && ! self::is_builder_request()) {
+
+			// Version query strings are what make a browser re-download a file
+			// after an update, so they're only dropped for real visitors (see
+			// remove_query_strings()).
+			add_filter('script_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
+			add_filter('style_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
+
 			if (! empty($options['minify_css'])) {
 				add_filter('style_loader_src', [__CLASS__, 'minify_style_src'], 20, 1);
 			}
@@ -258,7 +293,7 @@ class Reloadify_Speed
 			return $tag;
 		}
 
-		if (is_customize_preview() || is_feed() || is_embed()) {
+		if (is_customize_preview() || is_feed() || is_embed() || self::is_builder_request()) {
 			return $tag;
 		}
 
@@ -278,15 +313,31 @@ class Reloadify_Speed
 			return $tag;
 		}
 
-		if (false !== strpos($tag, 'type=')) {
-			return str_replace(
-				['type="text/javascript"', "type='text/javascript'"],
-				'type="reloadify/delayed-js"',
-				$tag
-			);
-		}
+		// Park every <script> in this tag -- the external file AND any inline
+		// before/after/localize blocks WordPress glued to it -- so they stay in
+		// order. Only plain JavaScript is touched; JSON-LD, import maps and
+		// templates keep their own type.
+		$converted = preg_replace_callback(
+			'#<script\b([^>]*)>#i',
+			function ($m) {
+				$attrs = $m[1];
 
-		return str_replace('<script ', '<script type="reloadify/delayed-js" ', $tag);
+				if (preg_match('#\stype\s*=\s*(["\']?)([^"\'\s>]*)\1#i', $attrs, $type)) {
+					$declared = strtolower($type[2]);
+
+					if (! in_array($declared, ['', 'text/javascript', 'application/javascript', 'text/ecmascript', 'application/ecmascript'], true)) {
+						return $m[0];
+					}
+
+					$attrs = preg_replace('#\stype\s*=\s*(["\']?)[^"\'\s>]*\1#i', '', $attrs, 1);
+				}
+
+				return '<script type="reloadify/delayed-js"' . $attrs . '>';
+			},
+			$tag
+		);
+
+		return is_string($converted) ? $converted : $tag;
 	}
 
 	/**
@@ -299,11 +350,16 @@ class Reloadify_Speed
 		if (is_user_logged_in() && current_user_can('edit_posts')) {
 			return;
 		}
+
+		if (is_customize_preview() || is_feed() || is_embed() || self::is_builder_request()) {
+			return;
+		}
 ?>
 		<script id="reloadify-delay-js">
 			(function() {
 				var activated = false;
 				var events = ['mousemove', 'scroll', 'touchstart', 'keydown', 'click', 'wheel'];
+				var fallback;
 
 				function activate() {
 					if (activated) {
@@ -315,25 +371,96 @@ class Reloadify_Speed
 						window.removeEventListener(evt, activate);
 					});
 
-					var parked = document.querySelectorAll('script[type="reloadify/delayed-js"]');
-					Array.prototype.forEach.call(parked, function(oldScript) {
-						var newScript = document.createElement('script');
-						for (var i = 0; i < oldScript.attributes.length; i++) {
-							var attr = oldScript.attributes[i];
+					var queue = Array.prototype.slice.call(document.querySelectorAll('script[type="reloadify/delayed-js"]'));
+
+					// A parked script that waits for DOMContentLoaded / load would
+					// otherwise wait forever, because both fired long ago. While the
+					// queue runs, listeners added for an event that has already
+					// happened are called straight away instead.
+					var nativeAdd = EventTarget.prototype.addEventListener;
+					EventTarget.prototype.addEventListener = function(type, listener, options) {
+						var onPage = (this === window || this === document);
+						var late = (type === 'DOMContentLoaded' && document.readyState !== 'loading') ||
+							(type === 'load' && this === window && document.readyState === 'complete') ||
+							(type === 'readystatechange' && this === document && document.readyState === 'complete');
+
+						if (onPage && late && listener) {
+							var target = this;
+							setTimeout(function() {
+								try {
+									var evt = new Event(type);
+									if (typeof listener === 'function') {
+										listener.call(target, evt);
+									} else if (typeof listener.handleEvent === 'function') {
+										listener.handleEvent(evt);
+									}
+								} catch (e) {
+									if (window.console) {
+										console.error(e);
+									}
+								}
+							}, 0);
+							return;
+						}
+
+						return nativeAdd.call(this, type, listener, options);
+					};
+
+					function finish() {
+						EventTarget.prototype.addEventListener = nativeAdd;
+						try {
+							document.dispatchEvent(new Event('reloadify:delayed-js-loaded'));
+						} catch (e) {}
+					}
+
+					// One script at a time, each waiting for the previous one to
+					// finish: an inline "after" block must never run before the
+					// external file it depends on has loaded.
+					function next() {
+						var old = queue.shift();
+						if (!old) {
+							finish();
+							return;
+						}
+						if (!old.parentNode) {
+							next();
+							return;
+						}
+
+						var fresh = document.createElement('script');
+						for (var i = 0; i < old.attributes.length; i++) {
+							var attr = old.attributes[i];
 							if (attr.name !== 'type') {
-								newScript.setAttribute(attr.name, attr.value);
+								fresh.setAttribute(attr.name, attr.value);
 							}
 						}
-						newScript.text = oldScript.text;
-						oldScript.parentNode.replaceChild(newScript, oldScript);
-					});
+						fresh.text = old.text;
 
-					try {
-						document.dispatchEvent(new Event('reloadify:delayed-js-loaded'));
-					} catch (e) {}
+						if (old.getAttribute('src')) {
+							var done = false;
+							var guard = null;
+							var go = function() {
+								if (done) {
+									return;
+								}
+								done = true;
+								clearTimeout(guard);
+								next();
+							};
+							guard = setTimeout(go, 8000);
+							fresh.onload = go;
+							fresh.onerror = go;
+							old.parentNode.replaceChild(fresh, old);
+						} else {
+							old.parentNode.replaceChild(fresh, old);
+							next();
+						}
+					}
+
+					next();
 				}
 
-				var fallback = setTimeout(activate, 7000);
+				fallback = setTimeout(activate, 7000);
 				events.forEach(function(evt) {
 					window.addEventListener(evt, activate, {
 						passive: true,
@@ -447,9 +574,16 @@ class Reloadify_Speed
 			return $src;
 		}
 
-		$fingerprint = md5($path . '|' . $size . '|' . filemtime($path) . '|' . RELOADIFY_VERSION);
+		$fingerprint = md5($path . '|' . $size . '|' . filemtime($path) . '|' . RELOADIFY_VERSION . '|' . self::CACHE_REV);
 		$filename    = sanitize_file_name(basename($clean_src, $extension)) . '-' . substr($fingerprint, 0, 12) . '.min' . $extension;
 		$target      = trailingslashit($cache['dir']) . $filename;
+		$skip_marker = $target . '.skip';
+
+		// A file we already decided to leave alone: don't re-read and re-parse it
+		// on every request.
+		if (file_exists($skip_marker)) {
+			return $src;
+		}
 
 		if (! file_exists($target)) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading a local asset already on this filesystem, not a remote request.
@@ -459,11 +593,23 @@ class Reloadify_Speed
 				return $src;
 			}
 
+			// The copy lives in a different folder, so anything that finds its
+			// siblings relative to its own URL would break. JavaScript like that
+			// (webpack chunks, currentScript lookups, workers, dynamic imports)
+			// is served from where it was.
+			if ('js' === $type && self::js_depends_on_its_location($source)) {
+				self::mark_skipped($skip_marker);
+				return $src;
+			}
+
+			// Relative url() / @import paths in CSS are rewritten to absolute
+			// ones for the same reason.
 			$minified = ('css' === $type)
-				? Reloadify_Minify::css($source)
+				? Reloadify_Minify::css($source, $clean_src)
 				: Reloadify_Minify::js($source);
 
 			if ('' === trim((string) $minified) || strlen($minified) >= strlen($source)) {
+				self::mark_skipped($skip_marker);
 				return $src; // No win, or the minifier bailed out -- keep the original.
 			}
 
@@ -474,6 +620,25 @@ class Reloadify_Speed
 		}
 
 		return trailingslashit($cache['url']) . $filename;
+	}
+
+	private static function js_depends_on_its_location($source)
+	{
+		$needles = ['webpackChunk', 'webpackJsonp', '__webpack_require__', '__webpack_public_path__', 'document.currentScript', 'import(', 'import.meta', 'new Worker(', 'importScripts('];
+
+		foreach ($needles as $needle) {
+			if (false !== strpos($source, $needle)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function mark_skipped($marker)
+	{
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- tiny marker inside the generated cache directory; non-fatal if it fails.
+		@file_put_contents($marker, '1');
 	}
 
 	/**
@@ -517,7 +682,7 @@ class Reloadify_Speed
 		}
 
 		$dir = trailingslashit($upload['basedir']) . self::CACHE_DIR;
-		$url = trailingslashit($upload['baseurl']) . self::CACHE_DIR;
+		$url = trailingslashit(set_url_scheme($upload['baseurl'])) . self::CACHE_DIR;
 
 		if (! file_exists($dir)) {
 			wp_mkdir_p($dir);
@@ -551,16 +716,24 @@ class Reloadify_Speed
 			return;
 		}
 
-		foreach ((array) glob($dir . '/*.min.{css,js}', GLOB_BRACE) as $file) {
-			if (is_file($file)) {
-				wp_delete_file($file);
+		// GLOB_BRACE isn't available on every platform (Alpine/musl, Solaris),
+		// where using it is a fatal error -- so one plain glob per pattern.
+		foreach (['*.min.css', '*.min.js', '*.skip'] as $pattern) {
+			foreach ((array) glob($dir . '/' . $pattern) as $file) {
+				if (is_file($file)) {
+					wp_delete_file($file);
+				}
 			}
 		}
 	}
 
 	public static function cap_revisions($num, $post)
 	{
-		return 5;
+		$num = (int) $num;
+
+		// -1 means unlimited. Never RAISE a stricter limit the site already set
+		// (WP_POST_REVISIONS = 3, or false/0 for none).
+		return (-1 === $num) ? 5 : min($num, 5);
 	}
 
 	public static function remove_self_pingbacks(&$links)
@@ -583,7 +756,9 @@ class Reloadify_Speed
 
 	public static function dequeue_frontend_heartbeat()
 	{
-		if (is_admin()) {
+		// Visitors only. Logged-in users on the front end rely on it (post locks,
+		// nonce refresh, page-builder sessions).
+		if (is_admin() || is_user_logged_in()) {
 			return;
 		}
 
@@ -611,6 +786,9 @@ class Reloadify_Speed
 		remove_action('admin_print_scripts', 'print_emoji_detection_script');
 		remove_action('wp_print_styles', 'print_emoji_styles');
 		remove_action('admin_print_styles', 'print_emoji_styles');
+		// WordPress 6.4+ prints the emoji CSS from these instead.
+		remove_action('wp_enqueue_scripts', 'wp_enqueue_emoji_styles');
+		remove_action('admin_enqueue_scripts', 'wp_enqueue_emoji_styles');
 		remove_filter('wp_mail', 'wp_staticize_emoji_for_email');
 		remove_filter('the_content_feed', 'wp_staticize_emoji');
 		remove_filter('comment_text_rss', 'wp_staticize_emoji');
@@ -748,13 +926,43 @@ class Reloadify_Speed
 	/**
 	 * Increase autosave interval from 60 to 120 seconds to reduce database writes
 	 * and server load while editing posts/pages in WordPress admin.
+	 *
+	 * WordPress defines AUTOSAVE_INTERVAL itself long before admin_init, so
+	 * calling define() here could never do anything. The value is consumed by
+	 * the block editor settings and the classic editor's autosave script, so
+	 * that is where it is adjusted.
 	 */
 	public static function increase_autosave_interval()
 	{
-		if (defined('AUTOSAVE_INTERVAL')) {
-			return; // Already defined in wp-config.php, don't override
+		// A site that already chose a longer interval in wp-config.php keeps it.
+		if (defined('AUTOSAVE_INTERVAL') && (int) AUTOSAVE_INTERVAL >= 120) {
+			return;
 		}
-		define('AUTOSAVE_INTERVAL', 120);
+
+		add_filter('block_editor_settings_all', [__CLASS__, 'filter_block_editor_autosave'], 20);
+		add_action('admin_enqueue_scripts', [__CLASS__, 'filter_classic_autosave'], 20);
+	}
+
+	public static function filter_block_editor_autosave($settings)
+	{
+		if (is_array($settings)) {
+			$settings['autosaveInterval'] = max(120, isset($settings['autosaveInterval']) ? (int) $settings['autosaveInterval'] : 0);
+		}
+
+		return $settings;
+	}
+
+	public static function filter_classic_autosave()
+	{
+		if (! wp_script_is('autosave', 'registered')) {
+			return;
+		}
+
+		wp_add_inline_script(
+			'autosave',
+			'if (window.autosaveL10n) { window.autosaveL10n.autosaveInterval = Math.max(parseInt(window.autosaveL10n.autosaveInterval, 10) || 0, 120); }',
+			'before'
+		);
 	}
 
 	/**
@@ -763,6 +971,13 @@ class Reloadify_Speed
 	 */
 	public static function remove_query_strings($src)
 	{
+		// The ?ver= value is what makes a browser fetch a file again after an
+		// update. Visitors only: an editor (or wp-admin) testing changes must
+		// never be handed a stale cached script or stylesheet.
+		if (is_admin() || self::is_editor_session()) {
+			return $src;
+		}
+
 		if (strpos($src, '?')) {
 			$src = remove_query_arg('ver', $src);
 		}

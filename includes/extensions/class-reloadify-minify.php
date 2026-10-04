@@ -27,40 +27,92 @@ class Reloadify_Minify {
 	 * Strips comments and collapses whitespace, leaving strings and url()
 	 * values untouched.
 	 *
-	 * @param string $css Raw stylesheet source.
+	 * Strings and url() tokens are lifted out before any whitespace is
+	 * tightened and put back afterwards, so nothing inside them is ever
+	 * rewritten. `+` is deliberately never tightened: calc(1px + 2px) is
+	 * invalid without the spaces.
+	 *
+	 * @param string $css      Raw stylesheet source.
+	 * @param string $base_url Optional URL of the file the CSS was read from.
+	 *                         When given, relative url() / @import paths are
+	 *                         made absolute, because the minified copy is
+	 *                         served from a different folder.
 	 * @return string
 	 */
-	public static function css( $css ) {
+	public static function css( $css, $base_url = '' ) {
 		if ( ! is_string( $css ) || '' === trim( $css ) ) {
 			return $css;
 		}
 
-		$out    = '';
-		$len    = strlen( $css );
-		$quote  = '';
-		$i      = 0;
+		// The placeholder bytes must not already exist in the source.
+		if ( false !== strpos( $css, "\x01" ) || false !== strpos( $css, "\x02" ) ) {
+			return $css;
+		}
+
+		$tokens = [];
+		$stash  = function ( $text ) use ( &$tokens ) {
+			$tokens[] = $text;
+			return "\x01" . ( count( $tokens ) - 1 ) . "\x02";
+		};
+
+		$out = '';
+		$len = strlen( $css );
+		$i   = 0;
 
 		while ( $i < $len ) {
 			$char = $css[ $i ];
 
-			if ( '' !== $quote ) {
-				$out .= $char;
-				if ( '\\' === $char && $i + 1 < $len ) {
-					$out .= $css[ $i + 1 ];
-					$i   += 2;
-					continue;
-				}
-				if ( $char === $quote ) {
+			// url( ... ) -- quoted or bare.
+			if ( ( 'u' === $char || 'U' === $char ) && ( 0 === $i || ! preg_match( '/[A-Za-z0-9_-]/', $css[ $i - 1 ] ) )
+				&& preg_match( '/\Gurl\(\s*(?:"((?:\\\\.|[^"\\\\])*)"|\'((?:\\\\.|[^\'\\\\])*)\'|([^)\s"\']*))\s*\)/i', $css, $m, 0, $i )
+			) {
+				// Which of the three alternatives matched is decided by the first
+				// character after "url(" -- empty strings make the groups ambiguous.
+				$first = ltrim( substr( $m[0], 4 ) );
+				$first = ( '' !== $first ) ? $first[0] : '';
+
+				if ( '"' === $first ) {
+					$quote = '"';
+					$url   = isset( $m[1] ) ? $m[1] : '';
+				} elseif ( "'" === $first ) {
+					$quote = "'";
+					$url   = isset( $m[2] ) ? $m[2] : '';
+				} else {
 					$quote = '';
+					$url   = isset( $m[3] ) ? $m[3] : '';
 				}
-				$i++;
+
+				$url = self::css_absolutize( $url, $base_url );
+				$out .= $stash( 'url(' . $quote . $url . $quote . ')' );
+				$i   += strlen( $m[0] );
 				continue;
 			}
 
+			// @import "file.css";
+			if ( '@' === $char && preg_match( '/\G@import\s*(["\'])((?:\\\\.|(?!\1)[^\\\\])*)\1/i', $css, $m, 0, $i ) ) {
+				$url  = self::css_absolutize( $m[2], $base_url );
+				$out .= $stash( '@import ' . $m[1] . $url . $m[1] );
+				$i   += strlen( $m[0] );
+				continue;
+			}
+
+			// Plain string.
 			if ( '"' === $char || "'" === $char ) {
-				$quote = $char;
-				$out  .= $char;
+				$start = $i;
 				$i++;
+				while ( $i < $len ) {
+					$c = $css[ $i ];
+					if ( '\\' === $c ) {
+						$i += 2;
+						continue;
+					}
+					if ( $c === $char ) {
+						$i++;
+						break;
+					}
+					$i++;
+				}
+				$out .= $stash( substr( $css, $start, $i - $start ) );
 				continue;
 			}
 
@@ -68,10 +120,10 @@ class Reloadify_Minify {
 			if ( '/' === $char && $i + 1 < $len && '*' === $css[ $i + 1 ] ) {
 				$end = strpos( $css, '*/', $i + 2 );
 				if ( false === $end ) {
-					break; // Unterminated -- drop the remainder rather than guess.
+					break; // Unterminated: per the CSS spec the comment runs to EOF.
 				}
 				if ( $i + 2 < $len && '!' === $css[ $i + 2 ] ) {
-					$out .= substr( $css, $i, $end - $i + 2 );
+					$out .= $stash( substr( $css, $i, $end - $i + 2 ) );
 				}
 				$i = $end + 2;
 				continue;
@@ -90,16 +142,71 @@ class Reloadify_Minify {
 			$i++;
 		}
 
-		// Drop spaces around punctuation that never needs them, then the
-		// final semicolon before each closing brace.
-		$out = preg_replace( '/\s*([{}:;,>~+])\s*/', '$1', $out );
+		// Spaces around these never matter. `:` is only tightened AFTER the
+		// colon (`a :hover` and `a:hover` are different selectors) and `+` is
+		// left alone entirely (calc()).
+		$out = preg_replace( '/\s*([{};,>~])\s*/', '$1', $out );
+		$out = preg_replace( '/:\s+/', ':', $out );
 		$out = str_replace( ';}', '}', $out );
 
-		// `>`, `~` and `+` are also valid inside media/supports queries and
-		// :not() etc., where the collapse above is harmless -- but a combinator
-		// directly after a comma still needs no space, so nothing to restore.
-		return trim( $out );
+		if ( ! is_string( $out ) ) {
+			return $css;
+		}
+
+		$out = preg_replace_callback(
+			'/\x01(\d+)\x02/',
+			function ( $m ) use ( &$tokens ) {
+				return isset( $tokens[ (int) $m[1] ] ) ? $tokens[ (int) $m[1] ] : '';
+			},
+			$out
+		);
+
+		return trim( (string) $out );
 	}
+
+	/**
+	 * Makes a relative url() / @import path absolute against the URL of the
+	 * stylesheet it came from. Absolute, protocol-relative, root-relative,
+	 * data:, and #fragment values are returned untouched.
+	 */
+	private static function css_absolutize( $url, $base_url ) {
+		$url = trim( (string) $url );
+
+		if ( '' === $url || '' === (string) $base_url || false !== strpos( $url, '\\' ) ) {
+			return $url;
+		}
+
+		if ( preg_match( '#^(?:[a-z][a-z0-9+.-]*:|//|/|\#|\?)#i', $url ) ) {
+			return $url;
+		}
+
+		$suffix = '';
+		if ( preg_match( '/^([^?#]*)([?#].*)$/s', $url, $parts ) ) {
+			$url    = $parts[1];
+			$suffix = $parts[2];
+		}
+
+		$base = strtok( (string) $base_url, '?#' );
+		if ( ! preg_match( '#^([a-z][a-z0-9+.-]*://[^/]+)(/.*)?$#i', (string) $base, $b ) ) {
+			return $url . $suffix;
+		}
+
+		$origin   = $b[1];
+		$path     = isset( $b[2] ) ? $b[2] : '';
+		$path     = preg_replace( '#/[^/]*$#', '', $path ); // Directory of the stylesheet.
+		$segments = ( '' === trim( (string) $path, '/' ) ) ? [] : explode( '/', trim( (string) $path, '/' ) );
+
+		foreach ( explode( '/', $url ) as $segment ) {
+			if ( '..' === $segment ) {
+				array_pop( $segments );
+			} elseif ( '.' !== $segment && '' !== $segment ) {
+				$segments[] = $segment;
+			}
+		}
+
+		return $origin . '/' . implode( '/', $segments ) . $suffix;
+	}
+
 
 	/* ---------------- JavaScript ---------------- */
 
@@ -141,15 +248,26 @@ class Reloadify_Minify {
 				if ( false === $end ) {
 					return $js; // Unterminated: don't risk it.
 				}
+				$had_newline = ( false !== strpos( substr( $js, $i, $end - $i ), "\n" ) );
+
 				if ( $i + 2 < $len && '!' === $js[ $i + 2 ] ) {
 					$out .= substr( $js, $i, $end - $i + 2 );
 				}
-				$i = $end + 2;
+				$i     = $end + 2;
+				$after = ( $i < $len ) ? $js[ $i ] : '';
+
+				// A comment can be the only thing separating two tokens (or two
+				// lines): `return/**/x`, or a comment that spans a line break.
+				if ( $had_newline && '' !== $out && "\n" !== substr( $out, -1 ) ) {
+					$out .= "\n";
+				} elseif ( self::js_is_word_char( $prev ) && self::js_is_word_char( $after ) ) {
+					$out .= ' ';
+				}
 				continue;
 			}
 
 			// Regex literal -- only where a value can legally start.
-			if ( '/' === $char && self::js_regex_allowed( $prev ) ) {
+			if ( '/' === $char && self::js_regex_allowed( $prev, $out ) ) {
 				$literal = self::js_read_regex( $js, $i );
 				if ( null === $literal ) {
 					return $js; // Ambiguous: leave the file as-is.
@@ -191,7 +309,16 @@ class Reloadify_Minify {
 				// A single space only where two identifier characters would
 				// otherwise run together.
 				$after = ( $j < $len ) ? $js[ $j ] : '';
+				if ( '' !== $out && "\n" === substr( $out, -1 ) ) {
+					// Start of a line: leading space is never needed.
+					$i = $j;
+					continue;
+				}
+
 				if ( self::js_is_word_char( $prev ) && self::js_is_word_char( $after ) ) {
+					$out .= ' ';
+				} elseif ( ( '+' === $prev || '-' === $prev ) && $after === $prev ) {
+					// `a + +b` must not become `a++b`.
 					$out .= ' ';
 				}
 				$i = $j;
@@ -212,13 +339,23 @@ class Reloadify_Minify {
 
 	/**
 	 * A `/` starts a regex literal only when the previous meaningful
-	 * character can't end an expression.
+	 * character can't end an expression -- or when it ends a keyword such as
+	 * `return` / `typeof`, after which a value (and so a regex) can start.
 	 */
-	private static function js_regex_allowed( $prev ) {
+	private static function js_regex_allowed( $prev, $out = '' ) {
 		if ( '' === $prev ) {
 			return true;
 		}
-		return false === strpos( ')]}', $prev ) && ! self::js_is_word_char( $prev );
+
+		if ( self::js_is_word_char( $prev ) ) {
+			if ( '' !== $out && preg_match( '/(?:^|[^A-Za-z0-9_$.])([A-Za-z_$][A-Za-z0-9_$]*)$/', substr( $out, -16 ), $word ) ) {
+				return in_array( $word[1], [ 'return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'void', 'delete', 'throw', 'new', 'instanceof', 'yield', 'await' ], true );
+			}
+			return false;
+		}
+
+		// After a closing bracket or a string/template literal a `/` divides.
+		return false === strpos( ')]}\'"`', $prev );
 	}
 
 	private static function js_read_string( $js, $start, $quote ) {
@@ -232,6 +369,35 @@ class Reloadify_Minify {
 				$i += 2;
 				continue;
 			}
+
+			// `${ ... }` inside a template literal may itself contain strings and
+			// further template literals; walk it with a brace counter.
+			if ( '`' === $quote && '$' === $char && $i + 1 < $len && '{' === $js[ $i + 1 ] ) {
+				$i    += 2;
+				$depth = 1;
+
+				while ( $i < $len && $depth > 0 ) {
+					$c = $js[ $i ];
+
+					if ( '"' === $c || "'" === $c || '`' === $c ) {
+						$nested = self::js_read_string( $js, $i, $c );
+						if ( null === $nested ) {
+							return null;
+						}
+						$i += strlen( $nested );
+						continue;
+					}
+
+					if ( '{' === $c ) {
+						$depth++;
+					} elseif ( '}' === $c ) {
+						$depth--;
+					}
+					$i++;
+				}
+				continue;
+			}
+
 			if ( $char === $quote ) {
 				return substr( $js, $start, $i - $start + 1 );
 			}
