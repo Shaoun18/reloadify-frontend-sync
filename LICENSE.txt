@@ -3,7 +3,7 @@ Main Product License
 
 Reloadify-Frontend-Sync
 ------------
-- Copyright: 2026-present Programmershaoun
+- Copyright: 2026-present shaounchandrashill
 - License: GPLv2
 - License URI: https://www.gnu.org/licenses/gpl-2.0.html
 

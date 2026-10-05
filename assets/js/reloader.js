@@ -127,23 +127,22 @@
      */
 
     var ACTIVE_TAB_KEY = 'reloadify_active_tab';
-    var ACTIVE_TAB_STALE_MS = 6000;
     var ACTIVE_TAB_HEARTBEAT_MS = 2000;
 
     var lastFocusTime = 0;
-    var lastActiveTabId = null;
 
-    var TAB_ID = (function () {
+    // A fresh id on every page load. It used to live in sessionStorage, but
+    // "Duplicate tab" (and window.open) copies sessionStorage -- two tabs then
+    // shared one id and both looked like the holder of the active claim.
+    var TAB_ID = 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
+    var STORAGE_OK = (function () {
         try {
-            var existing = sessionStorage.getItem('reloadify_tab_id');
-            if (existing) {
-                return existing;
-            }
-            var id = 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-            sessionStorage.setItem('reloadify_tab_id', id);
-            return id;
+            localStorage.setItem('__reloadify_probe__', '1');
+            localStorage.removeItem('__reloadify_probe__');
+            return true;
         } catch (e) {
-            return 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            return false;
         }
     })();
 
@@ -214,6 +213,17 @@
         stopHeartbeat();
         heartbeatTimer = setInterval(function () {
             var claim = readActiveClaim();
+
+            if (claim && claim.id !== TAB_ID) {
+                // Another tab took over while we weren't looking: let go
+                // instead of fighting it for the slot.
+                if ((claim.ft || 0) >= lastFocusTime || !isThisTabVisibleAndFocused()) {
+                    releaseActiveTab();
+                    stopHeartbeat();
+                    return;
+                }
+            }
+
             if (isTabActive || (claim && claim.id === TAB_ID)) {
                 writeActiveClaim();
             }
@@ -224,7 +234,6 @@
         var wasActive = isTabActive;
         isTabActive = true;
         lastFocusTime = Date.now();
-        lastActiveTabId = TAB_ID;
         writeActiveClaim();
         if (!wasActive) {
             startHeartbeat();
@@ -240,19 +249,51 @@
         }
     }
 
+    function isThisTabVisibleAndFocused() {
+        return !document.hidden && isThisWindowFocused();
+    }
+
+    /**
+     * The shared claim in localStorage is the single source of truth.
+     *
+     * Trusting the local isTabActive flag was the "all tabs reload after a
+     * while" bug: a tab that had been backgrounded, frozen or throttled (Chrome
+     * Memory Saver, Safari, etc.) could miss the storage event that told it to
+     * let go, wake up still believing it was active, and reload alongside the
+     * real active tab. Now, whenever a claim exists, only its owner reloads.
+     */
     function shouldThisTabReload() {
         if (allTabsReload) {
             return true;
         }
 
-        if (isTabActive || thisTabHasActiveClaim()) {
+        if (!STORAGE_OK) {
+            // No shared storage (some private windows): the best we can know
+            // is whether this tab is the one in front of the user.
+            return !document.hidden;
+        }
+
+        var claim = readActiveClaim();
+
+        if (claim) {
+            if (claim.id === TAB_ID) {
+                return true;
+            }
+            // Someone else holds it. Self-correct our stale local state.
+            if (isTabActive) {
+                isTabActive = false;
+            }
+            return false;
+        }
+
+        // Nobody holds the claim (holder closed/navigated away). Only the tab
+        // the user is really looking at may pick it up.
+        if (isThisTabVisibleAndFocused()) {
+            becomeActiveTab();
             return true;
         }
 
-        // Fallback for windows where localStorage is unavailable (private
-        // browsing): if nothing has claimed the slot and this tab was the
-        // last one the user touched, treat it as the active one.
-        return lastActiveTabId === TAB_ID && !readActiveClaim();
+        return false;
     }
 
     window.addEventListener('storage', function (e) {
@@ -261,7 +302,7 @@
         }
 
         if (e.newValue === null) {
-            if (isThisWindowFocused() && !isTabActive) {
+            if (isThisTabVisibleAndFocused() && !isTabActive) {
                 becomeActiveTab();
             }
             return;
@@ -270,12 +311,24 @@
         var claim = readActiveClaim();
 
         if (claim && claim.id !== TAB_ID && isTabActive) {
-            var otherTabFocusTime = claim.ft || 0;
-            if (otherTabFocusTime > lastFocusTime) {
+            if ((claim.ft || 0) >= lastFocusTime || !isThisTabVisibleAndFocused()) {
                 releaseActiveTab();
+            } else {
+                writeActiveClaim(); // we are genuinely the focused one
             }
         }
     });
+
+    // A frozen/discarded tab wakes up with whatever it believed before it
+    // slept. Re-check against the shared claim straight away.
+    function revalidateActiveState() {
+        var claim = readActiveClaim();
+        if (claim && claim.id !== TAB_ID) {
+            isTabActive = false;
+        }
+    }
+    document.addEventListener('resume', revalidateActiveState);
+    window.addEventListener('pageshow', revalidateActiveState);
 
     window.addEventListener('focus', function () {
         becomeActiveTab();
@@ -284,11 +337,11 @@
 
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden) {
-            if (isTabActive || thisTabHasActiveClaim()) {
-                writeActiveClaim();
-            }
+            revalidateActiveState();
             if (isThisWindowFocused()) {
                 becomeActiveTab();
+            } else if (thisTabHasActiveClaim()) {
+                writeActiveClaim();
             }
             catchUpIfNeeded();
         }
@@ -320,7 +373,7 @@
         window.addEventListener(evt, function () {
             // A real close/navigate releases the slot straight away so a
             // sibling tab can take it. A reload keeps it.
-            if (isTabActive && !isReloadingSelf) {
+            if (!isReloadingSelf && thisTabHasActiveClaim()) {
                 try {
                     localStorage.removeItem(ACTIVE_TAB_KEY);
                 } catch (e) {}
@@ -329,36 +382,23 @@
     });
 
     (function initialActiveTabState() {
-        var claim = readActiveClaim();
         var now = Date.now();
-        var claimIsOurs = claim && claim.id === TAB_ID;
-        var claimIsStale = !claim || (now - claim.ts) > ACTIVE_TAB_STALE_MS;
-        var focused = isThisWindowFocused();
+        var focused = isThisTabVisibleAndFocused();
 
         // Did this tab just reload itself? sessionStorage is per-tab and
         // survives a reload, so it answers that even when localStorage is
-        // unavailable (private windows).
+        // unavailable. The flag is timestamped so a copied sessionStorage
+        // (duplicated tab) can't carry a stale "I just reloaded" forever.
         var justReloaded = false;
         try {
-            justReloaded = '1' === sessionStorage.getItem(RECLAIM_KEY);
-            if (justReloaded) {
-                sessionStorage.removeItem(RECLAIM_KEY);
-            }
+            var flag = parseInt(sessionStorage.getItem(RECLAIM_KEY), 10);
+            justReloaded = flag > 0 && (now - flag) < 15000;
+            sessionStorage.removeItem(RECLAIM_KEY);
         } catch (e) {}
 
-        if (claimIsOurs) {
-            lastFocusTime = claim.ft || now;
+        if (justReloaded || focused) {
+            lastFocusTime = now;
             becomeActiveTab();
-        } else if (justReloaded || (claimIsStale && focused)) {
-            // Re-take the slot without needing focus: the user is most likely
-            // still in wp-admin, and this tab is the one they were last
-            // looking at on the front end.
-            lastFocusTime = justReloaded ? now : now;
-            becomeActiveTab();
-        }
-
-        if (claimIsOurs && !heartbeatTimer) {
-            startHeartbeat();
         }
     })();
 
@@ -367,7 +407,7 @@
         // isReloadingSelf comment above).
         isReloadingSelf = true;
         try {
-            sessionStorage.setItem(RECLAIM_KEY, '1');
+            sessionStorage.setItem(RECLAIM_KEY, String(Date.now()));
         } catch (e) {}
 
         if (mode === 'hard') {
@@ -392,7 +432,7 @@
                     return;
                 }
 
-                if (allTabsReload || isTabActive || thisTabHasActiveClaim()) {
+                if (shouldThisTabReload()) {
                     doReload(event.data.reloadMode);
                 }
             };
