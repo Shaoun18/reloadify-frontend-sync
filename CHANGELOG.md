@@ -1,36 +1,97 @@
 ## Changelog
 
+### 1.2.2
+
+*   **Fixed (Speed Boost): the WooCommerce product gallery was shown with a wrong height.** Delay JavaScript parked *every* script until the first interaction, so FlexSlider and the product-gallery code measured the layout at the wrong moment. Delay JavaScript now only holds back third-party tracking, advertising and chat scripts (Google Analytics / Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar). Theme, WooCommerce and page-builder scripts load normally. Add your own patterns with the `reloadify_delay_js_patterns` filter.
+*   **Fixed (Speed Boost): `window.et_pb_init_nav_menu is not a function`.** A `DOMContentLoaded` listener added by one delayed script was replayed immediately, before a later script had defined the function it calls. Replayed listeners now run in order, after the last delayed script.
+*   **Fixed (Speed Boost): removing `?ver=` from CSS/JS could leave visitors on stale files after an update.** The pass was removed; WordPress's own versioning is left intact.
+*   **Fixed (Speed Boost): the activator script is printed only when a script was actually delayed on that page.**
+*   **New (Speed Boost): browser caching & gzip (Apache).** Writes a guarded block to `.htaccess` (every directive wrapped in `<IfModule>`): compression for text, and long-lived caching for images, fonts and video. CSS and JS are deliberately not given long expiry. Skipped on Nginx, multisite, or when `.htaccess` is not writable; removed when the option is switched off, on deactivation and on uninstall.
+*   **New (Speed Boost): skip the Dashicons font for logged-out visitors** unless a stylesheet on the page depends on it.
+*   **New (Speed Boost): weekly cleanup of expired transients** from the options table (skipped when a persistent object cache is in use).
+*   **New (Speed Boost): REST API and oEmbed discovery links are dropped from `<head>`** together with the other unused links.
+*   **Changed: scheduled events** (Media Optimization, transient cleanup) are now always removed on uninstall, not only when "Delete Data on Uninstall" is on.
+*   **Fixed: auto-reload stopped working after a while.** Five separate causes:
+    *   A change that arrived while the tab was not the active one was marked as seen and dropped. It is now remembered and applied the moment the tab becomes active.
+    *   With no active claim, a visible tab still needed keyboard focus to reload, so a preview window sitting beside the editor never did. A visible tab now takes the claim.
+    *   A claim left behind by a tab that was closed, crashed or discarded blocked every other tab indefinitely. Claims nobody has refreshed for 150 seconds are treated as gone, and a tab being frozen hands its claim back.
+    *   One failed read of the timestamp file (for instance caught mid-write) switched polling to admin-ajax permanently, where an expired nonce then ended it silently. It now takes three failures, retries the static file regularly, ignores empty or garbled responses, and a hung request can no longer stall the loop.
+    *   A background tab's timers are throttled to once a minute. The polling beat now comes from a Web Worker (with a plain interval as fallback), so a preview tab behind the editor keeps up.
+*   **Fixed: polling never started** if the private-window detection hung; both probes now time out after 2.5 seconds.
+*   **Changed (Speed Boost): the optimization passes are now a modern list** — each pass is a card with an icon, a title, a description and a switch, all enabled by default, with a toast ("Minify CSS enabled" / "disabled") and an active counter.
+*   **Fixed: reload fired before a save had finished.** The timestamp is now written at the end of the request, so page builders and WooCommerce have finished writing meta. Timestamps are strictly increasing, so two saves in the same second both reload.
+*   **Fixed: `wpml-config.xml` described a different plugin.** It now matches this plugin (Media Optimization attachment meta only; no translatable options or front-end text). The `.pot` file was regenerated (218 strings).
+*   **Removed: all console output and debug logging** (`console.error` in the delayed-script replay, the `error_log()` call after a failed `.htaccess` write) and the discouraged `load_plugin_textdomain()` call — WordPress.org loads translations for the plugin slug automatically.
+*   **Fixed: PHPCS** `WordPress.WP.AlternativeFunctions.rename_rename` (documented exception: `rename()` is the only atomic replace) and `rand_mt_rand` (`random_int()`).
+*   **Fixed: activating through WP-CLI printed a stack trace** from the post-activation redirect.
+*   **Faster (Speed Boost): fewer disk operations per page.** No `realpath()` per stylesheet/script (expensive on Windows), one `stat()` per asset, and the cache folder is listed once per request instead of two `file_exists()` calls per asset. Measured on a WooCommerce page: about 7 ms for all of Speed Boost, 1.2 ms of it for assets.
+*   **Faster: the timestamp file is written atomically** (temp file + rename), so a poll can never read it half-written.
+*   **Faster: the timestamp and admin-ajax URLs are origin-relative**, so opening the site through another host name or scheme than the one stored in WordPress no longer blocks the request and forces the heavy admin-ajax path.
+*   **Faster: hidden tabs that are not the active one stop polling** (they catch up when brought forward), hidden tabs in "all tabs" mode poll at a quarter of the rate, and the admin-ajax cross-check runs every ~2 minutes instead of every ~20 seconds.
+*   **Faster (Speed Boost): large inline `<style>` / `<script>` blocks are minified once and cached by content hash**, instead of being run through the minifier on every page view.
+*   **Faster (Speed Boost): minification has a one-second budget per request**, so the first view after a change can no longer take many seconds; the remaining files are built on the following views.
+*   **Faster (Speed Boost): the cache folder check runs once per request** instead of once per stylesheet and script (on Windows it creates and deletes a temporary file each time).
+*   **Faster: repeated saves within one second** (WooCommerce and page builders update dozens of options at once) rewrite the timestamp file once instead of once per option.
+
+### 1.2.1
+
+*   **Fixed: "Active tab only" turned into "all tabs" after a while.** A tab that had been backgrounded, frozen or throttled by the browser could miss the message telling it to give up the active-tab slot, wake up still believing it was active, and reload together with the real active tab. The shared active-tab claim is now the single source of truth: whenever a claim exists, only its owner reloads, and a stale tab corrects itself instead of reloading.
+*   **Fixed: Duplicated tabs shared one tab ID.** The ID was stored in sessionStorage, which "Duplicate tab" and window.open copy, so two tabs could both look like the claim holder. Every page load now gets its own ID.
+*   **Fixed: Tabs fighting over the active slot.** The heartbeat no longer overwrites a newer claim written by another tab; it lets go instead.
+*   **Fixed: Private windows without storage reloaded every touched tab.** The fallback now reloads only the visible tab.
+*   **Fixed: A freshly opened, focused tab now claims the active slot immediately** instead of waiting for the first click.
+*   **Fixed: Background admin-ajax requests (Heartbeat, post-lock refresh) could count as a content change** and trigger a reload.
+*   **Fixed: Duplicate `added_option` hook registration** removed.
+*   **Fixed (Speed Boost): minified CSS lost its images and fonts.** The cached copy is served from the uploads folder, so every relative `url()` and `@import` in it pointed at the wrong place. They are now rewritten to absolute URLs.
+*   **Fixed (Speed Boost): CSS minifier broke `calc(a + b)`** and rewrote text inside strings and `url()` values. Strings and `url()` are now left untouched, `+` is never tightened, and `a :hover` keeps its meaning.
+*   **Fixed (Speed Boost): JS minifier** could glue `a + +b` into `a++b`, join words across a comment, and mis-read a regex after `return`/`typeof` or nested template literals.
+*   **Fixed (Speed Boost): delayed JavaScript ran out of order.** Scripts are now started one after another, so an inline block never runs before its external file has loaded, and `DOMContentLoaded` / `load` listeners added by delayed scripts are replayed instead of never firing.
+*   **Fixed (Speed Boost): delayed JavaScript missed inline blocks** when a script tag mixed attribute styles; every `<script>` in the tag is now parked reliably, while JSON-LD and templates keep their type.
+*   **Fixed (Speed Boost): scripts that locate themselves by their own URL** (webpack chunks, `document.currentScript`, workers, dynamic imports) are no longer relocated into the cache folder.
+*   **Fixed (Speed Boost): stale cache after a fix.** Cached files now carry a minifier revision, and files that were skipped are remembered instead of being re-read on every request.
+*   **Fixed (Speed Boost): fatal error on hosts without `GLOB_BRACE`** (Alpine/musl) when turning Speed Boost off.
+*   **Fixed (Speed Boost): page-builder frames** (Divi `et_fb`, Elementor, Beaver, Bricks, etc.) and the Customizer are no longer rewritten.
+*   **Fixed (Speed Boost): version query strings** are only removed for visitors, so editors and wp-admin always get fresh files after an update.
+*   **Fixed (Speed Boost): the autosave interval never changed.** WordPress already defines the constant before admin_init, so the old `define()` did nothing; the block and classic editors are now adjusted directly.
+*   **Fixed (Speed Boost): the revision cap could raise a stricter limit** (e.g. `WP_POST_REVISIONS = 3` became 5).
+*   **Fixed (Speed Boost): the front-end Heartbeat was removed for logged-in users**, not just visitors; embeds/emoji CSS handling updated for WordPress 6.4+.
+*   **Fixed (Media Optimization): the "about X% smaller" figure compared WebP with WebP** and showed ~0%; it now measures against the original format.
+*   **Fixed (Media Optimization): disabling it left per-video cron events queued**, and an uploaded video that wasn't an MP4 could be overwritten with MP4 data under its old extension. Non-MP4 videos are now skipped, and unusable attachments no longer block the backfill queue.
+*   **Fixed (Media Optimization): ffmpeg paths containing spaces** (common on Windows) failed to run.
+*   **Fixed (Media Optimization): the backfill regenerated every thumbnail** even when the server cannot produce WebP/AVIF.
+*   **Fixed: changing only the image format via the REST API switched Media Optimization off.** The on/off switch is only touched when the request includes it.
+*   **Fixed (Delete Data on Uninstall): on multisite the main site's choice decided for every site;** each site now uses its own setting. Per-video cron events and Media Optimization post meta are now removed too.
+
 ### 1.2.0
 
-* **Added: Reload all tabs.** A new toggle on the Cross-Browser Reload tab decides whether a change refreshes every open tab and window at once, or only the tab you're actually looking at. "Active tab only" is the default, so background tabs keep their scroll position and form state instead of resetting every time you save. Tabs coordinate through a shared active-tab claim plus BroadcastChannel, with a fallback for private windows where storage is blocked.
-* **Added: Live settings propagation.** Reload mode and the all-tabs flag now ride along on every poll response (both the static timestamp file and the admin-ajax check), so changing either takes effect on tabs that are already open instead of only after their next full page load.
-* **Added: CSS, JavaScript and HTML minification under Speed Boost.** Five new passes — Minify JavaScript, Minify CSS, Minify HTML output, Remove HTML comments, Remove unnecessary whitespace — each individually switchable. Minified CSS/JS are cached in `uploads/reloadify-minify/` and keyed by file size, modification time and plugin version; your original files are never modified, and anything already minified, remote, or over 1 MB is skipped. The JavaScript pass is deliberately conservative and returns the original file untouched whenever it isn't completely confident.
-* **Added: Delayed JavaScript, bundled into Speed Boost.** Non-essential scripts now wait for the first interaction (scroll, tap, key, mouse move) or 7 seconds, whichever comes first. There's no separate switch to find — enabling Speed Boost is all it takes. jQuery, this plugin's own scripts, module scripts, and anything served to a logged-in editor always load immediately, and `reloadify_delay_js_excluded_handles` lets you rescue any other handle.
-* **Changed: Speed Boost, Media Optimization and Delete Data on Uninstall now start switched off.** All three change real output or real files, so they're opt-in on new installs. Existing sites keep whatever you already had set.
-* **Changed: Deleting the plugin keeps your data unless you ask otherwise.** Delete Data on Uninstall defaults to off, and its confirmation now spells out exactly what would be removed and that deactivating alone changes nothing.
-* **Improved: "Optimize existing media now" is dramatically faster.** It used to convert three images per HTTP round trip, which on a real library meant hundreds of sequential requests. Each request now keeps converting for up to 15 seconds, raises the memory and time limits first, and leaves video compression until the images are finished so one slow video can't stall the run.
-* **Fixed: "Active tab only" stopped working after the first reload.** The tab released its active-tab claim on the way out of a reload, then came back with the user's focus still over in wp-admin, so it never re-claimed the slot — leaving that browser with no active tab and nothing to refresh on the next save. The claim now survives a self-initiated reload and is released only on a real close or navigation.
-* **Added: Confirmation toasts on every switch.** Developer Mode, the all-tabs / active-tab mode, each browser's Normal and Incognito window, SVG uploads and the Scroll To Top button all confirm what just changed.
-* **Changed: Shorter notifications.** Speed Boost, Media Optimization and Delete Data on Uninstall now confirm the change in a single line instead of a paragraph.
-* **Improved: Notifications.** Toasts now carry an icon, a dismiss button and a clean single-line layout.
-* **Fixed: Translation template.** JavaScript strings containing `\uXXXX` escapes were being written into the .pot with the escape intact, so those msgids could never match what `wp.i18n` looks up at runtime and translations for them silently did nothing. The .pot is regenerated for 1.2.0 with real characters (189 strings).
+*   **Added: Reload all tabs.** A new toggle on the Cross-Browser Reload tab decides whether a change refreshes every open tab and window at once, or only the tab you're actually looking at. "Active tab only" is the default, so background tabs keep their scroll position and form state instead of resetting every time you save. Tabs coordinate through a shared active-tab claim plus BroadcastChannel, with a fallback for private windows where storage is blocked.
+*   **Added: Live settings propagation.** Reload mode and the all-tabs flag now ride along on every poll response (both the static timestamp file and the admin-ajax check), so changing either takes effect on tabs that are already open instead of only after their next full page load.
+*   **Added: CSS, JavaScript and HTML minification under Speed Boost.** Five new passes — Minify JavaScript, Minify CSS, Minify HTML output, Remove HTML comments, Remove unnecessary whitespace — each individually switchable. Minified CSS/JS are cached in `uploads/reloadify-minify/` and keyed by file size, modification time and plugin version; your original files are never modified, and anything already minified, remote, or over 1 MB is skipped. The JavaScript pass is deliberately conservative and returns the original file untouched whenever it isn't completely confident.
+*   **Added: Delayed JavaScript, bundled into Speed Boost.** Non-essential scripts now wait for the first interaction (scroll, tap, key, mouse move) or 7 seconds, whichever comes first. There's no separate switch to find — enabling Speed Boost is all it takes. jQuery, this plugin's own scripts, module scripts, and anything served to a logged-in editor always load immediately, and `reloadify_delay_js_excluded_handles` lets you rescue any other handle.
+*   **Changed: Speed Boost, Media Optimization and Delete Data on Uninstall now start switched off.** All three change real output or real files, so they're opt-in on new installs. Existing sites keep whatever you already had set.
+*   **Changed: Deleting the plugin keeps your data unless you ask otherwise.** Delete Data on Uninstall defaults to off, and its confirmation now spells out exactly what would be removed and that deactivating alone changes nothing.
+*   **Improved: "Optimize existing media now" is dramatically faster.** It used to convert three images per HTTP round trip, which on a real library meant hundreds of sequential requests. Each request now keeps converting for up to 15 seconds, raises the memory and time limits first, and leaves video compression until the images are finished so one slow video can't stall the run.
+*   **Fixed: "Active tab only" stopped working after the first reload.** The tab released its active-tab claim on the way out of a reload, then came back with the user's focus still over in wp-admin, so it never re-claimed the slot — leaving that browser with no active tab and nothing to refresh on the next save. The claim now survives a self-initiated reload and is released only on a real close or navigation.
+*   **Added: Confirmation toasts on every switch.** Developer Mode, the all-tabs / active-tab mode, each browser's Normal and Incognito window, SVG uploads and the Scroll To Top button all confirm what just changed.
+*   **Changed: Shorter notifications.** Speed Boost, Media Optimization and Delete Data on Uninstall now confirm the change in a single line instead of a paragraph.
+*   **Improved: Notifications.** Toasts now carry an icon, a dismiss button and a clean single-line layout.
+*   **Fixed: Translation template.** JavaScript strings containing `\uXXXX` escapes were being written into the .pot with the escape intact, so those msgids could never match what `wp.i18n` looks up at runtime and translations for them silently did nothing. The .pot is regenerated for 1.2.0 with real characters (189 strings).
 
 ### 1.1.4
 
-* **Changed: Settings now save automatically.** Every toggle, radio, and field on the Cross-Browser Reload, Server Performance, and Extensions tabs saves itself the moment you change it — no more "Save Changes" button and no risk of losing changes by navigating away before clicking it.
-* **Changed: Default enabled browsers.** New installs now enable only Chrome, Edge, and Safari out of the box instead of all ten supported browsers. Enable any of the rest (Brave, Firefox, Opera, UC Browser, Vivaldi, Yandex Browser, Samsung Internet) from the Browsers & windows section whenever you need to test in them. Existing installs keep whatever browsers you already had enabled.
-* **Fixed: Broken dash characters in Media Optimization badges and the Heartbeat label.** Several UI strings used a `\u2013`-style escape inside single-quoted PHP strings, which PHP doesn't interpret — so the badges literally showed the text `\u2013` instead of an en dash. Replaced with real UTF-8 characters.
-* **Updated: Translation template (.pot) regenerated** — it was still tagged 1.1.1 and pointed at pre-reorg file paths (`includes/class-*.php` instead of `includes/extensions/` and `includes/admin/`), so translators using it would get stale source references and miss newer strings (e.g. the wp-embed toggle). Now in sync with the current source tree.
+*   **Changed: Settings now save automatically.** Every toggle, radio, and field on the Cross-Browser Reload, Server Performance, and Extensions tabs saves itself the moment you change it — no more "Save Changes" button and no risk of losing changes by navigating away before clicking it.
+*   **Changed: Default enabled browsers.** New installs now enable only Chrome, Edge, and Safari out of the box instead of all ten supported browsers. Enable any of the rest (Brave, Firefox, Opera, UC Browser, Vivaldi, Yandex Browser, Samsung Internet) from the Browsers & windows section whenever you need to test in them. Existing installs keep whatever browsers you already had enabled.
+*   **Fixed: Broken dash characters in Media Optimization badges and the Heartbeat label.** Several UI strings used a `\u2013`-style escape inside single-quoted PHP strings, which PHP doesn't interpret — so the badges literally showed the text `\u2013` instead of an en dash. Replaced with real UTF-8 characters.
+*   **Updated: Translation template (.pot) regenerated** — it was still tagged 1.1.1 and pointed at pre-reorg file paths (`includes/class-*.php` instead of `includes/extensions/` and `includes/admin/`), so translators using it would get stale source references and miss newer strings (e.g. the wp-embed toggle). Now in sync with the current source tree.
 
-### 1.1.3
-
-* **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
-* **Improved: .htaccess error handling** — permission checks now run before attempting writes; write failures are logged instead of silently crashing; file existence validated after write attempts.
-* **Added: Apache mod_php detection** — prevents attempting .htaccess modifications on Nginx or PHP-FPM setups; users get a clear error message instead of a 500 error.
-* **Added: Automatic .htaccess backups** — creates backup before modifying existing .htaccess files so users can recover if something goes wrong.
-* **Added fallback cache directives** — .htaccess now includes mod_expires as fallback for servers without mod_headers enabled.
-* **Confirmed compatible with WordPress 7.1** ("Tested up to: 7.1").
-* Enhanced Speed Boost with additional server-side optimizations for better performance.
+### 1.1.3 
+*   **Fixed: Apache 500 Internal Server Error** when clicking "Attempt automatic server override" — the plugin was writing .htaccess files without validating server type, permissions, or write success, causing crashes on Apache. Now validates server type first (Apache with mod_php) and creates backups before modifications.
+*   **Improved: .htaccess error handling** — permission checks now run before attempting writes; write failures are logged instead of silently crashing; file existence validated after write attempts.
+*   **Added: Apache mod_php detection** — prevents attempting .htaccess modifications on Nginx or PHP-FPM setups; users get a clear error message instead of a 500 error.
+*   **Added: Automatic .htaccess backups** — creates backup before modifying existing .htaccess files so users can recover if something goes wrong.
+*   **Added fallback cache directives** — .htaccess now includes mod_expires as fallback for servers without mod_headers enabled.
+*   **Confirmed compatible with WordPress 7.1** ("Tested up to: 7.1").
+*   Enhanced Speed Boost with additional server-side optimizations for better performance.
 
 ### 1.1.2
 

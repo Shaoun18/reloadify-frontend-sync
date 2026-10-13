@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	WPML / Polylang configuration for Reloadify Frontend Sync.
+
+	What this plugin stores, and why it needs so little here:
+
+	* It has no custom post types, taxonomies, shortcodes, blocks or
+	  front-end text, and none of its options hold text a visitor reads
+	  (they are switches, intervals and server settings), so there is
+	  nothing to register under <custom-types>, <taxonomies>,
+	  <shortcodes> or <admin-texts>.
+	* The only per-item data is bookkeeping that Media Optimization writes on
+	  attachments. WPML duplicates attachments per language, and every copy
+	  points at the SAME file on disk. The meta is therefore copied to the
+	  translations, so a duplicate is not optimised a second time.
+	* Admin screens are translated with the standard gettext text domain
+	  "reloadify-frontend-sync" (see /languages), not with String Translation.
+	* The reload channel (timestamp file and admin-ajax URL) is origin-relative,
+	  so it works unchanged with WPML's "different domain per language" and
+	  "language in directory" URL formats.
+-->
+<wpml-config>
+	<custom-fields>
+		<custom-field action="copy">_reloadify_media_optimized</custom-field>
+		<custom-field action="copy">_reloadify_media_video_optimized</custom-field>
+		<custom-field action="copy">_reloadify_media_stats</custom-field>
+	</custom-fields>
+</wpml-config>

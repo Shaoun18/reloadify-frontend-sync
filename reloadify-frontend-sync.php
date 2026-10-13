@@ -4,8 +4,8 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
- * Version:           1.2.0
- * Author:            Programmershaoun
+ * Version:           1.2.2
+ * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
  * Domain Path:       /languages
@@ -13,14 +13,13 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Requires at least: 6.4
  * Requires PHP:      7.4
- * Tested up to:      7.1
  */
 
 if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.2.0');
+define('RELOADIFY_VERSION', '1.2.2');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -53,6 +52,7 @@ class Reloadify_Frontend_Sync
 	{
 		register_activation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Settings', 'activate']);
 		register_deactivation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Media', 'deactivate']);
+		register_deactivation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Speed', 'deactivate']);
 		add_action('activated_plugin', [$this, 'redirect_after_activation']);
 
 		add_action('plugins_loaded', ['Reloadify_Performance', 'apply_runtime_overrides'], 0);
@@ -79,7 +79,6 @@ class Reloadify_Frontend_Sync
 		add_action('woocommerce_new_order', [$this, 'record_site_update_now']);
 		add_action('woocommerce_update_order', [$this, 'record_site_update_now']);
 		add_action('woocommerce_order_status_changed', [$this, 'record_site_update_now']);
-		add_action('added_option', [$this, 'maybe_record_option_change'], 10, 2);
 		add_action('updated_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('added_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('deleted_option', [$this, 'maybe_record_option_change'], 10, 1);
@@ -97,6 +96,12 @@ class Reloadify_Frontend_Sync
 	public function redirect_after_activation($plugin)
 	{
 		if ($plugin !== plugin_basename(RELOADIFY_PLUGIN_FILE)) {
+			return;
+		}
+
+		// WP-CLI, cron and REST/AJAX activations have no browser to redirect;
+		// calling exit() there aborts the command with a stack trace.
+		if ((defined('WP_CLI') && WP_CLI) || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST) || wp_doing_cron()) {
 			return;
 		}
 
@@ -144,6 +149,17 @@ class Reloadify_Frontend_Sync
 
 		if (! $is_admin_context || ! $is_write_method) {
 			return;
+		}
+
+		// Background admin-ajax chatter (Heartbeat, post-lock refresh) writes
+		// options on its own and is not a content change -- don't let it
+		// trigger a frontend reload.
+		if (function_exists('wp_doing_ajax') && wp_doing_ajax()) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only comparison against a fixed allow-list; nothing is processed or saved.
+			$ajax_action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
+			if (in_array($ajax_action, ['heartbeat', 'wp-remove-post-lock', 'reloadify_reloader_check'], true)) {
+				return;
+			}
 		}
 
 		if (0 === strpos($option, 'reloadify_')) {
@@ -215,7 +231,8 @@ class Reloadify_Frontend_Sync
 		);
 
 		wp_localize_script('reloadify-reloader-js', 'ReloadifySync', [
-			'ajax_url'         => admin_url('admin-ajax.php'),
+			// Origin-relative for the same reason as the timestamp URL.
+			'ajax_url'         => wp_make_link_relative(admin_url('admin-ajax.php')),
 			'timestamp_url'    => Reloadify_Settings::get_timestamp_file_url(),
 			'timestamp'        => Reloadify_Settings::get_site_updated_at(),
 			'interval'         => (int) $settings['poll_interval'],

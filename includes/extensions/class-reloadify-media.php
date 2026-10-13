@@ -223,14 +223,13 @@ class Reloadify_Media {
 	}
 
 	private static function clear_scheduled_events() {
-		wp_clear_scheduled_hook( self::CRON_HOOK_BACKFILL );
-		wp_clear_scheduled_hook( self::CRON_HOOK_VIDEO_BACKFILL );
-
-		$timestamp = wp_next_scheduled( self::CRON_HOOK_VIDEO );
-		while ( $timestamp ) {
-			wp_unschedule_event( $timestamp, self::CRON_HOOK_VIDEO );
-			$timestamp = wp_next_scheduled( self::CRON_HOOK_VIDEO );
-		}
+		// wp_unschedule_hook() removes every event on the hook whatever its
+		// arguments. The per-video events are scheduled WITH an attachment ID
+		// argument, which wp_next_scheduled( $hook ) (no args) never finds, so
+		// the old loop left them queued.
+		wp_unschedule_hook( self::CRON_HOOK_BACKFILL );
+		wp_unschedule_hook( self::CRON_HOOK_VIDEO_BACKFILL );
+		wp_unschedule_hook( self::CRON_HOOK_VIDEO );
 	}
 
 	private static function schedule_backfill() {
@@ -322,10 +321,15 @@ class Reloadify_Media {
 			],
 		] );
 
+		// With no WebP/AVIF support on this server there is nothing to convert
+		// to, and regenerating every thumbnail would burn CPU and rewrite files
+		// for no gain -- just record the image as checked.
+		$can_convert = (bool) self::preferred_image_format();
+
 		foreach ( $query->posts as $attachment_id ) {
 			$file = get_attached_file( $attachment_id );
 
-			if ( $file && file_exists( $file ) ) {
+			if ( $can_convert && $file && file_exists( $file ) ) {
 				$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
 				if ( $metadata ) {
 					wp_update_attachment_metadata( $attachment_id, $metadata );
@@ -472,7 +476,14 @@ class Reloadify_Media {
 		$editor->resize( (int) $sample['width'], (int) $sample['height'], false );
 		$ext           = ( 'image/png' === $mime ) ? 'png' : 'jpg';
 		$comparison_path = $base_dir . 'reloadify-media-compare-' . $attachment_id . '.' . $ext;
-		$saved          = $editor->save( $comparison_path, $mime );
+
+		// save() runs the same image_editor_output_format filter this class
+		// registers, so without this the "before" file would be converted to
+		// WebP/AVIF too and the comparison would measure WebP against WebP
+		// (always ~0% saved). Step aside for this one save.
+		remove_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10 );
+		$saved = $editor->save( $comparison_path, $mime );
+		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
 
 		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! file_exists( $saved['path'] ) ) {
 			if ( file_exists( $comparison_path ) ) {
@@ -544,13 +555,31 @@ class Reloadify_Media {
 		$file = get_attached_file( $attachment_id );
 
 		if ( ! $file || ! file_exists( $file ) ) {
+			// Mark it checked, otherwise the backfill keeps re-selecting the same
+			// unusable attachment and never reaches the ones behind it.
+			update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 1 );
+			return;
+		}
+
+		// The result is an MP4 written over the original file, so only files
+		// that already ARE mp4 are safe to replace in place. A .webm/.mov/.avi
+		// holding MP4 data would stop playing.
+		$extension = strtolower( pathinfo( $file, PATHINFO_EXTENSION ) );
+		if ( ! in_array( $extension, [ 'mp4', 'm4v' ], true ) ) {
+			update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 1 );
 			return;
 		}
 
 		$original_size = filesize( $file );
 
 		if ( ! $original_size ) {
+			update_post_meta( $attachment_id, self::VIDEO_BACKFILL_META_KEY, 1 );
 			return;
+		}
+
+		if ( function_exists( 'set_time_limit' ) ) {
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- background video job; without this a long encode can be cut off mid-way.
+			@set_time_limit( 0 );
 		}
 
 		$tmp_out       = $file . '.reloadify-optimized.mp4';
@@ -560,7 +589,9 @@ class Reloadify_Media {
 		$cmd        = sprintf(
 			'%s%s -y -i %s -c:v libx264 -crf 26 -preset veryfast -c:a aac -b:a 128k -movflags +faststart %s 2>&1',
 			$is_windows ? '' : 'nice -n 19 ',
-			escapeshellcmd( $ffmpeg ),
+			// escapeshellarg(), not escapeshellcmd(): the latter doesn't quote, so an
+			// ffmpeg path containing spaces (common on Windows) breaks.
+			escapeshellarg( $ffmpeg ),
 			escapeshellarg( $file ),
 			escapeshellarg( $tmp_out )
 		);
@@ -587,6 +618,12 @@ class Reloadify_Media {
 
 			if ( $moved ) {
 				clean_attachment_cache( $attachment_id );
+
+				$attachment_meta = wp_get_attachment_metadata( $attachment_id );
+				if ( is_array( $attachment_meta ) && isset( $attachment_meta['filesize'] ) ) {
+					$attachment_meta['filesize'] = $optimized_size;
+					wp_update_attachment_metadata( $attachment_id, $attachment_meta );
+				}
 
 				update_post_meta( $attachment_id, self::STATS_META_KEY, [
 					'type'              => 'video',

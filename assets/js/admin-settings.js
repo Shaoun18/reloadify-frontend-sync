@@ -573,7 +573,62 @@
 
     /* ---------------- Speed Boost Card ---------------- */
 
-    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace'];
+    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace', 'delay_js', 'browser_cache', 'dashicons', 'db_cleanup'];
+
+    /* One small inline SVG per pass (24x24, stroke icons) so the list stays dependency-free. */
+    var PASS_ICONS = {
+        minify_js: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12',
+        minify_css: 'M4 4h16l-1.5 14L12 20l-6.5-2L4 4zM8 9h8M8.5 13h7',
+        minify_html: 'M9 8l-5 4 5 4M15 8l5 4-5 4',
+        remove_html_comments: 'M4 5h16v11H9l-5 4V5zM9 9.5l5 3M14 9.5l-5 3',
+        collapse_whitespace: 'M4 6h16M4 18h16M12 9v6M9 12l3-3 3 3',
+        delay_js: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
+        browser_cache: 'M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5',
+        dashicons: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7L12 3z',
+        db_cleanup: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6'
+    };
+
+    function passTitle(key) {
+        var titles = {
+            minify_js: __('Minify JavaScript', 'reloadify-frontend-sync'),
+            minify_css: __('Minify CSS', 'reloadify-frontend-sync'),
+            minify_html: __('Minify HTML output', 'reloadify-frontend-sync'),
+            remove_html_comments: __('Remove HTML comments', 'reloadify-frontend-sync'),
+            collapse_whitespace: __('Remove unnecessary whitespace', 'reloadify-frontend-sync'),
+            delay_js: __('Delay tracking & chat scripts', 'reloadify-frontend-sync'),
+            browser_cache: __('Browser caching & compression', 'reloadify-frontend-sync'),
+            dashicons: __('Skip Dashicons for visitors', 'reloadify-frontend-sync'),
+            db_cleanup: __('Weekly transient cleanup', 'reloadify-frontend-sync')
+        };
+        return titles[key] || key;
+    }
+
+    function passDescription(key) {
+        var text = {
+            minify_js: __('Shrinks theme and plugin JavaScript files. Cached copies only \u2014 your originals are never touched.', 'reloadify-frontend-sync'),
+            minify_css: __('Shrinks stylesheets and keeps images and fonts working by rewriting their paths.', 'reloadify-frontend-sync'),
+            minify_html: __('Compresses the HTML WordPress sends to the browser, including large inline CSS and JS.', 'reloadify-frontend-sync'),
+            remove_html_comments: __('Strips developer comments from the page source (conditional comments are kept).', 'reloadify-frontend-sync'),
+            collapse_whitespace: __('Collapses extra spaces and line breaks. <pre> and <textarea> are left alone.', 'reloadify-frontend-sync'),
+            delay_js: __('Holds back analytics, ads and chat widgets until the first interaction. Theme and WooCommerce scripts always load normally.', 'reloadify-frontend-sync'),
+            browser_cache: __('gzip plus long-lived caching for images, fonts and video via .htaccess (Apache only; skipped when not writable).', 'reloadify-frontend-sync'),
+            dashicons: __('Stops loading the Dashicons font for logged-out visitors unless a stylesheet depends on it.', 'reloadify-frontend-sync'),
+            db_cleanup: __('Deletes expired transients from the options table once a week to keep database queries fast.', 'reloadify-frontend-sync')
+        };
+        return text[key] || '';
+    }
+
+    function PassIcon(props) {
+        return el(
+            'span',
+            { className: 'reloadify-pass-icon', 'aria-hidden': 'true' },
+            el(
+                'svg',
+                { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' },
+                el('path', { d: PASS_ICONS[props.name] || PASS_ICONS.minify_js })
+            )
+        );
+    }
 
     function SpeedBoostCard(props) {
         var speed = props.speed;
@@ -608,27 +663,45 @@
         function toggleOption(key) {
             var next = Object.assign({}, options);
             next[key] = !next[key];
-            save({ options: next });
+            save({ options: next }, function (response) {
+                var on = !!(response.options && response.options[key]);
+                props.onToast(on ? 'success' : 'info', on
+                    ? passTitle(key) + ' ' + __('enabled', 'reloadify-frontend-sync')
+                    : passTitle(key) + ' ' + __('disabled', 'reloadify-frontend-sync'));
+            });
         }
+
+        var activeCount = SPEED_OPTION_ORDER.filter(function (key) { return !!options[key]; }).length;
 
         var optionList = speed.enabled && el(
             'div',
             { className: 'reloadify-speed-options' },
-            el('div', { className: 'reloadify-speed-options-label' }, __('Optimization passes', 'reloadify-frontend-sync')),
-            SPEED_OPTION_ORDER.map(function (key) {
-                if (!Object.prototype.hasOwnProperty.call(labels, key)) { return null; }
-                return el(
-                    'label',
-                    { key: key, className: 'reloadify-speed-option' },
-                    el('input', {
-                        type: 'checkbox',
-                        checked: !!options[key],
-                        disabled: saving,
-                        onChange: function () { toggleOption(key); }
-                    }),
-                    el('span', null, labels[key])
-                );
-            })
+            el(
+                'div',
+                { className: 'reloadify-speed-options-label' },
+                el('span', null, __('Optimization passes', 'reloadify-frontend-sync')),
+                el('span', { className: 'reloadify-pass-count' }, activeCount + ' / ' + SPEED_OPTION_ORDER.length + ' ' + __('active', 'reloadify-frontend-sync'))
+            ),
+            el(
+                'div',
+                { className: 'reloadify-pass-list' },
+                SPEED_OPTION_ORDER.map(function (key) {
+                    if (!Object.prototype.hasOwnProperty.call(labels, key)) { return null; }
+                    var on = !!options[key];
+                    return el(
+                        'div',
+                        { key: key, className: 'reloadify-pass' + (on ? ' is-on' : ' is-off') },
+                        el(PassIcon, { name: key }),
+                        el(
+                            'div',
+                            { className: 'reloadify-pass-text' },
+                            el('strong', { className: 'reloadify-pass-title' }, passTitle(key)),
+                            el('span', { className: 'reloadify-pass-desc' }, passDescription(key) || labels[key])
+                        ),
+                        el(Switch, { checked: on, onChange: function () { toggleOption(key); }, disabled: saving })
+                    );
+                })
+            )
         );
 
         return el(
@@ -768,12 +841,14 @@
             } else if (videosStuck && !stillPending) {
                 statusNode = el('span', { className: 'reloadify-media-backfill-status reloadify-media-backfill-status--error' },
                     wp.i18n.sprintf(
+                        /* translators: %d: number of videos that could not be compressed. */
                         __('%d video(s) not compressed \u2014 ffmpeg isn\u2019t available on this server', 'reloadify-frontend-sync'),
                         progress.videos_unavailable
                     )
                 );
             } else {
                 statusNode = el('span', { className: 'reloadify-media-backfill-status' },
+                    /* translators: 1: number of images still waiting, 2: number of videos still waiting. */
                     wp.i18n.sprintf(__('%1$d images, %2$d videos left', 'reloadify-frontend-sync'), progress.images_remaining, progress.videos_remaining)
                 );
             }

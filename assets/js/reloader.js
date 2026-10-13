@@ -127,23 +127,34 @@
      */
 
     var ACTIVE_TAB_KEY = 'reloadify_active_tab';
-    var ACTIVE_TAB_STALE_MS = 6000;
     var ACTIVE_TAB_HEARTBEAT_MS = 2000;
 
-    var lastFocusTime = 0;
-    var lastActiveTabId = null;
+    // A claim nobody has refreshed for this long belongs to a tab that is gone
+    // (crashed, discarded by the browser, closed without a chance to clean up).
+    // Generous on purpose: a hidden tab's timers can be throttled to once a
+    // minute, and a live holder must never look dead.
+    var CLAIM_STALE_MS = 150000;
+    var lastClaimWrite = 0;
 
-    var TAB_ID = (function () {
+    // Set when a change arrived while this tab was not the one meant to
+    // reload; honoured the moment the tab becomes the active one.
+    var missedChange = false;
+    var isReloadingSelf = false;
+
+    var lastFocusTime = 0;
+
+    // A fresh id on every page load. It used to live in sessionStorage, but
+    // "Duplicate tab" (and window.open) copies sessionStorage -- two tabs then
+    // shared one id and both looked like the holder of the active claim.
+    var TAB_ID = 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
+    var STORAGE_OK = (function () {
         try {
-            var existing = sessionStorage.getItem('reloadify_tab_id');
-            if (existing) {
-                return existing;
-            }
-            var id = 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-            sessionStorage.setItem('reloadify_tab_id', id);
-            return id;
+            localStorage.setItem('__reloadify_probe__', '1');
+            localStorage.removeItem('__reloadify_probe__');
+            return true;
         } catch (e) {
-            return 'rt-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            return false;
         }
     })();
 
@@ -186,12 +197,25 @@
         }
     }
 
+    /** The claim, unless it was left behind by a tab that no longer exists. */
+    function readLiveClaim() {
+        var claim = readActiveClaim();
+        if (!claim) {
+            return null;
+        }
+        if (claim.id !== TAB_ID && (Date.now() - (claim.ts || 0)) > CLAIM_STALE_MS) {
+            return null;
+        }
+        return claim;
+    }
+
     function thisTabHasActiveClaim() {
         var claim = readActiveClaim();
         return !!(claim && claim.id === TAB_ID);
     }
 
     function writeActiveClaim() {
+        lastClaimWrite = Date.now();
         try {
             localStorage.setItem(ACTIVE_TAB_KEY, JSON.stringify({
                 id: TAB_ID,
@@ -213,7 +237,18 @@
     function startHeartbeat() {
         stopHeartbeat();
         heartbeatTimer = setInterval(function () {
-            var claim = readActiveClaim();
+            var claim = readLiveClaim();
+
+            if (claim && claim.id !== TAB_ID) {
+                // Another tab took over while we weren't looking: let go
+                // instead of fighting it for the slot.
+                if ((claim.ft || 0) >= lastFocusTime || !isThisTabVisibleAndFocused()) {
+                    releaseActiveTab();
+                    stopHeartbeat();
+                    return;
+                }
+            }
+
             if (isTabActive || (claim && claim.id === TAB_ID)) {
                 writeActiveClaim();
             }
@@ -224,7 +259,6 @@
         var wasActive = isTabActive;
         isTabActive = true;
         lastFocusTime = Date.now();
-        lastActiveTabId = TAB_ID;
         writeActiveClaim();
         if (!wasActive) {
             startHeartbeat();
@@ -240,19 +274,66 @@
         }
     }
 
+    function isThisTabVisibleAndFocused() {
+        return !document.hidden && isThisWindowFocused();
+    }
+
+    /**
+     * The shared claim in localStorage is the single source of truth.
+     *
+     * Trusting only a tab's own isTabActive flag was the "all tabs reload
+     * after a while" bug: a tab that had been backgrounded, frozen or
+     * throttled could miss the storage event that told it to let go, wake up
+     * still believing it was active, and reload alongside the real active tab.
+     * So while a LIVE claim exists, only its owner reloads.
+     *
+     * The opposite failure is just as bad -- nobody reloading. That happens
+     * when the claim is missing, or left behind by a tab that no longer
+     * exists. In that case the tab in front of the user (visible; it does not
+     * need keyboard focus, because a preview window beside the editor never
+     * has it) takes the claim and reloads.
+     */
     function shouldThisTabReload() {
         if (allTabsReload) {
             return true;
         }
 
-        if (isTabActive || thisTabHasActiveClaim()) {
+        if (!STORAGE_OK) {
+            // No shared storage (some private windows): the best we can know
+            // is whether this tab is the one in front of the user.
+            return !document.hidden;
+        }
+
+        var claim = readLiveClaim();
+
+        if (claim) {
+            if (claim.id === TAB_ID) {
+                return true;
+            }
+            // Someone else holds it. Self-correct our stale local state.
+            if (isTabActive) {
+                isTabActive = false;
+            }
+            return false;
+        }
+
+        if (!document.hidden) {
+            becomeActiveTab();
             return true;
         }
 
-        // Fallback for windows where localStorage is unavailable (private
-        // browsing): if nothing has claimed the slot and this tab was the
-        // last one the user touched, treat it as the active one.
-        return lastActiveTabId === TAB_ID && !readActiveClaim();
+        return false;
+    }
+
+    /** A change was skipped earlier; act on it now that this tab is the active one. */
+    function reloadIfMissed() {
+        if (!missedChange || allTabsReload) {
+            return;
+        }
+        if (shouldThisTabReload()) {
+            missedChange = false;
+            doReload(reloadMode);
+        }
     }
 
     window.addEventListener('storage', function (e) {
@@ -261,8 +342,9 @@
         }
 
         if (e.newValue === null) {
-            if (isThisWindowFocused() && !isTabActive) {
+            if (!document.hidden && !isTabActive) {
                 becomeActiveTab();
+                reloadIfMissed();
             }
             return;
         }
@@ -270,26 +352,54 @@
         var claim = readActiveClaim();
 
         if (claim && claim.id !== TAB_ID && isTabActive) {
-            var otherTabFocusTime = claim.ft || 0;
-            if (otherTabFocusTime > lastFocusTime) {
+            if ((claim.ft || 0) >= lastFocusTime || !isThisTabVisibleAndFocused()) {
                 releaseActiveTab();
+            } else {
+                writeActiveClaim(); // we are genuinely the focused one
             }
         }
     });
 
+    // A frozen/discarded tab wakes up with whatever it believed before it
+    // slept. Re-check against the shared claim straight away.
+    function revalidateActiveState() {
+        var claim = readLiveClaim();
+        if (claim && claim.id !== TAB_ID) {
+            isTabActive = false;
+        } else if (!claim && !document.hidden) {
+            becomeActiveTab();
+        }
+    }
+
+    // A tab the browser is about to freeze stops running timers; hand the slot
+    // back so a sibling can take it instead of everyone waiting on a ghost.
+    document.addEventListener('freeze', function () {
+        if (!isReloadingSelf && thisTabHasActiveClaim()) {
+            try {
+                localStorage.removeItem(ACTIVE_TAB_KEY);
+            } catch (e) {}
+        }
+        isTabActive = false;
+        stopHeartbeat();
+    });
+    document.addEventListener('resume', revalidateActiveState);
+    window.addEventListener('pageshow', revalidateActiveState);
+
     window.addEventListener('focus', function () {
         becomeActiveTab();
+        reloadIfMissed();
         catchUpIfNeeded();
     });
 
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden) {
-            if (isTabActive || thisTabHasActiveClaim()) {
-                writeActiveClaim();
-            }
+            revalidateActiveState();
             if (isThisWindowFocused()) {
                 becomeActiveTab();
+            } else if (thisTabHasActiveClaim()) {
+                writeActiveClaim();
             }
+            reloadIfMissed();
             catchUpIfNeeded();
         }
     });
@@ -299,6 +409,7 @@
             var wasAlreadyActive = isTabActive;
             becomeActiveTab();
             if (!wasAlreadyActive) {
+                reloadIfMissed();
                 catchUpIfNeeded();
             }
         }, { passive: true, capture: true });
@@ -313,14 +424,13 @@
      * and so never re-claimed the active slot -- leaving the browser with no
      * active tab at all, and nothing to reload on the next save.
      */
-    var isReloadingSelf = false;
     var RECLAIM_KEY = 'reloadify_reclaim';
 
     ['pagehide', 'beforeunload'].forEach(function (evt) {
         window.addEventListener(evt, function () {
             // A real close/navigate releases the slot straight away so a
             // sibling tab can take it. A reload keeps it.
-            if (isTabActive && !isReloadingSelf) {
+            if (!isReloadingSelf && thisTabHasActiveClaim()) {
                 try {
                     localStorage.removeItem(ACTIVE_TAB_KEY);
                 } catch (e) {}
@@ -329,36 +439,23 @@
     });
 
     (function initialActiveTabState() {
-        var claim = readActiveClaim();
         var now = Date.now();
-        var claimIsOurs = claim && claim.id === TAB_ID;
-        var claimIsStale = !claim || (now - claim.ts) > ACTIVE_TAB_STALE_MS;
-        var focused = isThisWindowFocused();
+        var focused = isThisTabVisibleAndFocused();
 
         // Did this tab just reload itself? sessionStorage is per-tab and
         // survives a reload, so it answers that even when localStorage is
-        // unavailable (private windows).
+        // unavailable. The flag is timestamped so a copied sessionStorage
+        // (duplicated tab) can't carry a stale "I just reloaded" forever.
         var justReloaded = false;
         try {
-            justReloaded = '1' === sessionStorage.getItem(RECLAIM_KEY);
-            if (justReloaded) {
-                sessionStorage.removeItem(RECLAIM_KEY);
-            }
+            var flag = parseInt(sessionStorage.getItem(RECLAIM_KEY), 10);
+            justReloaded = flag > 0 && (now - flag) < 15000;
+            sessionStorage.removeItem(RECLAIM_KEY);
         } catch (e) {}
 
-        if (claimIsOurs) {
-            lastFocusTime = claim.ft || now;
+        if (justReloaded || focused) {
+            lastFocusTime = now;
             becomeActiveTab();
-        } else if (justReloaded || (claimIsStale && focused)) {
-            // Re-take the slot without needing focus: the user is most likely
-            // still in wp-admin, and this tab is the one they were last
-            // looking at on the front end.
-            lastFocusTime = justReloaded ? now : now;
-            becomeActiveTab();
-        }
-
-        if (claimIsOurs && !heartbeatTimer) {
-            startHeartbeat();
         }
     })();
 
@@ -367,7 +464,7 @@
         // isReloadingSelf comment above).
         isReloadingSelf = true;
         try {
-            sessionStorage.setItem(RECLAIM_KEY, '1');
+            sessionStorage.setItem(RECLAIM_KEY, String(Date.now()));
         } catch (e) {}
 
         if (mode === 'hard') {
@@ -392,7 +489,7 @@
                     return;
                 }
 
-                if (allTabsReload || isTabActive || thisTabHasActiveClaim()) {
+                if (shouldThisTabReload()) {
                     doReload(event.data.reloadMode);
                 }
             };
@@ -410,23 +507,78 @@
         } catch (e) {}
     }
 
+    /**
+     * A steady beat that is not throttled when the tab is in the background.
+     *
+     * Browsers slow a hidden tab's setTimeout/setInterval to once a minute
+     * after a few minutes, so a preview tab left behind the editor noticed
+     * saves up to a minute late -- which looks exactly like "reload stopped
+     * working". A dedicated Worker's timer is not throttled that way, so it
+     * carries the beat and the page does the actual work. A plain interval
+     * stays as a safety net (and as the whole mechanism where Workers are
+     * blocked).
+     */
+    function startTicker(callback, ms) {
+        var safety = setInterval(callback, 5000);
+        var worker = null;
+        var started = false;
+
+        function fallBack() {
+            try {
+                if (worker) {
+                    worker.terminate();
+                }
+            } catch (e) {}
+            worker = null;
+            if (!started) {
+                started = true; // stop the "never ticked" timer from firing again
+            }
+        }
+
+        if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || !window.URL || !URL.createObjectURL) {
+            return safety;
+        }
+
+        try {
+            var blobUrl = URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0);},' + ms + ');'], { type: 'text/javascript' }));
+            worker = new Worker(blobUrl);
+            worker.onmessage = function () {
+                if (!started) {
+                    started = true;
+                    try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+                }
+                callback();
+            };
+            worker.onerror = fallBack;
+        } catch (e) {
+            fallBack();
+        }
+
+        return safety;
+    }
+
     function startPolling(allowed) {
         if (!allowed) {
             return;
         }
 
-        var checkInterval = parseInt(ReloadifySync.interval, 10) || 2000;
+        var checkInterval = Math.max(500, parseInt(ReloadifySync.interval, 10) || 2000);
         var nonce = ReloadifySync.nonce;
         var timestampUrl = ReloadifySync.timestamp_url;
 
         var useStaticFile = !!timestampUrl;
+        var staticFailures = 0;
+        var ajaxChecksSinceFallback = 0;
 
         var currentTimestamp = parseInt(ReloadifySync.timestamp, 10) || 0;
         var hasSyncedBaseline = false;
 
         var checksSinceAjaxVerify = 0;
-        var AJAX_VERIFY_EVERY = 10; // roughly every 10 * checkInterval
-        var scheduledTimeoutId = null;
+        var AJAX_VERIFY_EVERY = 60; // roughly every 60 * checkInterval
+
+        var inFlight = false;
+        var inFlightSince = 0;
+        var nextDueAt = 0;
 
         /**
          * Reload mode and the all-tabs flag ride along on every poll response,
@@ -443,10 +595,23 @@
         }
 
         function scheduleNext(delay) {
-            scheduledTimeoutId = setTimeout(checkForUpdates, delay);
+            inFlight = false;
+            var wait = delay;
+
+            // A hidden tab that is not the one being reloaded can afford to
+            // look less often; it checks at once when it comes back anyway.
+            if (document.hidden && !thisTabHasActiveClaim()) {
+                wait = delay * 4;
+            }
+            nextDueAt = Date.now() + wait;
         }
 
         function handleTimestamp(newTimestamp) {
+            // An empty, partial or garbled response is not "time zero".
+            if (!(newTimestamp > 0)) {
+                return false;
+            }
+
             if (!hasSyncedBaseline) {
                 hasSyncedBaseline = true;
                 currentTimestamp = newTimestamp;
@@ -457,6 +622,7 @@
                 currentTimestamp = newTimestamp;
 
                 if (!shouldThisTabReload()) {
+                    missedChange = true;
                     return false;
                 }
 
@@ -464,40 +630,50 @@
                 doReload(reloadMode);
                 return true;
             }
+
+            if (newTimestamp < currentTimestamp) {
+                currentTimestamp = newTimestamp; // clock moved back: keep following it
+            }
             return false;
         }
 
         function checkViaStaticFile() {
             $.ajax({
-                url: timestampUrl + '?_=' + Date.now(),
+                url: timestampUrl + (timestampUrl.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now(),
                 type: 'GET',
                 timeout: 5000,
                 cache: false,
                 dataType: 'json',
                 headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' },
                 success: function (response) {
-                    if (!response) {
-                        scheduleNext(checkInterval);
-                        return;
-                    }
+                    try {
+                        if (response && typeof response === 'object') {
+                            staticFailures = 0;
+                            applyFreshSettings(response.atr, response.rm);
 
-                    applyFreshSettings(response.atr, response.rm);
+                            if (handleTimestamp(parseInt(response.t, 10))) {
+                                return;
+                            }
 
-                    if (handleTimestamp(parseInt(response.t, 10))) {
-                        return;
-                    }
-
-                    checksSinceAjaxVerify++;
-                    if (hasSyncedBaseline && checksSinceAjaxVerify >= AJAX_VERIFY_EVERY) {
-                        checksSinceAjaxVerify = 0;
-                        checkViaAjax();
-                        return;
-                    }
+                            checksSinceAjaxVerify++;
+                            if (hasSyncedBaseline && !document.hidden && checksSinceAjaxVerify >= AJAX_VERIFY_EVERY) {
+                                checksSinceAjaxVerify = 0;
+                                checkViaAjax();
+                                return;
+                            }
+                        }
+                    } catch (e) {}
 
                     scheduleNext(checkInterval);
                 },
                 error: function () {
-                    useStaticFile = false;
+                    // One bad read (the file caught mid-write, a network blip)
+                    // must not drop us onto the heavy admin-ajax path for good.
+                    staticFailures++;
+                    if (staticFailures >= 3) {
+                        useStaticFile = false;
+                        ajaxChecksSinceFallback = 0;
+                    }
                     scheduleNext(checkInterval);
                 }
             });
@@ -515,29 +691,33 @@
                     nonce: nonce
                 },
                 success: function (response) {
-                    if (response && response.success && response.data) {
-                        applyFreshSettings(response.data.all_tabs_reload_enabled, response.data.reload_mode);
+                    try {
+                        if (response && response.success && response.data) {
+                            applyFreshSettings(response.data.all_tabs_reload_enabled, response.data.reload_mode);
 
-                        if (!hasSyncedBaseline) {
-                            hasSyncedBaseline = true;
-                            currentTimestamp = parseInt(response.data.new_timestamp, 10) || currentTimestamp;
-                            scheduleNext(checkInterval);
-                            return;
-                        }
+                            if (!hasSyncedBaseline) {
+                                hasSyncedBaseline = true;
+                                currentTimestamp = parseInt(response.data.new_timestamp, 10) || currentTimestamp;
+                            } else if (response.data.reload) {
+                                currentTimestamp = parseInt(response.data.new_timestamp, 10) || currentTimestamp;
 
-                        if (response.data.reload) {
-                            currentTimestamp = parseInt(response.data.new_timestamp, 10) || currentTimestamp;
-
-                            if (!shouldThisTabReload()) {
-                                scheduleNext(checkInterval);
-                                return;
+                                if (shouldThisTabReload()) {
+                                    announceReload();
+                                    doReload(reloadMode);
+                                    return;
+                                }
+                                missedChange = true;
                             }
-
-                            announceReload();
-                            doReload(reloadMode);
-                            return;
                         }
-                    }
+
+                        // On the AJAX path only because the static file failed:
+                        // try it again after a while.
+                        if (!useStaticFile && timestampUrl && ++ajaxChecksSinceFallback >= 15) {
+                            useStaticFile = true;
+                            staticFailures = 2; // one more failure sends us straight back
+                        }
+                    } catch (e) {}
+
                     scheduleNext(checkInterval);
                 },
                 error: function () {
@@ -554,17 +734,85 @@
             }
         }
 
+        // Which tabs need to look at all? In "all tabs" mode every tab does.
+        // Otherwise a hidden tab that is not the active one has nothing to
+        // reload, so it stays quiet -- fewer requests with many tabs open --
+        // and catches up the moment it is brought forward.
+        function shouldPollNow() {
+            if (!document.hidden || allTabsReload) {
+                return true;
+            }
+            return !STORAGE_OK || thisTabHasActiveClaim();
+        }
+
+        function tick() {
+            var now = Date.now();
+
+            // Keep the claim fresh even when this tab's own timers are throttled.
+            if (isTabActive && STORAGE_OK && thisTabHasActiveClaim() && (now - lastClaimWrite) > 4000) {
+                writeActiveClaim();
+            }
+
+            // A request that never came back must not stall the beat for good.
+            if (inFlight && (now - inFlightSince) > 15000) {
+                inFlight = false;
+            }
+
+            if (inFlight || now < nextDueAt) {
+                return;
+            }
+
+            if (!shouldPollNow()) {
+                nextDueAt = now + checkInterval;
+                return;
+            }
+
+            inFlight = true;
+            inFlightSince = now;
+
+            try {
+                checkForUpdates();
+            } catch (e) {
+                inFlight = false;
+                nextDueAt = now + checkInterval;
+            }
+        }
+
         // Called when this tab comes back to the foreground: check straight
         // away rather than waiting out the rest of the current interval.
         runImmediateCheck = function () {
-            if (scheduledTimeoutId) {
-                clearTimeout(scheduledTimeoutId);
-                scheduledTimeoutId = null;
+            if (inFlight) {
+                return;
             }
-            checkForUpdates();
+            nextDueAt = 0;
+            tick();
         };
 
-        checkForUpdates();
+        startTicker(tick, Math.max(250, Math.min(500, Math.floor(checkInterval / 4))));
+        tick();
+    }
+
+    /** Resolves with the promise's value, or `fallback` if it hangs or fails. */
+    function withTimeout(promise, ms, fallback) {
+        return new Promise(function (resolve) {
+            var done = false;
+            var timer = setTimeout(function () {
+                if (!done) {
+                    done = true;
+                    resolve(fallback);
+                }
+            }, ms);
+
+            function finish(value) {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    resolve(value);
+                }
+            }
+
+            promise.then(finish, function () { finish(fallback); });
+        });
     }
 
     function init() {
@@ -572,9 +820,12 @@
         // check, so the per-browser Enable/Disable toggles actually control
         // whether this tab polls.
         var settings = ReloadifySync.browser_settings || {};
+        var baseName = detectBrowserName();
 
-        resolveBrowserName(detectBrowserName()).then(function (browserName) {
-            detectIncognito().then(function (isIncognito) {
+        // Both probes can hang in some private-mode / blocked-storage setups.
+        // Without a timeout polling would simply never start.
+        withTimeout(resolveBrowserName(baseName), 2500, baseName).then(function (browserName) {
+            withTimeout(detectIncognito(), 2500, false).then(function (isIncognito) {
                 var mode = isIncognito ? 'incognito' : 'normal';
                 var rule = settings[browserName];
                 var allowed = !!(rule && rule[mode]);
