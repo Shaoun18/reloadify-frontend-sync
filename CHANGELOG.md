@@ -1,5 +1,38 @@
 ## Changelog
 
+### 1.2.2
+
+*   **Fixed (Speed Boost): the WooCommerce product gallery was shown with a wrong height.** Delay JavaScript parked *every* script until the first interaction, so FlexSlider and the product-gallery code measured the layout at the wrong moment. Delay JavaScript now only holds back third-party tracking, advertising and chat scripts (Google Analytics / Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar). Theme, WooCommerce and page-builder scripts load normally. Add your own patterns with the `reloadify_delay_js_patterns` filter.
+*   **Fixed (Speed Boost): `window.et_pb_init_nav_menu is not a function`.** A `DOMContentLoaded` listener added by one delayed script was replayed immediately, before a later script had defined the function it calls. Replayed listeners now run in order, after the last delayed script.
+*   **Fixed (Speed Boost): removing `?ver=` from CSS/JS could leave visitors on stale files after an update.** The pass was removed; WordPress's own versioning is left intact.
+*   **Fixed (Speed Boost): the activator script is printed only when a script was actually delayed on that page.**
+*   **New (Speed Boost): browser caching & gzip (Apache).** Writes a guarded block to `.htaccess` (every directive wrapped in `<IfModule>`): compression for text, and long-lived caching for images, fonts and video. CSS and JS are deliberately not given long expiry. Skipped on Nginx, multisite, or when `.htaccess` is not writable; removed when the option is switched off, on deactivation and on uninstall.
+*   **New (Speed Boost): skip the Dashicons font for logged-out visitors** unless a stylesheet on the page depends on it.
+*   **New (Speed Boost): weekly cleanup of expired transients** from the options table (skipped when a persistent object cache is in use).
+*   **New (Speed Boost): REST API and oEmbed discovery links are dropped from `<head>`** together with the other unused links.
+*   **Changed: scheduled events** (Media Optimization, transient cleanup) are now always removed on uninstall, not only when "Delete Data on Uninstall" is on.
+*   **Fixed: auto-reload stopped working after a while.** Five separate causes:
+    *   A change that arrived while the tab was not the active one was marked as seen and dropped. It is now remembered and applied the moment the tab becomes active.
+    *   With no active claim, a visible tab still needed keyboard focus to reload, so a preview window sitting beside the editor never did. A visible tab now takes the claim.
+    *   A claim left behind by a tab that was closed, crashed or discarded blocked every other tab indefinitely. Claims nobody has refreshed for 150 seconds are treated as gone, and a tab being frozen hands its claim back.
+    *   One failed read of the timestamp file (for instance caught mid-write) switched polling to admin-ajax permanently, where an expired nonce then ended it silently. It now takes three failures, retries the static file regularly, ignores empty or garbled responses, and a hung request can no longer stall the loop.
+    *   A background tab's timers are throttled to once a minute. The polling beat now comes from a Web Worker (with a plain interval as fallback), so a preview tab behind the editor keeps up.
+*   **Fixed: polling never started** if the private-window detection hung; both probes now time out after 2.5 seconds.
+*   **Changed (Speed Boost): the optimization passes are now a modern list** — each pass is a card with an icon, a title, a description and a switch, all enabled by default, with a toast ("Minify CSS enabled" / "disabled") and an active counter.
+*   **Fixed: reload fired before a save had finished.** The timestamp is now written at the end of the request, so page builders and WooCommerce have finished writing meta. Timestamps are strictly increasing, so two saves in the same second both reload.
+*   **Fixed: `wpml-config.xml` described a different plugin.** It now matches this plugin (Media Optimization attachment meta only; no translatable options or front-end text). The `.pot` file was regenerated (218 strings).
+*   **Removed: all console output and debug logging** (`console.error` in the delayed-script replay, the `error_log()` call after a failed `.htaccess` write) and the discouraged `load_plugin_textdomain()` call — WordPress.org loads translations for the plugin slug automatically.
+*   **Fixed: PHPCS** `WordPress.WP.AlternativeFunctions.rename_rename` (documented exception: `rename()` is the only atomic replace) and `rand_mt_rand` (`random_int()`).
+*   **Fixed: activating through WP-CLI printed a stack trace** from the post-activation redirect.
+*   **Faster (Speed Boost): fewer disk operations per page.** No `realpath()` per stylesheet/script (expensive on Windows), one `stat()` per asset, and the cache folder is listed once per request instead of two `file_exists()` calls per asset. Measured on a WooCommerce page: about 7 ms for all of Speed Boost, 1.2 ms of it for assets.
+*   **Faster: the timestamp file is written atomically** (temp file + rename), so a poll can never read it half-written.
+*   **Faster: the timestamp and admin-ajax URLs are origin-relative**, so opening the site through another host name or scheme than the one stored in WordPress no longer blocks the request and forces the heavy admin-ajax path.
+*   **Faster: hidden tabs that are not the active one stop polling** (they catch up when brought forward), hidden tabs in "all tabs" mode poll at a quarter of the rate, and the admin-ajax cross-check runs every ~2 minutes instead of every ~20 seconds.
+*   **Faster (Speed Boost): large inline `<style>` / `<script>` blocks are minified once and cached by content hash**, instead of being run through the minifier on every page view.
+*   **Faster (Speed Boost): minification has a one-second budget per request**, so the first view after a change can no longer take many seconds; the remaining files are built on the following views.
+*   **Faster (Speed Boost): the cache folder check runs once per request** instead of once per stylesheet and script (on Windows it creates and deletes a temporary file each time).
+*   **Faster: repeated saves within one second** (WooCommerce and page builders update dozens of options at once) rewrite the timestamp file once instead of once per option.
+
 ### 1.2.1
 
 *   **Fixed: "Active tab only" turned into "all tabs" after a while.** A tab that had been backgrounded, frozen or throttled by the browser could miss the message telling it to give up the active-tab slot, wake up still believing it was active, and reload together with the real active tab. The shared active-tab claim is now the single source of truth: whenever a claim exists, only its owner reloads, and a stale tab corrects itself instead of reloading.

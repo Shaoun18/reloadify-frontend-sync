@@ -804,18 +804,92 @@
     margin-bottom: 9px;
 }
 
-.reloadify-speed-option {
+.reloadify-speed-options-label {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 6px;
-    font-size: 13px;
-    color: #374151;
-    cursor: pointer;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.reloadify-speed-option input[type="checkbox"] {
-    margin: 2px 0 0;
+.reloadify-pass-count {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: #047857;
+    background: #d1fae5;
+    padding: 2px 9px;
+    border-radius: 999px;
+}
+
+.reloadify-pass-list {
+    display: grid;
+    gap: 8px;
+}
+
+.reloadify-pass {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.reloadify-pass:hover {
+    border-color: #a7f3d0;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.10);
+}
+
+.reloadify-pass.is-off {
+    background: #f9fafb;
+}
+
+.reloadify-pass-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    color: #059669;
+    background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+    transition: color 0.18s ease, background 0.18s ease;
+}
+
+.reloadify-pass.is-off .reloadify-pass-icon {
+    color: #9ca3af;
+    background: #f3f4f6;
+}
+
+.reloadify-pass-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.reloadify-pass-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.reloadify-pass.is-off .reloadify-pass-title {
+    color: #6b7280;
+}
+
+.reloadify-pass-desc {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #6b7280;
+}
+
+.reloadify-pass .reloadify-switch {
+    flex: 0 0 auto;
 }
 
 /* Speed Boost / Media Optimization / Delete on Uninstall -- side by side */

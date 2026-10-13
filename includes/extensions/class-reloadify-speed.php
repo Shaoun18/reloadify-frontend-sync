@@ -18,7 +18,7 @@ class Reloadify_Speed
 	 * older revision are never served again (the version number alone isn't
 	 * enough when a fix ships without one).
 	 */
-	const CACHE_REV   = 2;
+	const CACHE_REV   = 3;
 
 	/**
 	 * Script handles that must never be deferred until first interaction.
@@ -28,6 +28,45 @@ class Reloadify_Speed
 	 * touching the page.
 	 */
 	const DELAY_JS_EXCLUDED_HANDLES = [ 'jquery', 'jquery-core', 'jquery-migrate' ];
+
+	/**
+	 * Only third-party tracking / marketing / chat scripts are ever delayed.
+	 *
+	 * Delaying EVERYTHING until the first interaction (what 1.2.0/1.2.1 did)
+	 * broke anything that measures or builds layout when it runs -- the
+	 * WooCommerce product gallery (FlexSlider) ended up with a wrong height,
+	 * and theme code that expects its siblings to exist already failed. Those
+	 * scripts must run in the normal order, so only scripts whose URL matches
+	 * one of these fragments are parked. Extend with the
+	 * `reloadify_delay_js_patterns` filter.
+	 */
+	const DELAY_JS_PATTERNS = [
+		'google-analytics.com', 'googletagmanager.com', 'googleadservices.com', 'googlesyndication.com',
+		'doubleclick.net', 'connect.facebook.net', 'static.hotjar.com', 'script.hotjar.com', 'clarity.ms',
+		'analytics.tiktok.com', 'sc-static.net', 'snap.licdn.com', 'static.ads-twitter.com', 'platform.twitter.com',
+		's.pinimg.com', 'assets.pinterest.com', 'cdn.segment.com', 'js.hs-scripts.com', 'js.hs-analytics.net',
+		'js.hscollectedforms.net', 'widget.intercom.io', 'js.intercomcdn.com', 'client.crisp.chat', 'embed.tawk.to',
+		'js.driftt.com', 'static.cloudflareinsights.com', 'plausible.io', 'stats.wp.com', 'pixel.wp.com',
+		'mc.yandex.ru', 'cdn.heapanalytics.com', 'cdn.mxpnl.com', 'fullstory.com', 'chimpstatic.com',
+		'cdn.onesignal.com', 'static.klaviyo.com', 'cdn.matomo.cloud', 'wa.me/widget', 'cdn.lr-ingest.io',
+	];
+
+	/** Hook that purges expired transients once a week (Speed Boost > Database cleanup). */
+	const CRON_HOOK_CLEANUP = 'reloadify_cleanup_transients';
+	const RULES_MARKER      = 'Reloadify Speed Boost';
+	const RULES_REV_OPTION  = 'reloadify_server_rules_rev';
+
+	/** Third-party scripts parked on this request. */
+	private static $parked = 0;
+
+	/**
+	 * Seconds of CSS/JS minification one request may spend. The first view
+	 * after a change builds the cached copies; with a large theme that could
+	 * add up to many seconds on a single page load. Past the budget the
+	 * original file is served and the rest are built on the following views.
+	 */
+	const MINIFY_BUDGET = 1.0;
+	private static $minify_spent = 0.0;
 
 	/**
 	 * Off by default since 1.2.0 -- Speed Boost now changes real front-end
@@ -51,7 +90,19 @@ class Reloadify_Speed
 			self::purge_cache();
 		}
 
+		self::sync_server_side();
+
 		return self::is_enabled();
+	}
+
+	/**
+	 * Called when the plugin is deactivated: leave no .htaccess rules or
+	 * scheduled events behind.
+	 */
+	public static function deactivate()
+	{
+		self::remove_server_rules();
+		wp_unschedule_hook(self::CRON_HOOK_CLEANUP);
 	}
 
 	/* ---------------- Sub-options ---------------- */
@@ -69,6 +120,10 @@ class Reloadify_Speed
 			'minify_html'         => true,
 			'remove_html_comments' => true,
 			'collapse_whitespace' => true,
+			'delay_js'            => true,
+			'browser_cache'       => true,
+			'dashicons'           => true,
+			'db_cleanup'          => true,
 		];
 	}
 
@@ -101,6 +156,8 @@ class Reloadify_Speed
 		// Cached files were produced under the previous rules.
 		self::purge_cache();
 
+		self::sync_server_side();
+
 		return self::get_options();
 	}
 
@@ -112,6 +169,10 @@ class Reloadify_Speed
 			'minify_html'         => __('Minify HTML output', 'reloadify-frontend-sync'),
 			'remove_html_comments' => __('Remove HTML comments', 'reloadify-frontend-sync'),
 			'collapse_whitespace' => __('Remove unnecessary whitespace', 'reloadify-frontend-sync'),
+			'delay_js'            => __('Delay third-party tracking & chat scripts until first interaction', 'reloadify-frontend-sync'),
+			'browser_cache'       => __('Browser caching & compression for images, fonts and text (Apache)', 'reloadify-frontend-sync'),
+			'dashicons'           => __('Skip the Dashicons font for logged-out visitors', 'reloadify-frontend-sync'),
+			'db_cleanup'          => __('Weekly cleanup of expired transients in the database', 'reloadify-frontend-sync'),
 		];
 	}
 
@@ -132,7 +193,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'delay_js',
-				'label' => __('Delays non-essential JavaScript until the first interaction (scroll, tap, key, mouse move) or 7 seconds, whichever comes first — jQuery and this plugin\'s own scripts always load immediately', 'reloadify-frontend-sync'),
+				'label' => __('Delays third-party tracking, advertising and chat scripts (Google Analytics/Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar) until the first interaction or 7 seconds — your theme, WooCommerce and page-builder scripts always load normally, so layouts and galleries are never affected', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'emojis',
@@ -140,7 +201,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'head_links',
-				'label' => __('Drops unused <link> tags from <head> (RSD, WLW manifest, shortlink, generator tag)', 'reloadify-frontend-sync'),
+				'label' => __('Drops unused <link> tags from <head> (RSD, WLW manifest, shortlink, generator tag, REST API and oEmbed discovery links)', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'opcache',
@@ -171,8 +232,16 @@ class Reloadify_Speed
 				'label' => __('Increases autosave interval from 60 to 120 seconds in wp-admin — fewer database writes and server calls while editing', 'reloadify-frontend-sync'),
 			],
 			[
-				'key' => 'query_strings',
-				'label' => __('Removes version query strings from static resources (CSS, JS) for visitors so they can be served by CDN and proxies more efficiently — speeds up repeat visitor loads (logged-in editors always get the versioned URLs)', 'reloadify-frontend-sync'),
+				'key' => 'browser_cache',
+				'label' => __('Adds compression (gzip) and long-lived browser caching for images, fonts and video to your .htaccess on Apache — fewer bytes and fewer requests on every repeat visit. CSS and JS keep WordPress\'s own versioning, so updates always show immediately. Skipped automatically on Nginx or when .htaccess isn\'t writable', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'dashicons',
+				'label' => __('Stops loading the Dashicons icon font for logged-out visitors unless a stylesheet on the page actually depends on it', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'db_cleanup',
+				'label' => __('Deletes expired transients from the options table once a week — without an object cache they pile up and slow down every options query', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'embeds',
@@ -226,6 +295,7 @@ class Reloadify_Speed
 
 		add_action('admin_init', [__CLASS__, 'ease_backend_load']);
 		add_action('admin_init', [__CLASS__, 'increase_autosave_interval']);
+		add_action('admin_init', [__CLASS__, 'maybe_sync_server_side']);
 
 		add_filter('heartbeat_settings', [__CLASS__, 'throttle_heartbeat']);
 
@@ -237,15 +307,17 @@ class Reloadify_Speed
 
 		$options = self::get_options();
 
+		if (! empty($options['db_cleanup'])) {
+			add_action(self::CRON_HOOK_CLEANUP, [__CLASS__, 'cleanup_expired_transients']);
+		}
+
+		if (! empty($options['dashicons'])) {
+			add_action('wp_enqueue_scripts', [__CLASS__, 'dequeue_dashicons'], 100);
+		}
+
 		// Everything below changes front-end output -- never in wp-admin, and
 		// never inside a page builder's editor frame.
 		if (! is_admin() && ! self::is_builder_request()) {
-
-			// Version query strings are what make a browser re-download a file
-			// after an update, so they're only dropped for real visitors (see
-			// remove_query_strings()).
-			add_filter('script_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
-			add_filter('style_loader_src', [__CLASS__, 'remove_query_strings'], 15, 1);
 
 			if (! empty($options['minify_css'])) {
 				add_filter('style_loader_src', [__CLASS__, 'minify_style_src'], 20, 1);
@@ -259,10 +331,232 @@ class Reloadify_Speed
 				add_action('template_redirect', [__CLASS__, 'start_html_buffer'], 1);
 			}
 
-			// Bundled into Speed Boost since 1.2.0 -- no separate switch.
-			add_filter('script_loader_tag', [__CLASS__, 'delay_script_tag'], 20, 2);
-			add_action('wp_footer', [__CLASS__, 'print_delay_js_activator'], 1);
+			if (! empty($options['delay_js'])) {
+				add_filter('script_loader_tag', [__CLASS__, 'delay_script_tag'], 20, 3);
+				// After footer scripts (priority 20) have been printed, so we know
+				// whether anything was actually parked.
+				add_action('wp_footer', [__CLASS__, 'print_delay_js_activator'], 99);
+			}
 		}
+	}
+
+	/* ---------------- Server-side extras ---------------- */
+
+	/**
+	 * Brings .htaccess rules and the weekly cron event in line with the
+	 * current settings. Runs on every Speed Boost change, and (cheaply) on
+	 * admin_init so a site that already had Speed Boost on picks up new rules
+	 * after an update.
+	 */
+	public static function sync_server_side()
+	{
+		$enabled = self::is_enabled();
+		$options = self::get_options();
+
+		if ($enabled && ! empty($options['browser_cache'])) {
+			self::write_server_rules();
+		} else {
+			self::remove_server_rules();
+		}
+
+		if ($enabled && ! empty($options['db_cleanup'])) {
+			if (! wp_next_scheduled(self::CRON_HOOK_CLEANUP)) {
+				wp_schedule_event(time() + HOUR_IN_SECONDS, 'weekly', self::CRON_HOOK_CLEANUP);
+			}
+		} else {
+			wp_unschedule_hook(self::CRON_HOOK_CLEANUP);
+		}
+	}
+
+	public static function maybe_sync_server_side()
+	{
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+
+		// An update changed how cached files are built or named: clear what the
+		// previous revision left behind, once.
+		if ((int) get_option('reloadify_speed_cache_rev', 0) !== self::CACHE_REV) {
+			self::purge_cache();
+			update_option('reloadify_speed_cache_rev', self::CACHE_REV, false);
+		}
+
+		$options = self::get_options();
+		$want    = ! empty($options['browser_cache']) ? md5(implode("\n", self::server_rules())) : 'off';
+
+		if (get_option(self::RULES_REV_OPTION, '') !== $want || (! empty($options['db_cleanup']) && ! wp_next_scheduled(self::CRON_HOOK_CLEANUP))) {
+			self::sync_server_side();
+		}
+	}
+
+	/**
+	 * Apache directives, each wrapped in <IfModule> so a host without the
+	 * module simply ignores them instead of returning a 500.
+	 *
+	 * Deliberately NOT included: long expiry for CSS and JS. WordPress already
+	 * versions those with ?ver=, but a developer editing a file without bumping
+	 * the version would keep seeing the stale copy for days.
+	 *
+	 * @return string[]
+	 */
+	public static function server_rules()
+	{
+		return [
+			'<IfModule mod_deflate.c>',
+			'	<IfModule mod_filter.c>',
+			'		AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript',
+			'		AddOutputFilterByType DEFLATE application/javascript application/x-javascript application/json application/xml application/xhtml+xml',
+			'		AddOutputFilterByType DEFLATE application/rss+xml application/atom+xml image/svg+xml image/x-icon',
+			'		AddOutputFilterByType DEFLATE font/ttf font/otf application/vnd.ms-fontobject',
+			'	</IfModule>',
+			'</IfModule>',
+			'<IfModule mod_expires.c>',
+			'	ExpiresActive On',
+			'	ExpiresByType image/jpeg "access plus 1 month"',
+			'	ExpiresByType image/png "access plus 1 month"',
+			'	ExpiresByType image/gif "access plus 1 month"',
+			'	ExpiresByType image/webp "access plus 1 month"',
+			'	ExpiresByType image/avif "access plus 1 month"',
+			'	ExpiresByType image/svg+xml "access plus 1 month"',
+			'	ExpiresByType image/x-icon "access plus 1 month"',
+			'	ExpiresByType font/woff "access plus 1 year"',
+			'	ExpiresByType font/woff2 "access plus 1 year"',
+			'	ExpiresByType font/ttf "access plus 1 year"',
+			'	ExpiresByType font/otf "access plus 1 year"',
+			'	ExpiresByType application/font-woff "access plus 1 year"',
+			'	ExpiresByType application/font-woff2 "access plus 1 year"',
+			'	ExpiresByType video/mp4 "access plus 1 month"',
+			'	ExpiresByType video/webm "access plus 1 month"',
+			'</IfModule>',
+			'<IfModule mod_headers.c>',
+			'	<FilesMatch "\\.(?:css|js|html|xml|json|svg|ttf|otf)$">',
+			'		Header append Vary Accept-Encoding',
+			'	</FilesMatch>',
+			'</IfModule>',
+		];
+	}
+
+	private static function htaccess_path()
+	{
+		if (! function_exists('get_home_path')) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		return trailingslashit(get_home_path()) . '.htaccess';
+	}
+
+	private static function server_rules_supported()
+	{
+		global $is_apache;
+
+		// Multisite shares one .htaccess between sites; one site switching the
+		// rules off must not pull them out from under the others.
+		if (is_multisite() || empty($is_apache)) {
+			return false;
+		}
+
+		$file = self::htaccess_path();
+
+		return file_exists($file) ? wp_is_writable($file) : wp_is_writable(dirname($file));
+	}
+
+	private static function write_server_rules()
+	{
+		if (! self::server_rules_supported()) {
+			update_option(self::RULES_REV_OPTION, 'unsupported', false);
+			return false;
+		}
+
+		if (! function_exists('insert_with_markers')) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
+		}
+
+		$rules = self::server_rules();
+		$done  = insert_with_markers(self::htaccess_path(), self::RULES_MARKER, $rules);
+
+		update_option(self::RULES_REV_OPTION, $done ? md5(implode("\n", $rules)) : 'failed', false);
+
+		return (bool) $done;
+	}
+
+	private static function remove_server_rules()
+	{
+		delete_option(self::RULES_REV_OPTION);
+
+		if (! self::server_rules_supported()) {
+			return;
+		}
+
+		$file = self::htaccess_path();
+		if (! file_exists($file)) {
+			return;
+		}
+
+		if (! function_exists('insert_with_markers')) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
+		}
+
+		// Only touch the file if our block is actually in it.
+		if (! function_exists('extract_from_markers')) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
+		}
+
+		if (extract_from_markers($file, self::RULES_MARKER)) {
+			insert_with_markers($file, self::RULES_MARKER, []);
+		}
+	}
+
+	/**
+	 * Expired transients are only removed when something reads them again; on
+	 * a site without a persistent object cache the rest stay in wp_options
+	 * forever, bloating the autoload query path.
+	 */
+	public static function cleanup_expired_transients()
+	{
+		global $wpdb;
+
+		if (wp_using_ext_object_cache()) {
+			return;
+		}
+
+		$now = time();
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- scheduled maintenance of the options table; caching a DELETE makes no sense.
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE a, b FROM {$wpdb->options} a, {$wpdb->options} b
+				WHERE a.option_name LIKE %s
+				AND a.option_name NOT LIKE %s
+				AND b.option_name = CONCAT( %s, SUBSTRING( a.option_name, %d ) )
+				AND b.option_value < %d",
+				$wpdb->esc_like('_transient_') . '%',
+				$wpdb->esc_like('_transient_timeout_') . '%',
+				'_transient_timeout_',
+				strlen('_transient_') + 1,
+				$now
+			)
+		);
+
+		// Timeout rows whose value row is already gone.
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value < %d",
+				$wpdb->esc_like('_transient_timeout_') . '%',
+				$now
+			)
+		);
+		// phpcs:enable
+	}
+
+	public static function dequeue_dashicons()
+	{
+		if (is_admin() || is_user_logged_in()) {
+			return; // The admin bar and editors need it.
+		}
+
+		// Only removes the direct request; a stylesheet that declares it as a
+		// dependency still pulls it in.
+		wp_dequeue_style('dashicons');
 	}
 
 	/* ---------------- Delayed JavaScript ---------------- */
@@ -285,11 +579,42 @@ class Reloadify_Speed
 		return is_array($handles) ? $handles : [];
 	}
 
-	public static function delay_script_tag($tag, $handle)
+	/**
+	 * Is this script one of the third-party tracking/chat scripts that are
+	 * safe to hold back until the visitor interacts?
+	 */
+	public static function is_delayable($handle, $src)
+	{
+		if (in_array($handle, self::delay_js_excluded_handles(), true) || 0 === strpos((string) $handle, 'reloadify-')) {
+			return false;
+		}
+
+		$src = (string) $src;
+		if ('' === $src) {
+			return false; // Inline-only handles ride along with their parent, never on their own.
+		}
+
+		/**
+		 * Filters the URL fragments that mark a script as delayable.
+		 *
+		 * @param string[] $patterns Host/path fragments, e.g. 'googletagmanager.com'.
+		 */
+		$patterns = apply_filters('reloadify_delay_js_patterns', self::DELAY_JS_PATTERNS);
+
+		foreach ((array) $patterns as $pattern) {
+			if ('' !== $pattern && false !== stripos($src, (string) $pattern)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static function delay_script_tag($tag, $handle, $src = '')
 	{
 		// A logged-in editor is usually mid-build; never make them click the
 		// page before their builder's scripts run.
-		if (is_user_logged_in() && current_user_can('edit_posts')) {
+		if (self::is_editor_session()) {
 			return $tag;
 		}
 
@@ -297,11 +622,7 @@ class Reloadify_Speed
 			return $tag;
 		}
 
-		if (in_array($handle, self::delay_js_excluded_handles(), true)) {
-			return $tag;
-		}
-
-		if (0 === strpos($handle, 'reloadify-')) {
+		if (! self::is_delayable($handle, $src)) {
 			return $tag;
 		}
 
@@ -337,7 +658,12 @@ class Reloadify_Speed
 			$tag
 		);
 
-		return is_string($converted) ? $converted : $tag;
+		if (is_string($converted) && $converted !== $tag) {
+			self::$parked++;
+			return $converted;
+		}
+
+		return $tag;
 	}
 
 	/**
@@ -347,7 +673,12 @@ class Reloadify_Speed
 	 */
 	public static function print_delay_js_activator()
 	{
-		if (is_user_logged_in() && current_user_can('edit_posts')) {
+		// Nothing was parked on this page -- don't add a script for nothing.
+		if (self::$parked < 1) {
+			return;
+		}
+
+		if (self::is_editor_session()) {
 			return;
 		}
 
@@ -376,30 +707,20 @@ class Reloadify_Speed
 					// A parked script that waits for DOMContentLoaded / load would
 					// otherwise wait forever, because both fired long ago. While the
 					// queue runs, listeners added for an event that has already
-					// happened are called straight away instead.
+					// happened are collected, and called -- in the order they were
+					// added -- only once EVERY parked script has run. Calling them
+					// straight away fails when one script's handler needs a function
+					// that a later script defines.
+					var late = [];
 					var nativeAdd = EventTarget.prototype.addEventListener;
 					EventTarget.prototype.addEventListener = function(type, listener, options) {
 						var onPage = (this === window || this === document);
-						var late = (type === 'DOMContentLoaded' && document.readyState !== 'loading') ||
+						var fired = (type === 'DOMContentLoaded' && document.readyState !== 'loading') ||
 							(type === 'load' && this === window && document.readyState === 'complete') ||
 							(type === 'readystatechange' && this === document && document.readyState === 'complete');
 
-						if (onPage && late && listener) {
-							var target = this;
-							setTimeout(function() {
-								try {
-									var evt = new Event(type);
-									if (typeof listener === 'function') {
-										listener.call(target, evt);
-									} else if (typeof listener.handleEvent === 'function') {
-										listener.handleEvent(evt);
-									}
-								} catch (e) {
-									if (window.console) {
-										console.error(e);
-									}
-								}
-							}, 0);
+						if (onPage && fired && listener) {
+							late.push({ target: this, type: type, listener: listener });
 							return;
 						}
 
@@ -407,6 +728,22 @@ class Reloadify_Speed
 					};
 
 					function finish() {
+						// Anything a replayed handler registers while we are still
+						// flushing is picked up by the same loop.
+						while (late.length) {
+							var item = late.shift();
+							try {
+								var evt = new Event(item.type);
+								if (typeof item.listener === 'function') {
+									item.listener.call(item.target, evt);
+								} else if (typeof item.listener.handleEvent === 'function') {
+									item.listener.handleEvent(evt);
+								}
+							} catch (e) {
+								// One failing handler must not stop the others; stay silent.
+							}
+						}
+
 						EventTarget.prototype.addEventListener = nativeAdd;
 						try {
 							document.dispatchEvent(new Event('reloadify:delayed-js-loaded'));
@@ -514,6 +851,11 @@ class Reloadify_Speed
 
 		$options = self::get_options();
 
+		$cache = self::cache_dir();
+		if ($cache) {
+			Reloadify_Minify::set_cache_dir($cache['dir']);
+		}
+
 		$minified = Reloadify_Minify::html($buffer, [
 			'remove_comments'     => ! empty($options['remove_html_comments']),
 			'collapse_whitespace' => ! empty($options['collapse_whitespace']) && ! empty($options['minify_html']),
@@ -560,11 +902,18 @@ class Reloadify_Speed
 		}
 
 		$path = self::url_to_path($clean_src);
-		if (! $path || ! is_readable($path)) {
+		if (! $path) {
 			return $src;
 		}
 
-		$size = filesize($path);
+		// One stat() call: filesize() and filemtime() below are answered from
+		// PHP's stat cache. A missing file simply returns false here.
+		$stat = @stat($path);
+		if (! $stat || ! empty($stat['mode']) && ($stat['mode'] & 0170000) !== 0100000) {
+			return $src;
+		}
+
+		$size = (int) $stat['size'];
 		if (! $size || $size > Reloadify_Minify::MAX_SOURCE_BYTES) {
 			return $src;
 		}
@@ -574,18 +923,27 @@ class Reloadify_Speed
 			return $src;
 		}
 
-		$fingerprint = md5($path . '|' . $size . '|' . filemtime($path) . '|' . RELOADIFY_VERSION . '|' . self::CACHE_REV);
-		$filename    = sanitize_file_name(basename($clean_src, $extension)) . '-' . substr($fingerprint, 0, 12) . '.min' . $extension;
+		$fingerprint = md5($path . '|' . $size . '|' . (int) $stat['mtime'] . '|' . RELOADIFY_VERSION . '|' . self::CACHE_REV);
+		// name-<path hash>-<content fingerprint>.min.ext -- the path hash keeps two
+		// different files that share a basename (every theme has a style.css)
+		// from ever treating each other's cached copy as stale.
+		$name_prefix = sanitize_file_name(basename($clean_src, $extension)) . '-' . substr(md5($path), 0, 6) . '-';
+		$filename    = $name_prefix . substr($fingerprint, 0, 12) . '.min' . $extension;
 		$target      = trailingslashit($cache['dir']) . $filename;
 		$skip_marker = $target . '.skip';
 
+		// The cache folder is listed ONCE per request, and "is there a copy / a
+		// skip marker?" becomes an array lookup. Two file_exists() calls per
+		// asset added up to hundreds of disk hits on a page-builder site.
+		$present = self::cache_listing($cache['dir']);
+
 		// A file we already decided to leave alone: don't re-read and re-parse it
 		// on every request.
-		if (file_exists($skip_marker)) {
+		if (isset($present[$filename . '.skip'])) {
 			return $src;
 		}
 
-		if (! file_exists($target)) {
+		if (! isset($present[$filename])) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading a local asset already on this filesystem, not a remote request.
 			$source = @file_get_contents($path);
 
@@ -602,11 +960,19 @@ class Reloadify_Speed
 				return $src;
 			}
 
+			if (self::$minify_spent >= self::MINIFY_BUDGET) {
+				return $src; // Over budget for this request; built on a later one.
+			}
+
+			$started = microtime(true);
+
 			// Relative url() / @import paths in CSS are rewritten to absolute
 			// ones for the same reason.
 			$minified = ('css' === $type)
 				? Reloadify_Minify::css($source, $clean_src)
 				: Reloadify_Minify::js($source);
+
+			self::$minify_spent += microtime(true) - $started;
 
 			if ('' === trim((string) $minified) || strlen($minified) >= strlen($source)) {
 				self::mark_skipped($skip_marker);
@@ -616,6 +982,15 @@ class Reloadify_Speed
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- writing a derived cache file inside the uploads directory; failure is non-fatal and falls back to the original asset.
 			if (false === @file_put_contents($target, $minified, LOCK_EX)) {
 				return $src;
+			}
+
+			// The source changed (a page builder regenerating its CSS, a theme
+			// update): drop the copies built from its previous versions so the
+			// cache folder doesn't grow forever.
+			foreach (array_merge((array) glob(trailingslashit($cache['dir']) . $name_prefix . '*.min' . $extension), (array) glob(trailingslashit($cache['dir']) . $name_prefix . '*.min' . $extension . '.skip')) as $stale) {
+				if ($stale !== $target && is_file($stale)) {
+					wp_delete_file($stale);
+				}
 			}
 		}
 
@@ -635,8 +1010,29 @@ class Reloadify_Speed
 		return false;
 	}
 
+	/** @var array|null Names in the cache folder, listed once per request. */
+	private static $cache_listing = null;
+
+	private static function cache_listing($dir)
+	{
+		if (null === self::$cache_listing) {
+			self::$cache_listing = [];
+
+			$names = @scandir($dir);
+			if (is_array($names)) {
+				self::$cache_listing = array_flip($names);
+			}
+		}
+
+		return self::$cache_listing;
+	}
+
 	private static function mark_skipped($marker)
 	{
+		if (is_array(self::$cache_listing)) {
+			self::$cache_listing[basename($marker)] = 0;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- tiny marker inside the generated cache directory; non-fatal if it fails.
 		@file_put_contents($marker, '1');
 	}
@@ -647,33 +1043,62 @@ class Reloadify_Speed
 	 */
 	private static function url_to_path($url)
 	{
-		$candidates = [
-			[content_url(), WP_CONTENT_DIR],
-			[includes_url(), ABSPATH . WPINC],
-		];
+		static $bases = null;
+
+		// Computed once per request. realpath() resolves every path component
+		// against the filesystem and is the single slowest call here on
+		// Windows, so it is used for the two base folders only -- never once
+		// per stylesheet and script.
+		if (null === $bases) {
+			$bases = [];
+			foreach ([[content_url(), WP_CONTENT_DIR], [includes_url(), ABSPATH . WPINC]] as $pair) {
+				$real_dir = realpath($pair[1]);
+				if ($real_dir) {
+					$bases[] = [set_url_scheme(untrailingslashit($pair[0])), str_replace('\\', '/', $real_dir)];
+				}
+			}
+		}
 
 		// Protocol-relative and scheme mismatches are common; compare hosts loosely.
 		$url = set_url_scheme($url);
 
-		foreach ($candidates as $pair) {
-			$base_url = set_url_scheme(untrailingslashit($pair[0]));
-			$base_dir = untrailingslashit($pair[1]);
-
-			if (0 === strpos($url, $base_url)) {
-				$relative = ltrim(substr($url, strlen($base_url)), '/');
-				$path     = $base_dir . '/' . $relative;
-				$real     = realpath($path);
-
-				if ($real && 0 === strpos($real, realpath($base_dir))) {
-					return $real;
-				}
+		foreach ($bases as $pair) {
+			if (0 !== strpos($url, $pair[0] . '/')) {
+				continue;
 			}
+
+			$relative = ltrim(substr($url, strlen($pair[0])), '/');
+
+			// The URL comes from WordPress's own script/style registry, but it is
+			// still turned into a filesystem path: no traversal, no encoded dots.
+			if ('' === $relative || false !== strpos($relative, '..') || false !== strpos($relative, '%') || false !== strpos($relative, "\0")) {
+				return false;
+			}
+
+			return $pair[1] . '/' . $relative;
 		}
 
 		return false;
 	}
 
+	/** Result of cache_dir() for the rest of this request (see there). */
+	private static $cache_dir_memo = null;
+
 	private static function cache_dir()
+	{
+		// Asked once per stylesheet and script on every page view. wp_is_writable()
+		// is not free -- on Windows it creates and deletes a temporary file to
+		// find out -- so the answer is worked out once per request.
+		if (null !== self::$cache_dir_memo) {
+			return self::$cache_dir_memo;
+		}
+
+		self::$cache_dir_memo = self::resolve_cache_dir();
+
+		return self::$cache_dir_memo;
+	}
+
+	private static function resolve_cache_dir()
 	{
 		$upload = wp_upload_dir();
 
@@ -704,6 +1129,9 @@ class Reloadify_Speed
 	 */
 	public static function purge_cache()
 	{
+		self::$cache_dir_memo = null;
+		self::$cache_listing  = null;
+
 		$upload = wp_upload_dir();
 
 		if (! empty($upload['error']) || empty($upload['basedir'])) {
@@ -718,7 +1146,7 @@ class Reloadify_Speed
 
 		// GLOB_BRACE isn't available on every platform (Alpine/musl, Solaris),
 		// where using it is a fatal error -- so one plain glob per pattern.
-		foreach (['*.min.css', '*.min.js', '*.skip'] as $pattern) {
+		foreach (['*.min.css', '*.min.js', '*.skip', 'inl-*.txt'] as $pattern) {
 			foreach ((array) glob($dir . '/' . $pattern) as $file) {
 				if (is_file($file)) {
 					wp_delete_file($file);
@@ -826,6 +1254,9 @@ class Reloadify_Speed
 		remove_action('wp_head', 'wlwmanifest_link');
 		remove_action('wp_head', 'wp_shortlink_wp_head');
 		remove_action('wp_head', 'wp_generator');
+		remove_action('wp_head', 'rest_output_link_wp_head', 10);
+		remove_action('wp_head', 'wp_oembed_add_discovery_links', 10);
+		remove_action('template_redirect', 'rest_output_link_header', 11);
 	}
 
 	public static function ensure_opcache_on()
@@ -965,22 +1396,4 @@ class Reloadify_Speed
 		);
 	}
 
-	/**
-	 * Remove query strings from static resources (CSS, JS) for better CDN/proxy caching.
-	 * Query strings prevent caching since browsers treat ?ver=X as a unique file.
-	 */
-	public static function remove_query_strings($src)
-	{
-		// The ?ver= value is what makes a browser fetch a file again after an
-		// update. Visitors only: an editor (or wp-admin) testing changes must
-		// never be handed a stale cached script or stylesheet.
-		if (is_admin() || self::is_editor_session()) {
-			return $src;
-		}
-
-		if (strpos($src, '?')) {
-			$src = remove_query_arg('ver', $src);
-		}
-		return $src;
-	}
 }

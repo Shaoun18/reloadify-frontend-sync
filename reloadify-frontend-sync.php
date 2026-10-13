@@ -4,7 +4,7 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
- * Version:           1.2.1
+ * Version:           1.2.2
  * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.2.1');
+define('RELOADIFY_VERSION', '1.2.2');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -52,6 +52,7 @@ class Reloadify_Frontend_Sync
 	{
 		register_activation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Settings', 'activate']);
 		register_deactivation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Media', 'deactivate']);
+		register_deactivation_hook(RELOADIFY_PLUGIN_FILE, ['Reloadify_Speed', 'deactivate']);
 		add_action('activated_plugin', [$this, 'redirect_after_activation']);
 
 		add_action('plugins_loaded', ['Reloadify_Performance', 'apply_runtime_overrides'], 0);
@@ -95,6 +96,12 @@ class Reloadify_Frontend_Sync
 	public function redirect_after_activation($plugin)
 	{
 		if ($plugin !== plugin_basename(RELOADIFY_PLUGIN_FILE)) {
+			return;
+		}
+
+		// WP-CLI, cron and REST/AJAX activations have no browser to redirect;
+		// calling exit() there aborts the command with a stack trace.
+		if ((defined('WP_CLI') && WP_CLI) || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST) || wp_doing_cron()) {
 			return;
 		}
 
@@ -224,7 +231,8 @@ class Reloadify_Frontend_Sync
 		);
 
 		wp_localize_script('reloadify-reloader-js', 'ReloadifySync', [
-			'ajax_url'         => admin_url('admin-ajax.php'),
+			// Origin-relative for the same reason as the timestamp URL.
+			'ajax_url'         => wp_make_link_relative(admin_url('admin-ajax.php')),
 			'timestamp_url'    => Reloadify_Settings::get_timestamp_file_url(),
 			'timestamp'        => Reloadify_Settings::get_site_updated_at(),
 			'interval'         => (int) $settings['poll_interval'],

@@ -8,6 +8,15 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 /* ---------------- Uninstall Cleanup ---------------- */
 
 function reloadify_uninstall_cleanup_current_site() {
+	// Scheduled events are plugin footprint, not user data: they go whatever
+	// the "delete data" choice is. wp_unschedule_hook() also removes the
+	// per-video events, which carry an attachment ID argument that
+	// wp_next_scheduled( $hook ) can't match.
+	wp_unschedule_hook( 'reloadify_media_backfill_batch' );
+	wp_unschedule_hook( 'reloadify_media_backfill_video_batch' );
+	wp_unschedule_hook( 'reloadify_media_compress_video' );
+	wp_unschedule_hook( 'reloadify_cleanup_transients' );
+
 	// Checked per site: on multisite each site has its own choice, and the
 	// main site's setting must not decide for every other site.
 	if ( ! get_option( 'reloadify_delete_data_on_uninstall', false ) ) {
@@ -23,12 +32,8 @@ function reloadify_uninstall_cleanup_current_site() {
 	delete_option( 'reloadify_media_format_preference' );
 	delete_option( 'reloadify_delete_data_on_uninstall' );
 	delete_option( 'reloadify_extras_settings' );
-
-	// wp_unschedule_hook() also removes the per-video events, which carry an
-	// attachment ID argument that wp_next_scheduled( $hook ) can't match.
-	wp_unschedule_hook( 'reloadify_media_backfill_batch' );
-	wp_unschedule_hook( 'reloadify_media_backfill_video_batch' );
-	wp_unschedule_hook( 'reloadify_media_compress_video' );
+	delete_option( 'reloadify_server_rules_rev' );
+	delete_option( 'reloadify_speed_cache_rev' );
 
 	// Per-attachment bookkeeping written by Media Optimization.
 	delete_post_meta_by_key( '_reloadify_media_optimized' );
@@ -59,6 +64,20 @@ function reloadify_uninstall_cleanup_current_site() {
 		if ( is_dir( $dir ) ) {
 			$wp_filesystem->delete( $dir, true );
 		}
+	}
+}
+
+// The Speed Boost block in .htaccess is plugin footprint too -- remove it
+// whatever the "delete data" choice is. (Single sites only; the plugin never
+// writes it on multisite.)
+if ( ! is_multisite() ) {
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	require_once ABSPATH . 'wp-admin/includes/misc.php';
+
+	$reloadify_htaccess = trailingslashit( get_home_path() ) . '.htaccess';
+
+	if ( file_exists( $reloadify_htaccess ) && wp_is_writable( $reloadify_htaccess ) && extract_from_markers( $reloadify_htaccess, 'Reloadify Speed Boost' ) ) {
+		insert_with_markers( $reloadify_htaccess, 'Reloadify Speed Boost', [] );
 	}
 }
 
