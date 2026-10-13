@@ -81,8 +81,8 @@
                     var req = indexedDB.open('__reloadify_probe__');
                     req.onerror = function () { resolve(true); };
                     req.onsuccess = function () {
-                        try { req.result.close(); } catch (e) { }
-                        try { indexedDB.deleteDatabase('__reloadify_probe__'); } catch (e) { }
+                        try { req.result.close(); } catch (e) {}
+                        try { indexedDB.deleteDatabase('__reloadify_probe__'); } catch (e) {}
                         resolve(false);
                     };
                 } catch (e) {
@@ -377,7 +377,7 @@
         if (!isReloadingSelf && thisTabHasActiveClaim()) {
             try {
                 localStorage.removeItem(ACTIVE_TAB_KEY);
-            } catch (e) { }
+            } catch (e) {}
         }
         isTabActive = false;
         stopHeartbeat();
@@ -433,7 +433,7 @@
             if (!isReloadingSelf && thisTabHasActiveClaim()) {
                 try {
                     localStorage.removeItem(ACTIVE_TAB_KEY);
-                } catch (e) { }
+                } catch (e) {}
             }
         });
     });
@@ -451,7 +451,7 @@
             var flag = parseInt(sessionStorage.getItem(RECLAIM_KEY), 10);
             justReloaded = flag > 0 && (now - flag) < 15000;
             sessionStorage.removeItem(RECLAIM_KEY);
-        } catch (e) { }
+        } catch (e) {}
 
         if (justReloaded || focused) {
             lastFocusTime = now;
@@ -465,7 +465,7 @@
         isReloadingSelf = true;
         try {
             sessionStorage.setItem(RECLAIM_KEY, String(Date.now()));
-        } catch (e) { }
+        } catch (e) {}
 
         if (mode === 'hard') {
             var url = window.location.href.replace(/([?&])_reloadify_ts=\d+/, '');
@@ -504,7 +504,7 @@
         }
         try {
             broadcastChannel.postMessage({ action: 'reload_triggered', reloadMode: reloadMode });
-        } catch (e) { }
+        } catch (e) {}
     }
 
     /**
@@ -528,7 +528,7 @@
                 if (worker) {
                     worker.terminate();
                 }
-            } catch (e) { }
+            } catch (e) {}
             worker = null;
             if (!started) {
                 started = true; // stop the "never ticked" timer from firing again
@@ -545,7 +545,7 @@
             worker.onmessage = function () {
                 if (!started) {
                     started = true;
-                    try { URL.revokeObjectURL(blobUrl); } catch (e) { }
+                    try { URL.revokeObjectURL(blobUrl); } catch (e) {}
                 }
                 callback();
             };
@@ -662,7 +662,7 @@
                                 return;
                             }
                         }
-                    } catch (e) { }
+                    } catch (e) {}
 
                     scheduleNext(checkInterval);
                 },
@@ -716,7 +716,7 @@
                             useStaticFile = true;
                             staticFailures = 2; // one more failure sends us straight back
                         }
-                    } catch (e) { }
+                    } catch (e) {}
 
                     scheduleNext(checkInterval);
                 },
