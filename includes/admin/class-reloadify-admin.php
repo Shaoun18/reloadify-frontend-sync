@@ -75,6 +75,7 @@ class Reloadify_Admin {
 					'options'      => Reloadify_Speed::get_options(),
 					'optionLabels' => Reloadify_Speed::option_labels(),
 				],
+				'dashicons'   => Reloadify_Extras::dashicon_names(),
 				'media'       => Reloadify_Media::payload(),
 				'cleanup'     => Reloadify_Cleanup::payload(),
 				'extras'      => Reloadify_Extras::get_settings(),

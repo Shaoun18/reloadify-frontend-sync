@@ -64,20 +64,45 @@
         }
     }
 
+    function perfHelp(key) {
+        var text = {
+            'memory_limit': __('Most memory a single request may use.', 'reloadify-frontend-sync'),
+            'max_execution_time': __('Seconds a script may run before PHP stops it.', 'reloadify-frontend-sync'),
+            'opcache.enable': __('Keeps compiled PHP in memory so pages build faster.', 'reloadify-frontend-sync'),
+            'opcache.validate_timestamps': __('Check files for edits. Keep on (1) while developing.', 'reloadify-frontend-sync'),
+            'opcache.revalidate_freq': __('Seconds between those edit checks.', 'reloadify-frontend-sync'),
+            'max_input_time': __('Seconds PHP may spend reading request data.', 'reloadify-frontend-sync'),
+            'post_max_size': __('Largest request body PHP accepts.', 'reloadify-frontend-sync'),
+            'upload_max_filesize': __('Largest single file you can upload.', 'reloadify-frontend-sync'),
+            'opcache.memory_consumption': __('Memory (MB) reserved for compiled scripts.', 'reloadify-frontend-sync'),
+            'opcache.interned_strings_buffer': __('Memory (MB) for strings shared between scripts.', 'reloadify-frontend-sync'),
+            'opcache.max_accelerated_files': __('How many files opcache can hold.', 'reloadify-frontend-sync'),
+            'realpath_cache_size': __('Cache size for resolved file paths.', 'reloadify-frontend-sync'),
+            'realpath_cache_ttl': __('Seconds a resolved path stays cached.', 'reloadify-frontend-sync')
+        };
+        return text[key] || '';
+    }
+
     var PERF_GROUPS = {
         runtime: {
             title: __('Applied automatically by this plugin', 'reloadify-frontend-sync'),
             hint: __('Changed live via ini_set() on every request \u2014 no server access needed.', 'reloadify-frontend-sync'),
+            subtitle: __('Changed live on every request \u2014 no server access needed', 'reloadify-frontend-sync'),
+            icon: 'bolt',
             keys: ['memory_limit', 'max_execution_time', 'opcache.enable', 'opcache.validate_timestamps', 'opcache.revalidate_freq']
         },
         host: {
             title: __('Requires your host / server config', 'reloadify-frontend-sync'),
             hint: __('PHP locks these before WordPress loads. Auto-attempt below writes .user.ini / .htaccess.', 'reloadify-frontend-sync'),
+            subtitle: __('PHP locks these before WordPress loads', 'reloadify-frontend-sync'),
+            icon: 'server',
             keys: ['max_input_time', 'post_max_size', 'upload_max_filesize']
         },
         opcache: {
             title: __('Startup-only PHP settings — danger zone', 'reloadify-frontend-sync'),
             hint: __('opcache sizing and the realpath cache are both locked in once at PHP startup \u2014 .user.ini and .htaccess can\u2019t reach them at all, only a real php.ini edit can.', 'reloadify-frontend-sync'),
+            subtitle: __('Locked in once when PHP starts \u2014 local development only', 'reloadify-frontend-sync'),
+            icon: 'warn',
             keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl']
         }
     };
@@ -534,46 +559,57 @@
             var matches = String(props.live) === String(props.value);
             matchStatus = el(
                 'div',
-                { className: 'reloadify-perf-status ' + (matches ? 'is-match' : 'is-mismatch') },
-                matches
-                    ? __('\u2713 Matches the live server right now.', 'reloadify-frontend-sync')
-                    : __('\u2717 Not applied yet on this page load \u2014 save your changes, then reload this page to confirm.', 'reloadify-frontend-sync')
+                { className: 'reloadify-setting-status ' + (matches ? 'is-match' : 'is-mismatch') },
+                el(Ico, { name: matches ? 'check' : 'info', size: 13 }),
+                el('span', null, matches
+                    ? __('Matches the live server right now.', 'reloadify-frontend-sync')
+                    : __('Not applied yet on this page load \u2014 save your changes, then reload this page to confirm.', 'reloadify-frontend-sync'))
             );
         }
 
+        var inputId = 'reloadify-perf-' + String(props.name).replace(/[^a-z0-9]+/gi, '-');
+
         return el(
             'div',
-            { className: 'reloadify-perf-card' },
+            { className: 'reloadify-setting' + (isRuntime ? (enabled ? ' is-live' : ' is-off') : '') + (isOpcache ? ' is-danger' : '') },
             el(
                 'div',
-                { className: 'reloadify-perf-card-top' },
+                { className: 'reloadify-setting-top' },
                 el('code', { title: PERF_LABELS[props.name] }, PERF_LABELS[props.name]),
                 badge
             ),
+            el('p', { className: 'reloadify-setting-help' }, perfHelp(props.name)),
             el(
                 'div',
-                { className: 'reloadify-perf-current' },
-                __('Current: ', 'reloadify-frontend-sync'),
+                { className: 'reloadify-setting-current' },
+                el('span', null, __('Current', 'reloadify-frontend-sync')),
                 el('strong', null, props.live || __('(default)', 'reloadify-frontend-sync'))
             ),
             matchStatus,
             el(
                 'div',
-                { className: 'reloadify-perf-controls' },
+                { className: 'reloadify-setting-controls' },
+                el('label', { className: 'reloadify-sr-only', htmlFor: inputId }, PERF_LABELS[props.name]),
                 el('input', {
+                    id: inputId,
                     type: 'text',
-                    className: 'reloadify-perf-input',
+                    className: 'reloadify-setting-input',
                     value: props.value,
+                    spellCheck: false,
                     onChange: function (e) { props.onChange(props.name, e.target.value); }
                 }),
-                isRuntime && el(Switch, {
-                    checked: enabled,
-                    onChange: function (e) { props.onToggleRuntime(props.name, e.target.checked); }
-                })
+                isRuntime && el(
+                    'span',
+                    { className: 'reloadify-setting-apply' },
+                    el('span', null, enabled ? __('Applied', 'reloadify-frontend-sync') : __('Off', 'reloadify-frontend-sync')),
+                    el(Switch, {
+                        checked: enabled,
+                        onChange: function (e) { props.onToggleRuntime(props.name, e.target.checked); }
+                    })
+                )
             )
         );
     }
-
     function ApplyResults(props) {
         if (!props.results) return null;
         var rows = [
@@ -615,6 +651,12 @@
         palette: 'M12 3a9 9 0 100 18c1.4 0 2-1 2-2 0-1.2-1-1.6-1-2.7 0-1 .8-1.8 1.8-1.8H17a4 4 0 004-4c0-4-4-7.5-9-7.5zM7.5 11h.01M10 7.5h.01M14.5 7.5h.01',
         ruler: 'M4 16L16 4l4 4L8 20l-4-4zM8 12l2 2M11 9l2 2M14 6l2 2',
         check: 'M5 13l4 4L19 7',
+        server: 'M4 5h16v5H4V5zM4 14h16v5H4v-5zM8 7.5h.01M8 16.5h.01M12 7.5h4M12 16.5h4',
+        warn: 'M12 3l10 18H2L12 3zM12 10v5M12 18h.01',
+        sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z',
+        search: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5',
+        play: 'M8 5v14l11-7L8 5z',
+        file: 'M6 3h9l4 4v14H6V3zM14 3v5h5',
         info: 'M12 8h.01M11 12h1v5h1M12 3a9 9 0 100 18 9 9 0 000-18z'
     };
 
@@ -1325,6 +1367,7 @@
             var runtimeEnabled = Object.assign({}, data.settings.runtime_enabled);
             runtimeEnabled[key] = val;
             props.onChange(Object.assign({}, data, { settings: Object.assign({}, data.settings, { runtime_enabled: runtimeEnabled }) }));
+            props.onToast(val ? 'success' : 'info', PERF_LABELS[key] + ' ' + (val ? __('will be applied live', 'reloadify-frontend-sync') : __('is no longer applied', 'reloadify-frontend-sync')));
         }
 
         function attemptServerOverride() {
@@ -1345,21 +1388,34 @@
                 });
         }
 
+        var liveApplied = PERF_GROUPS.runtime.keys.filter(function (key) {
+            return !!data.settings.runtime_enabled[key];
+        }).length;
+
         return el(
             'div',
-            null,
+            { className: 'reloadify-tab-body' },
             el(
                 'div',
-                { className: 'reloadify-callout reloadify-perf-header' },
+                { className: 'reloadify-perf-hero' },
+                el(IconChip, { name: 'server', tone: 'indigo', size: 22 }),
                 el(
                     'div',
-                    { className: 'reloadify-perf-header-label' },
-                    __('Server Performance', 'reloadify-frontend-sync'),
-                    el(InfoIcon, { text: __('Only PHP settings still changeable at runtime update live here. The rest need a server-side change.', 'reloadify-frontend-sync') })
+                    { className: 'reloadify-perf-hero-text' },
+                    el('h2', null, __('Server Performance', 'reloadify-frontend-sync'), el(InfoIcon, { text: __('Only PHP settings still changeable at runtime update live here. The rest need a server-side change.', 'reloadify-frontend-sync') })),
+                    el('p', null, __('See what is live, what needs your host, and what is locked at PHP startup.', 'reloadify-frontend-sync')),
+                    el(
+                        'div',
+                        { className: 'reloadify-perf-hero-stats' },
+                        el('span', { className: 'reloadify-stat-chip is-live' }, liveApplied + ' / ' + PERF_GROUPS.runtime.keys.length + ' ' + __('live', 'reloadify-frontend-sync')),
+                        el('span', { className: 'reloadify-stat-chip' }, PERF_GROUPS.host.keys.length + ' ' + __('need host', 'reloadify-frontend-sync')),
+                        el('span', { className: 'reloadify-stat-chip is-danger' }, PERF_GROUPS.opcache.keys.length + ' ' + __('startup-only', 'reloadify-frontend-sync'))
+                    )
                 ),
                 el(
                     'button',
-                    { className: 'button', onClick: props.onSync, disabled: props.syncing },
+                    { type: 'button', className: 'reloadify-sync-btn', onClick: props.onSync, disabled: props.syncing },
+                    el(Ico, { name: 'refresh', size: 15 }),
                     props.syncing ? __('Syncing\u2026', 'reloadify-frontend-sync') : __('Sync from server', 'reloadify-frontend-sync')
                 )
             ),
@@ -1374,13 +1430,24 @@
 
             Object.keys(PERF_GROUPS).map(function (groupKey) {
                 var group = PERF_GROUPS[groupKey];
+                var isDanger = groupKey === 'opcache';
+
+                var aside = null;
+                if (groupKey === 'runtime') {
+                    aside = el('span', { className: 'reloadify-pass-count' }, liveApplied + ' / ' + group.keys.length + ' ' + __('applied', 'reloadify-frontend-sync'));
+                } else if (groupKey === 'host') {
+                    aside = el('span', { className: 'reloadify-stat-chip' }, __('Auto-attempt available', 'reloadify-frontend-sync'));
+                } else {
+                    aside = el('span', { className: 'reloadify-stat-chip is-danger' }, __('Local dev only', 'reloadify-frontend-sync'));
+                }
+
                 return el(
                     'div',
-                    { className: 'reloadify-section', key: groupKey },
-                    el(SectionTitle, { text: group.title, hint: group.hint }),
+                    { className: 'reloadify-section reloadify-card' + (isDanger ? ' reloadify-card--danger' : ''), key: groupKey },
+                    el(CardHeading, { title: group.title, subtitle: group.subtitle, hint: group.hint, aside: aside }),
                     el(
                         'div',
-                        { className: 'reloadify-perf-grid' },
+                        { className: 'reloadify-setting-grid' },
                         group.keys.map(function (key) {
                             return el(DirectiveCard, {
                                 key: key,
@@ -1399,44 +1466,64 @@
                         { className: 'reloadify-perf-actions' },
                         el(
                             'button',
-                            { className: 'button button-primary', onClick: attemptServerOverride, disabled: applying },
+                            { type: 'button', className: 'reloadify-btn reloadify-btn--primary', onClick: attemptServerOverride, disabled: applying },
+                            el(Ico, { name: 'bolt', size: 15 }),
                             applying ? __('Attempting\u2026', 'reloadify-frontend-sync') : __('Attempt automatic server override', 'reloadify-frontend-sync')
                         ),
                         el(
                             'button',
-                            { className: 'button', onClick: function () { setModalOpen(true); } },
+                            { type: 'button', className: 'reloadify-btn', onClick: function () { setModalOpen(true); } },
+                            el(Ico, { name: 'file', size: 15 }),
                             __('Generate config snippet', 'reloadify-frontend-sync')
                         ),
                         el(InfoIcon, { text: __('Writes .user.ini / .htaccess. Safe to try \u2014 it just fails quietly if unsupported.', 'reloadify-frontend-sync') }),
                         el(ApplyResults, { results: applyResults })
                     ),
 
-                    groupKey === 'opcache' && el(
+                    isDanger && el(
                         'div',
-                        { className: 'reloadify-danger-zone' },
+                        { className: 'reloadify-danger-panel' },
                         el(
                             'div',
-                            { className: 'reloadify-danger-banner' },
-                            el('strong', null, __('\u26a0 Local development only \u2014 do not use on a live/production site.', 'reloadify-frontend-sync')),
-                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way, and .user.ini / .htaccess genuinely cannot reach them regardless of what\u2019s written there. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync')),
+                            { className: 'reloadify-danger-head' },
+                            el('span', { className: 'reloadify-chip reloadify-chip--red', 'aria-hidden': 'true' }, el(Ico, { name: 'warn', size: 18 })),
+                            el('strong', null, __('Local development only \u2014 do not use on a live/production site.', 'reloadify-frontend-sync'))
+                        ),
+                        el(
+                            'ul',
+                            { className: 'reloadify-danger-facts' },
+                            el('li', null, __('These five values are fixed when PHP starts, so only a real php.ini edit can change them.', 'reloadify-frontend-sync')),
+                            el('li', null, __('A mistake can bring PHP down for every site on the server.', 'reloadify-frontend-sync')),
+                            el('li', null, __('Nothing changes until PHP is restarted \u2014 this plugin cannot restart it for you.', 'reloadify-frontend-sync'))
+                        ),
+                        el(
+                            'div',
+                            { className: 'reloadify-danger-file' },
+                            el(Ico, { name: 'file', size: 15 }),
                             data.phpIniPath
-                                ? el('p', null, __('File this would write to: ', 'reloadify-frontend-sync'), el('code', null, data.phpIniPath))
-                                : el('p', null, __('This server reports no loaded php.ini file at all, so this action can\u2019t do anything here.', 'reloadify-frontend-sync')),
-                            el('p', null, __('It also does nothing until PHP restarts \u2014 this plugin cannot restart PHP for you.', 'reloadify-frontend-sync'))
+                                ? el('span', null, __('File this would write to: ', 'reloadify-frontend-sync'), el('code', null, data.phpIniPath))
+                                : el('span', null, __('This server reports no loaded php.ini file at all, so this action can\u2019t do anything here.', 'reloadify-frontend-sync'))
+                        ),
+                        el(
+                            'details',
+                            { className: 'reloadify-danger-details' },
+                            el('summary', null, __('Read the full explanation', 'reloadify-frontend-sync')),
+                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way, and .user.ini / .htaccess genuinely cannot reach them regardless of what\u2019s written there. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync'))
                         ),
                         el(
                             'label',
-                            { className: 'reloadify-danger-confirm' },
+                            { className: 'reloadify-danger-confirm' + (opcacheConfirmed ? ' is-checked' : '') },
                             el('input', {
                                 type: 'checkbox',
                                 checked: opcacheConfirmed,
                                 onChange: function (e) { setOpcacheConfirmed(e.target.checked); }
                             }),
-                            __('I understand this can crash PHP for the whole server, and I\u2019m only doing this on a local development site I fully control.', 'reloadify-frontend-sync')
+                            el('span', null, __('I understand this can crash PHP for the whole server, and I\u2019m only doing this on a local development site I fully control.', 'reloadify-frontend-sync'))
                         ),
                         el(
                             'button',
-                            { className: 'button reloadify-button-danger', onClick: attemptOpcacheOverride, disabled: !opcacheConfirmed || opcacheApplying || !data.phpIniPath },
+                            { type: 'button', className: 'reloadify-btn reloadify-btn--danger', onClick: attemptOpcacheOverride, disabled: !opcacheConfirmed || opcacheApplying || !data.phpIniPath },
+                            el(Ico, { name: 'warn', size: 15 }),
                             opcacheApplying ? __('Writing\u2026', 'reloadify-frontend-sync') : __('Attempt opcache override (local dev only)', 'reloadify-frontend-sync')
                         ),
                         opcacheResult && el(
@@ -1505,15 +1592,157 @@
         );
     }
 
+    var ANIMATION_CHOICES = ['fade', 'slide', 'zoom', 'bounce'];
+    var HOVER_CHOICES = ['none', 'lift', 'pulse', 'wiggle'];
+
+    function animationLabel(key) {
+        return {
+            fade: __('Fade', 'reloadify-frontend-sync'),
+            slide: __('Slide up', 'reloadify-frontend-sync'),
+            zoom: __('Zoom', 'reloadify-frontend-sync'),
+            bounce: __('Bounce', 'reloadify-frontend-sync'),
+            none: __('None', 'reloadify-frontend-sync'),
+            lift: __('Lift', 'reloadify-frontend-sync'),
+            pulse: __('Pulse', 'reloadify-frontend-sync'),
+            wiggle: __('Nudge', 'reloadify-frontend-sync')
+        }[key] || key;
+    }
+
+    function iconTitle(name) {
+        return String(name).replace(/^dashicons-/, '').replace(/-/g, ' ');
+    }
+
+    function ScrollTopGlyph(props) {
+        if (props.icon && props.icon !== 'default') {
+            return el('span', { className: 'dashicons ' + props.icon, 'aria-hidden': 'true' });
+        }
+        return el(
+            'svg',
+            { viewBox: '0 0 24 24', width: props.size || 20, height: props.size || 20, fill: 'none', stroke: 'currentColor', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true', focusable: 'false' },
+            el('polyline', { points: '18 15 12 9 6 15' })
+        );
+    }
+
     function ScrollTopPreview(props) {
         var left = props.position === 'left';
+        var c = 2 * Math.PI * 21;
         return el(
             'div',
             { className: 'reloadify-st-preview' + (props.on ? '' : ' is-off'), 'aria-hidden': 'true' },
             el('span', { className: 'reloadify-st-line reloadify-st-line--1' }),
             el('span', { className: 'reloadify-st-line reloadify-st-line--2' }),
             el('span', { className: 'reloadify-st-line reloadify-st-line--3' }),
-            el('span', { className: 'reloadify-st-btn' + (left ? ' is-left' : ''), style: { background: props.color } }, el(Ico, { name: 'arrowUp', size: 16 }))
+            el(
+                'span',
+                {
+                    key: props.replayKey,
+                    className: 'reloadify-st-btn reloadify-st-anim-' + props.animation + ' reloadify-st-hover-' + props.hover + (left ? ' is-left' : ''),
+                    style: { background: props.color }
+                },
+                props.ring && el(
+                    'svg',
+                    { className: 'reloadify-st-ring', viewBox: '0 0 48 48' },
+                    el('circle', { className: 'reloadify-st-ring-track', cx: 24, cy: 24, r: 21 }),
+                    el('circle', { className: 'reloadify-st-ring-bar', cx: 24, cy: 24, r: 21, style: { strokeDasharray: c, strokeDashoffset: c * 0.35 } })
+                ),
+                el('span', { className: 'reloadify-st-glyph' }, el(ScrollTopGlyph, { icon: props.icon }))
+            ),
+            el(
+                'button',
+                { type: 'button', className: 'reloadify-st-replay', onClick: props.onReplay },
+                el(Ico, { name: 'play', size: 12 }),
+                __('Replay animation', 'reloadify-frontend-sync')
+            )
+        );
+    }
+
+    function PickSegments(sprops) {
+        return el(
+            'div',
+            { className: 'reloadify-segmented', role: 'radiogroup', 'aria-label': sprops.label },
+            sprops.choices.map(function (key) {
+                var active = sprops.value === key;
+                return el('button', {
+                    key: key, type: 'button', role: 'radio', 'aria-checked': active,
+                    className: 'reloadify-segment' + (active ? ' is-active' : ''),
+                    onClick: function () { sprops.onPick(key); }
+                }, animationLabel(key));
+            })
+        );
+    }
+
+    function IconPicker(props) {
+        var names = props.names || [];
+        var stateQuery = useState('');
+        var query = stateQuery[0], setQuery = stateQuery[1];
+        var stateOpen = useState(false);
+        var open = stateOpen[0], setOpen = stateOpen[1];
+        var stateAll = useState(false);
+        var showAll = stateAll[0], setShowAll = stateAll[1];
+
+        var needle = query.trim().toLowerCase().replace(/\s+/g, '-');
+        var matches = needle ? names.filter(function (n) { return n.indexOf(needle) !== -1; }) : names;
+        var visible = (showAll || needle) ? matches : matches.slice(0, 96);
+
+        return el(
+            'div',
+            { className: 'reloadify-icon-picker' },
+            el(
+                'div',
+                { className: 'reloadify-icon-current' },
+                el('span', { className: 'reloadify-icon-current-glyph', style: { background: props.color } }, el(ScrollTopGlyph, { icon: props.value, size: 22 })),
+                el(
+                    'div',
+                    { className: 'reloadify-icon-current-text' },
+                    el('strong', null, props.value === 'default' ? __('Built-in arrow', 'reloadify-frontend-sync') : iconTitle(props.value)),
+                    el('span', null, props.value === 'default'
+                        ? __('Lightweight \u2014 no icon font to download.', 'reloadify-frontend-sync')
+                        : __('WordPress Dashicons \u2014 loaded only when a visitor scrolls.', 'reloadify-frontend-sync'))
+                ),
+                el('button', { type: 'button', className: 'reloadify-ghost-btn', onClick: function () { setOpen(!open); }, 'aria-expanded': open }, open ? __('Close', 'reloadify-frontend-sync') : __('Choose icon', 'reloadify-frontend-sync'))
+            ),
+            open && el(
+                'div',
+                { className: 'reloadify-icon-panel' },
+                el(
+                    'label',
+                    { className: 'reloadify-icon-search' },
+                    el(Ico, { name: 'search', size: 15 }),
+                    el('input', {
+                        type: 'search', value: query, placeholder: wp.i18n.sprintf(
+                            /* translators: %d: number of icons available */
+                            __('Search %d WordPress icons\u2026', 'reloadify-frontend-sync'), names.length),
+                        'aria-label': __('Search icons', 'reloadify-frontend-sync'),
+                        onChange: function (e) { setQuery(e.target.value); }
+                    })
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-icon-grid', role: 'listbox', 'aria-label': __('Icons', 'reloadify-frontend-sync') },
+                    (!needle || 'default'.indexOf(needle) !== -1) && el('button', {
+                        key: 'default', type: 'button', role: 'option', 'aria-selected': props.value === 'default',
+                        className: 'reloadify-icon-tile reloadify-icon-tile--default' + (props.value === 'default' ? ' is-selected' : ''),
+                        title: __('Built-in arrow (default)', 'reloadify-frontend-sync'),
+                        onClick: function () { props.onSelect('default'); }
+                    }, el(ScrollTopGlyph, { icon: 'default', size: 20 })),
+                    visible.map(function (name) {
+                        return el('button', {
+                            key: name, type: 'button', role: 'option', 'aria-selected': props.value === name,
+                            className: 'reloadify-icon-tile' + (props.value === name ? ' is-selected' : ''),
+                            title: iconTitle(name),
+                            onClick: function () { props.onSelect(name); }
+                        }, el('span', { className: 'dashicons ' + name, 'aria-hidden': 'true' }));
+                    })
+                ),
+                !visible.length && el('p', { className: 'reloadify-media-format-note' }, __('No icon matches that search.', 'reloadify-frontend-sync')),
+                (!showAll && !needle && matches.length > visible.length) && el(
+                    'button',
+                    { type: 'button', className: 'reloadify-ghost-btn reloadify-icon-more', onClick: function () { setShowAll(true); } },
+                    wp.i18n.sprintf(
+                        /* translators: %d: number of icons */
+                        __('Show all %d icons', 'reloadify-frontend-sync'), matches.length)
+                )
+            )
         );
     }
 
@@ -1521,9 +1750,13 @@
         var extras = props.extras;
         var cfg = extras.scroll_top;
         var on = !!cfg.enabled;
+        var iconNames = (window.ReloadifyAdmin && window.ReloadifyAdmin.initial && window.ReloadifyAdmin.initial.dashicons) || [];
 
         var stateColor = useState(cfg.bg_color);
         var colorDraft = stateColor[0], setColorDraft = stateColor[1];
+
+        var stateReplay = useState(0);
+        var replayKey = stateReplay[0], setReplayKey = stateReplay[1];
 
         function patch(change) {
             props.update({ scroll_top: Object.assign({}, cfg, change) });
@@ -1567,12 +1800,41 @@
             toastDistance(value);
         }
 
+        function setIcon(name) {
+            patch({ icon: name });
+            props.onToast('success', name === 'default'
+                ? __('Icon set to the built-in arrow', 'reloadify-frontend-sync')
+                : __('Icon set to', 'reloadify-frontend-sync') + ' ' + iconTitle(name));
+        }
+
+        function setAnimation(name) {
+            patch({ animation: name });
+            setReplayKey(replayKey + 1);
+            props.onToast('success', __('Entrance animation:', 'reloadify-frontend-sync') + ' ' + animationLabel(name));
+        }
+
+        function setHover(name) {
+            patch({ hover: name });
+            props.onToast('success', __('Hover effect:', 'reloadify-frontend-sync') + ' ' + animationLabel(name));
+        }
+
+        function toggleRing() {
+            var next = !ringOn;
+            patch({ progress_ring: next });
+            props.onToast(next ? 'success' : 'info', next ? __('Scroll progress ring enabled', 'reloadify-frontend-sync') : __('Scroll progress ring disabled', 'reloadify-frontend-sync'));
+        }
+
         var position = cfg.position === 'left' ? 'left' : 'right';
         var distance = Math.max(0, parseInt(cfg.show_after, 10) || 0);
+        var animation = ANIMATION_CHOICES.indexOf(cfg.animation) !== -1 ? cfg.animation : 'slide';
+        var hover = HOVER_CHOICES.indexOf(cfg.hover) !== -1 ? cfg.hover : 'lift';
+        var ringOn = cfg.progress_ring !== false;
+        var icon = cfg.icon || 'default';
+        var color = /^#[0-9a-fA-F]{6}$/.test(colorDraft) ? colorDraft : cfg.bg_color;
 
         return el(
             'div',
-            { className: 'reloadify-section reloadify-card' },
+            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
             el(CardHead, {
                 title: __('Scroll To Top Button', 'reloadify-frontend-sync'),
                 subtitle: __('A small floating button that returns visitors to the top', 'reloadify-frontend-sync'),
@@ -1582,11 +1844,11 @@
             el(
                 'div',
                 { className: 'reloadify-st-layout' + (on ? '' : ' is-inactive') },
-                el(ScrollTopPreview, { color: /^#[0-9a-fA-F]{6}$/.test(colorDraft) ? colorDraft : cfg.bg_color, position: position, on: on }),
                 el(
                     'div',
-                    { className: 'reloadify-st-controls' },
-                    el('div', { className: 'reloadify-card-eyebrow' }, el('span', null, __('Position', 'reloadify-frontend-sync'))),
+                    { className: 'reloadify-st-col' },
+                    el(ScrollTopPreview, { color: color, position: position, on: on, icon: icon, animation: animation, hover: hover, ring: ringOn, replayKey: replayKey, onReplay: function () { setReplayKey(replayKey + 1); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Position', 'reloadify-frontend-sync'))),
                     el(
                         'div',
                         { className: 'reloadify-choice-row reloadify-choice-row--compact', role: 'radiogroup', 'aria-label': __('Position', 'reloadify-frontend-sync') },
@@ -1600,17 +1862,17 @@
                         el(
                             'div',
                             { className: 'reloadify-swatches', role: 'group', 'aria-label': __('Colour presets', 'reloadify-frontend-sync') },
-                            SCROLL_COLORS.map(function (color) {
-                                var active = color.toLowerCase() === String(cfg.bg_color).toLowerCase();
+                            SCROLL_COLORS.map(function (swatch) {
+                                var active = swatch.toLowerCase() === String(cfg.bg_color).toLowerCase();
                                 return el('button', {
-                                    key: color, type: 'button', className: 'reloadify-swatch' + (active ? ' is-active' : ''),
-                                    style: { background: color }, title: color.toUpperCase(), 'aria-label': color.toUpperCase(), 'aria-pressed': active,
-                                    onClick: function () { setColor(color); }
+                                    key: swatch, type: 'button', className: 'reloadify-swatch' + (active ? ' is-active' : ''),
+                                    style: { background: swatch }, title: swatch.toUpperCase(), 'aria-label': swatch.toUpperCase(), 'aria-pressed': active,
+                                    onClick: function () { setColor(swatch); }
                                 }, active && el(Ico, { name: 'check', size: 13 }));
                             })
                         ),
                         el('input', {
-                            type: 'color', className: 'reloadify-color-input', value: /^#[0-9a-fA-F]{6}$/.test(colorDraft) ? colorDraft : cfg.bg_color,
+                            type: 'color', className: 'reloadify-color-input', value: color,
                             'aria-label': __('Pick a custom colour', 'reloadify-frontend-sync'),
                             onChange: function (e) { setColor(e.target.value); }
                         }),
@@ -1637,6 +1899,29 @@
                         }),
                         el('div', { className: 'reloadify-quality-scale' }, el('span', null, __('Always visible', 'reloadify-frontend-sync')), el('span', null, '1500 px'))
                     )
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el('div', { className: 'reloadify-card-eyebrow' }, el('span', null, __('Icon', 'reloadify-frontend-sync')), el('span', { className: 'reloadify-pass-count' }, iconNames.length + ' ' + __('WordPress icons', 'reloadify-frontend-sync'))),
+                    el(IconPicker, { names: iconNames, value: icon, color: color, onSelect: setIcon }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Entrance animation', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Entrance animation', 'reloadify-frontend-sync'), choices: ANIMATION_CHOICES, value: animation, onPick: setAnimation }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Hover effect', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Hover effect', 'reloadify-frontend-sync'), choices: HOVER_CHOICES, value: hover, onPick: setHover }),
+                    el(
+                        'div',
+                        { className: 'reloadify-pass reloadify-pass--wide' + (ringOn ? ' is-on' : ' is-off') },
+                        el(IconChip, { name: 'sparkle', tone: ringOn ? 'green' : 'gray' }),
+                        el(
+                            'div',
+                            { className: 'reloadify-pass-text' },
+                            el('strong', { className: 'reloadify-pass-title' }, __('Scroll progress ring', 'reloadify-frontend-sync')),
+                            el('span', { className: 'reloadify-pass-desc' }, __('A ring around the button fills as the visitor scrolls down the page.', 'reloadify-frontend-sync'))
+                        ),
+                        el(Switch, { checked: ringOn, onChange: toggleRing })
+                    ),
+                    el('p', { className: 'reloadify-tip' }, __('Animations respect the visitor\u2019s \u201creduce motion\u201d setting automatically.', 'reloadify-frontend-sync'))
                 )
             )
         );
