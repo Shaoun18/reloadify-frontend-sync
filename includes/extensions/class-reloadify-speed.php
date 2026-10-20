@@ -51,6 +51,25 @@ class Reloadify_Speed
 		'cdn.onesignal.com', 'static.klaviyo.com', 'cdn.matomo.cloud', 'wa.me/widget', 'cdn.lr-ingest.io',
 	];
 
+	/**
+	 * Scripts that are never deferred, matched against the HANDLE. They either
+	 * build or measure layout when they run (galleries, sliders, page
+	 * builders), are used by inline code the theme prints (jQuery, WooCommerce,
+	 * core), or must be ready the moment a form is touched. Extend with the
+	 * `reloadify_defer_js_skip_patterns` filter.
+	 */
+	const DEFER_SKIP_PATTERNS = [
+		'jquery', 'wp-', 'woocommerce', 'wc-', 'wc_', 'et-', 'et_', 'divi', 'elementor', 'bricks', 'fl-builder',
+		'beaver', 'vc_', 'js_composer', 'slider', 'slick', 'swiper', 'owl', 'flex', 'carousel', 'gallery',
+		'lightbox', 'fancybox', 'magnific', 'photoswipe', 'zoom', 'masonry', 'isotope', 'parallax', 'waypoints',
+		'lazy', 'modernizr', 'polyfill', 'recaptcha', 'captcha', 'stripe', 'paypal', 'payment', 'checkout',
+		'cart', 'map', 'wpcf7', 'contact-form', 'gravity', 'forminator', 'ninja', 'jetpack', 'tinymce', 'editor',
+		'customize', 'admin-bar', 'comment', 'select2', 'selectwoo', 'chosen', 'datepicker', 'moment',
+	];
+
+	/** How long a changed file keeps its ?ver= tag (seconds) when query strings are removed. */
+	const QUERY_STRING_GRACE = 7 * DAY_IN_SECONDS;
+
 	/** Hook that purges expired transients once a week (Speed Boost > Database cleanup). */
 	const CRON_HOOK_CLEANUP = 'reloadify_cleanup_transients';
 	const RULES_MARKER      = 'Reloadify Speed Boost';
@@ -120,6 +139,9 @@ class Reloadify_Speed
 			'minify_html'         => true,
 			'remove_html_comments' => true,
 			'collapse_whitespace' => true,
+			'remove_query_strings' => true,
+			'lazy_load_images'    => true,
+			'defer_js'            => true,
 			'delay_js'            => true,
 			'browser_cache'       => true,
 			'dashicons'           => true,
@@ -169,6 +191,9 @@ class Reloadify_Speed
 			'minify_html'         => __('Minify HTML output', 'reloadify-frontend-sync'),
 			'remove_html_comments' => __('Remove HTML comments', 'reloadify-frontend-sync'),
 			'collapse_whitespace' => __('Remove unnecessary whitespace', 'reloadify-frontend-sync'),
+			'remove_query_strings' => __('Remove version query strings from static files', 'reloadify-frontend-sync'),
+			'lazy_load_images'    => __('Lazy-load images and iframes below the fold', 'reloadify-frontend-sync'),
+			'defer_js'            => __('Defer non-critical scripts', 'reloadify-frontend-sync'),
 			'delay_js'            => __('Delay third-party tracking & chat scripts until first interaction', 'reloadify-frontend-sync'),
 			'browser_cache'       => __('Browser caching & compression for images, fonts and text (Apache)', 'reloadify-frontend-sync'),
 			'dashicons'           => __('Skip the Dashicons font for logged-out visitors', 'reloadify-frontend-sync'),
@@ -190,6 +215,18 @@ class Reloadify_Speed
 			[
 				'key' => 'minify_html',
 				'label' => __('Minifies the HTML WordPress sends to the browser — strips comments and collapses redundant whitespace, leaving <pre>, <textarea> and script payloads untouched', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'remove_query_strings',
+				'label' => __('Removes ?ver= from CSS and JS URLs for logged-out visitors so CDNs and proxies cache them. A file keeps its version tag for 7 days after it changes, and logged-in editors always get the tagged URL, so updates and edits are never hidden', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'lazy_load_images',
+				'label' => __('Adds loading="lazy" and decoding="async" to images and iframes that don\'t have it. The first two images stay eager (they are usually the largest paint), and gallery, slider and already-lazy images are left alone', 'reloadify-frontend-sync'),
+			],
+			[
+				'key' => 'defer_js',
+				'label' => __('Adds defer to stand-alone scripts in the page head that nothing else depends on. jQuery, WordPress core, WooCommerce, page builders, sliders and galleries are never deferred', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'delay_js',
@@ -318,7 +355,6 @@ class Reloadify_Speed
 		// Everything below changes front-end output -- never in wp-admin, and
 		// never inside a page builder's editor frame.
 		if (! is_admin() && ! self::is_builder_request()) {
-
 			if (! empty($options['minify_css'])) {
 				add_filter('style_loader_src', [__CLASS__, 'minify_style_src'], 20, 1);
 			}
@@ -327,8 +363,17 @@ class Reloadify_Speed
 				add_filter('script_loader_src', [__CLASS__, 'minify_script_src'], 20, 1);
 			}
 
-			if (! empty($options['minify_html']) || ! empty($options['remove_html_comments']) || ! empty($options['collapse_whitespace'])) {
+			if (! empty($options['minify_html']) || ! empty($options['remove_html_comments']) || ! empty($options['collapse_whitespace']) || ! empty($options['lazy_load_images']) || ! empty($options['minify_js']) || ! empty($options['minify_css'])) {
 				add_action('template_redirect', [__CLASS__, 'start_html_buffer'], 1);
+			}
+
+			if (! empty($options['remove_query_strings'])) {
+				add_filter('script_loader_src', [__CLASS__, 'strip_version_query'], 15, 1);
+				add_filter('style_loader_src', [__CLASS__, 'strip_version_query'], 15, 1);
+			}
+
+			if (! empty($options['defer_js'])) {
+				add_filter('script_loader_tag', [__CLASS__, 'defer_script_tag'], 15, 3);
 			}
 
 			if (! empty($options['delay_js'])) {
@@ -338,6 +383,190 @@ class Reloadify_Speed
 				add_action('wp_footer', [__CLASS__, 'print_delay_js_activator'], 99);
 			}
 		}
+	}
+
+	/* ---------------- Query strings ---------------- */
+
+	/**
+	 * Drops ?ver= from local CSS/JS URLs for logged-out visitors.
+	 *
+	 * The version tag is what makes a browser fetch a file again after an
+	 * update, so it is only removed from files that have been stable for a
+	 * week. A file that changed recently keeps its tag, which means an update
+	 * or an edit is never hidden behind a cached copy; and logged-in editors
+	 * always get the tagged URL.
+	 */
+	public static function strip_version_query($src)
+	{
+		static $memo = [];
+
+		if (is_admin() || false === strpos((string) $src, 'ver=') || self::is_editor_session()) {
+			return $src;
+		}
+
+		if (isset($memo[$src])) {
+			return $memo[$src];
+		}
+
+		$memo[$src] = $src;
+		$path       = self::url_to_path(strtok($src, '?'));
+
+		if ($path) {
+			$mtime = @filemtime($path);
+			if ($mtime && (time() - $mtime) >= self::QUERY_STRING_GRACE) {
+				$memo[$src] = remove_query_arg('ver', $src);
+			}
+		}
+
+		return $memo[$src];
+	}
+
+	/* ---------------- Lazy loading ---------------- */
+
+	/**
+	 * Adds loading="lazy" / decoding="async" to images and iframes that don't
+	 * carry them. Operates on the finished page, so it also covers markup that
+	 * never went through WordPress's own content filters (page builders,
+	 * widgets, theme templates).
+	 *
+	 * Left alone: the first two images (the likeliest largest paint), anything
+	 * already declaring loading= or fetchpriority=, lazy-loader markup
+	 * (data-src, lazyload classes), WooCommerce gallery images, tracking
+	 * pixels, and everything inside <script>, <style>, <noscript>, <template>,
+	 * <textarea> and <svg>.
+	 */
+	public static function lazy_load_media($html)
+	{
+		if (! is_string($html) || (false === stripos($html, '<img') && false === stripos($html, '<iframe'))) {
+			return $html;
+		}
+
+		// Ranges whose content is not page markup.
+		if (! preg_match_all('#<(script|style|noscript|template|textarea|svg)\b[^>]*>.*?</\1\s*>#is', $html, $blocks, PREG_OFFSET_CAPTURE)) {
+			$blocks = [[]];
+		}
+
+		$out      = '';
+		$cursor   = 0;
+		$images   = 0;
+		$tag_rx   = '#<(img|iframe)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i';
+		$callback = function ($m) use (&$images) {
+			$tag  = $m[0];
+			$name = strtolower($m[1]);
+
+			if ('img' === $name && ++$images <= 2) {
+				return $tag;
+			}
+
+			// Already decided, or handled by another lazy-loader.
+			if (preg_match('#\s(?:loading|fetchpriority|data-skip-lazy)\s*=#i', $tag)
+				|| preg_match('#\sdata-(?:src|srcset|lazy|large[_-]image|thumb|zoom|full)#i', $tag)
+				|| preg_match('#\sclass\s*=\s*["\'][^"\']*\b(?:lazyload|lazyloaded|lazy|skip-lazy|no-lazy|swiper-lazy)\b#i', $tag)) {
+				return $tag;
+			}
+
+			if ('img' === $name) {
+				// Tracking pixels and images without a source.
+				if (! preg_match('#\ssrc\s*=#i', $tag) || preg_match('#\s(?:width|height)\s*=\s*["\']?[01]["\']?[\s/>]#i', $tag)) {
+					return $tag;
+				}
+			} elseif (preg_match('#\ssrc\s*=\s*["\']?(?:about:|javascript:)#i', $tag)) {
+				return $tag;
+			}
+
+			$add = ' loading="lazy"';
+			if ('img' === $name && ! preg_match('#\sdecoding\s*=#i', $tag)) {
+				$add .= ' decoding="async"';
+			}
+
+			$closing = ('/>' === substr($tag, -2)) ? ' />' : '>';
+			$inner   = rtrim(substr($tag, 0, -strlen(rtrim($closing))));
+
+			return $inner . $add . $closing;
+		};
+
+		foreach ($blocks[0] as $block) {
+			$gap  = substr($html, $cursor, $block[1] - $cursor);
+			$out .= preg_replace_callback($tag_rx, $callback, $gap) . $block[0];
+			$cursor = $block[1] + strlen($block[0]);
+		}
+
+		$out .= preg_replace_callback($tag_rx, $callback, substr($html, $cursor));
+
+		return $out;
+	}
+
+	/* ---------------- Deferred JavaScript ---------------- */
+
+	/**
+	 * Adds `defer` to a stand-alone script in the page head that nothing else
+	 * depends on. Deliberately narrow: deferring a script that inline code or
+	 * another script calls straight away breaks the page, so anything with
+	 * attached inline code, any script another one depends on, footer scripts
+	 * (already late), and the layout/commerce/builder libraries in
+	 * DEFER_SKIP_PATTERNS are left exactly as WordPress prints them.
+	 */
+	public static function defer_script_tag($tag, $handle, $src = '')
+	{
+		static $depended_on = null;
+
+		if (self::is_editor_session() || is_customize_preview() || is_feed() || is_embed() || self::is_builder_request()) {
+			return $tag;
+		}
+
+		$src = (string) $src;
+		if ('' === $src || 1 !== substr_count(strtolower($tag), '<script') || preg_match('#\s(?:defer|async|nomodule)\b#i', $tag)) {
+			return $tag;
+		}
+
+		// Plain JavaScript only (no modules, JSON, templates).
+		if (preg_match('#\stype\s*=\s*(["\']?)([^"\'\s>]*)\1#i', $tag, $type) && ! in_array(strtolower($type[2]), ['text/javascript', 'application/javascript', ''], true)) {
+			return $tag;
+		}
+
+		if (false !== strpos($src, '/wp-includes/') || 0 === strpos((string) $handle, 'reloadify-') || in_array($handle, self::delay_js_excluded_handles(), true)) {
+			return $tag;
+		}
+
+		global $wp_scripts;
+
+		// Footer scripts already run after the page; only the head benefits.
+		if ($wp_scripts instanceof WP_Scripts && ! empty($wp_scripts->groups[$handle])) {
+			return $tag;
+		}
+
+		// Held back until interaction anyway.
+		if (self::is_delayable($handle, $src)) {
+			return $tag;
+		}
+
+		$patterns = apply_filters('reloadify_defer_js_skip_patterns', self::DEFER_SKIP_PATTERNS);
+		$needle   = strtolower((string) $handle);
+		foreach ((array) $patterns as $pattern) {
+			if ('' !== $pattern && false !== strpos($needle, strtolower((string) $pattern))) {
+				return $tag;
+			}
+		}
+
+		// Is any other registered script built on top of this one?
+		if (null === $depended_on) {
+			$depended_on = [];
+			if ($wp_scripts instanceof WP_Scripts) {
+				foreach ($wp_scripts->registered as $registered) {
+					foreach ((array) $registered->deps as $dep) {
+						$depended_on[$dep] = true;
+					}
+				}
+			}
+		}
+
+		if (isset($depended_on[$handle])) {
+			return $tag;
+		}
+
+		$deferred = preg_replace('#<script\b#i', '<script defer', $tag, 1);
+
+		return is_string($deferred) ? $deferred : $tag;
 	}
 
 	/* ---------------- Server-side extras ---------------- */
@@ -856,14 +1085,32 @@ class Reloadify_Speed
 			Reloadify_Minify::set_cache_dir($cache['dir']);
 		}
 
-		$minified = Reloadify_Minify::html($buffer, [
-			'remove_comments'     => ! empty($options['remove_html_comments']),
-			'collapse_whitespace' => ! empty($options['collapse_whitespace']) && ! empty($options['minify_html']),
-			'minify_inline_js'    => ! empty($options['minify_js']),
-			'minify_inline_css'   => ! empty($options['minify_css']),
-		]);
+		$result = $buffer;
 
-		return ('' === trim((string) $minified)) ? $buffer : $minified;
+		if (! empty($options['lazy_load_images']) && ! self::is_builder_request() && ! self::is_editor_session()) {
+			$result = self::lazy_load_media($result);
+		}
+
+		// Each rule works on its own: comments, whitespace between tags, runs of
+		// whitespace, and the inline <script> / <style> bodies (which follow the
+		// JavaScript and CSS switches).
+		$wants_minify = ! empty($options['minify_html']) || ! empty($options['remove_html_comments']) || ! empty($options['collapse_whitespace']) || ! empty($options['minify_js']) || ! empty($options['minify_css']);
+
+		if ($wants_minify) {
+			$minified = Reloadify_Minify::html($result, [
+				'remove_comments'     => ! empty($options['remove_html_comments']),
+				'collapse_whitespace' => ! empty($options['collapse_whitespace']),
+				'trim_tags'           => ! empty($options['minify_html']),
+				'minify_inline_js'    => ! empty($options['minify_js']),
+				'minify_inline_css'   => ! empty($options['minify_css']),
+			]);
+
+			if ('' !== trim((string) $minified)) {
+				$result = $minified;
+			}
+		}
+
+		return $result;
 	}
 
 	/* ---------------- Asset minification ---------------- */
@@ -909,7 +1156,7 @@ class Reloadify_Speed
 		// One stat() call: filesize() and filemtime() below are answered from
 		// PHP's stat cache. A missing file simply returns false here.
 		$stat = @stat($path);
-		if (! $stat || ! empty($stat['mode']) && ($stat['mode'] & 0170000) !== 0100000) {
+		if (! $stat || (! empty($stat['mode']) && ($stat['mode'] & 0170000) !== 0100000)) {
 			return $src;
 		}
 

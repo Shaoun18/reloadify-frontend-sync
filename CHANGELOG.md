@@ -1,5 +1,22 @@
 ## Changelog
 
+### 1.3.0
+
+*   **New (Speed Boost): Remove query strings.** `?ver=` is removed from local CSS/JS URLs for logged-out visitors. A file that changed in the last 7 days keeps its tag, logged-in editors always get the tagged URL, third-party URLs are untouched, and other query parameters are preserved.
+*   **New (Speed Boost): Lazy-load images.** `loading="lazy"` and `decoding="async"` are added to images and iframes that lack them, on the finished page (so page-builder and theme markup is covered). The first two images stay eager; images that already declare `loading`/`fetchpriority`, lazy-loader markup, WooCommerce gallery images, tracking pixels and anything in `<script>`, `<style>`, `<noscript>`, `<template>`, `<textarea>` or `<svg>` are left alone.
+*   **New (Speed Boost): Defer non-critical scripts.** `defer` is added to stand-alone head scripts that no other script depends on. jQuery, WordPress core, WooCommerce, page builders, sliders, galleries, payment/captcha scripts and footer scripts are never deferred (`reloadify_defer_js_skip_patterns` filter to extend).
+*   **Changed (Speed Boost): compact list.** Tighter row spacing, one fixed toggle column so every switch aligns, and an "N enabled" counter.
+*   **New (Media Optimization): format selector** — Auto, WebP, AVIF or Original (keep the uploaded format). Options the server cannot encode are disabled.
+*   **New (Media Optimization): compression-quality slider (40–95%)**, applied as a ceiling that only tightens: an encoder whose own default is lower is kept.
+*   **New (Media Optimization): savings tiles** — average size saved and estimated total saved across optimized images.
+*   **New (Media Optimization): real before/after preview.** The newest JPEG/PNG in the library is scaled to preview size and encoded the way WordPress would without the plugin and with the chosen format and quality; both sizes are measured and both images are shown. It updates as the slider moves (debounced) and shows "% larger" honestly when a setting would not help.
+*   **New (Delete Data on Uninstall): choose what is removed** — plugin settings, cached files, local storage (per-image/per-video optimization records) and logs & diagnostics — with a privacy callout and a warning. Defaults: settings and cached files on, the other two off. Media Library files are never deleted. Sites that already had the option on keep the old behaviour for settings and cache.
+*   **New: confirmation toasts** for every switch in the three panels.
+*   **Changed: Cross-Browser Reload tab redesigned** in the same card language. Developer Mode and Reload all tabs are control cards with an icon and an On/Off pill; browsers enabled (with a progress meter), reload mode and last change are status tiles; Reload behavior is a pair of icon choice cards; the browser grid shows a status dot per browser, icons for Normal / Incognito, an "N enabled" counter and **Enable all / Disable all** shortcuts. Every change shows a toast (the reload-mode choice had none before).
+*   **Changed: Extensions tab redesigned.** SVG Upload Support and Scroll To Top Button are cards with a header switch. The scroll button gets a live preview, position choice cards, six colour presets plus a custom picker and hex field, and a "show after scrolling" slider (0–1500 px) — each with a confirmation toast.
+*   **Fixed: the Server Performance header** could pick up the privacy-callout styling because both used the same CSS class.
+*   **Changed: version 1.3.0** (new features, backwards compatible).
+
 ### 1.2.2
 
 *   **Fixed (Speed Boost): the WooCommerce product gallery was shown with a wrong height.** Delay JavaScript parked *every* script until the first interaction, so FlexSlider and the product-gallery code measured the layout at the wrong moment. Delay JavaScript now only holds back third-party tracking, advertising and chat scripts (Google Analytics / Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar). Theme, WooCommerce and page-builder scripts load normally. Add your own patterns with the `reloadify_delay_js_patterns` filter.

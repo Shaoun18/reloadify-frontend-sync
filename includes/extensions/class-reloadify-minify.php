@@ -465,6 +465,7 @@ class Reloadify_Minify {
 		$options = wp_parse_args( $options, [
 			'remove_comments'    => true,
 			'collapse_whitespace' => true,
+			'trim_tags'          => true,
 			'minify_inline_js'   => true,
 			'minify_inline_css'  => true,
 		] );
@@ -511,7 +512,9 @@ class Reloadify_Minify {
 			if ( is_string( $collapsed ) ) {
 				$html = $collapsed;
 			}
+		}
 
+		if ( $options['trim_tags'] ) {
 			// Whitespace between block-level tags carries no meaning.
 			$collapsed = preg_replace( '#>\s+<(/?(?:html|head|body|div|section|article|aside|header|footer|nav|main|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|form|fieldset|figure|h[1-6]|p|hr|br|meta|link|title|script|style)\b)#i', '><$1', $html );
 			if ( is_string( $collapsed ) ) {

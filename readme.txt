@@ -4,7 +4,7 @@ Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,14 @@ Your feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.3.0 =
+* New **Speed Boost** rules, all on by default and each with its own switch: Remove query strings (a file keeps its `?ver=` for 7 days after it changes, so updates are never hidden), Lazy-load images and iframes (first two images stay eager; galleries and sliders are skipped), and Defer non-critical scripts (stand-alone head scripts nothing else depends on — never jQuery, WooCommerce, builders or sliders).
+* **Speed Boost** panel: compact rows, one aligned toggle column and an "N enabled" counter.
+* **Media Optimization**: image format selector (Auto, WebP, AVIF, Original), a compression-quality slider (40–95%), summary tiles for average and total savings, and a real before/after preview measured on your newest image that updates as you move the slider.
+* **Delete Data on Uninstall**: choose what is removed — plugin settings, cached files, local storage (per-image optimization records) and logs & diagnostics — with a warning. Your Media Library files are never deleted.
+* Every change in these three panels shows a confirmation toast.
+* **Cross-Browser Reload** and **Extensions** tabs redesigned to match: control cards, status tiles, icon choice cards, Enable all / Disable all for browsers, and a live preview with colour presets and a distance slider for the Scroll To Top button.
 
 = 1.2.2 =
 * Fixed **Speed Boost** breaking the WooCommerce product gallery (image shown with a wrong height) — Delay JavaScript now only holds back third-party tracking/chat scripts; theme, WooCommerce and page-builder scripts always run normally.

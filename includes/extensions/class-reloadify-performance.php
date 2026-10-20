@@ -224,7 +224,7 @@ class Reloadify_Performance {
 			];
 		}
 
-		$block = "; BEGIN " . self::MARKER . " (opcache)\n" . implode( "\n", $lines ) . "\n; END " . self::MARKER . " (opcache)";
+		$block = '; BEGIN ' . self::MARKER . " (opcache)\n" . implode( "\n", $lines ) . "\n; END " . self::MARKER . ' (opcache)';
 
 		$pattern = '/; BEGIN ' . preg_quote( self::MARKER, '/' ) . ' \(opcache\).*?; END ' . preg_quote( self::MARKER, '/' ) . ' \(opcache\)/s';
 
@@ -259,7 +259,7 @@ class Reloadify_Performance {
 				$lines[] = $key . '=' . $desired[ $key ];
 			}
 		}
-		$block = "; BEGIN " . self::MARKER . "\n" . implode( "\n", $lines ) . "\n; END " . self::MARKER;
+		$block = '; BEGIN ' . self::MARKER . "\n" . implode( "\n", $lines ) . "\n; END " . self::MARKER;
 
 		$existing = file_exists( $path ) ? @file_get_contents( $path ) : '';
 		$existing = false !== $existing ? $existing : '';
