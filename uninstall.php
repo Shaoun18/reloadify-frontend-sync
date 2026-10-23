@@ -89,6 +89,7 @@ function reloadify_uninstall_cleanup_current_site() {
 	$reloadify_generated_dirs = [
 		trailingslashit( $upload['basedir'] ) . 'reloadify-reload',
 		trailingslashit( $upload['basedir'] ) . 'reloadify-minify',
+		trailingslashit( $upload['basedir'] ) . 'reloadify-preview',
 	];
 
 	foreach ( $reloadify_generated_dirs as $dir ) {

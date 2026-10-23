@@ -291,6 +291,11 @@ class Reloadify_Rest {
 
 	public static function run_media_backfill_now() {
 		$result = Reloadify_Media::run_backfill_batch_now();
+
+		// If the person closes the tab mid-run, WP-Cron picks up where this left off.
+		if ( ! empty( $result['images_remaining'] ) && ! wp_next_scheduled( Reloadify_Media::CRON_HOOK_BACKFILL, [] ) ) {
+			wp_schedule_single_event( time() + 30, Reloadify_Media::CRON_HOOK_BACKFILL );
+		}
 		return rest_ensure_response( $result );
 	}
 

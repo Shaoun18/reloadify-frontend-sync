@@ -113,6 +113,9 @@ Your feedback helps improve the plugin and supports future updates.
 * **Media Optimization**: image format selector (Auto, WebP, AVIF, Original), a compression-quality slider (40–95%), summary tiles for average and total savings, and a real before/after preview measured on your newest image that updates as you move the slider.
 * **Delete Data on Uninstall**: choose what is removed — plugin settings, cached files, local storage (per-image optimization records) and logs & diagnostics — with a warning. Your Media Library files are never deleted.
 * Every change in these three panels shows a confirmation toast.
+* **Media Optimization is much faster:** ~10× faster before/after preview, Auto now uses WebP (AVIF encodes several times slower), images converted at upload are not converted again, and the bulk job does more per request.
+* **Optimize existing media now** runs in the background — switch tabs while a progress notification shows "N images left · X% complete" and hides when done. The button changes colour as it works.
+* **Server Performance:** larger text, and each live setting now says "Updated — the server is now using …" so the new value is obvious.
 * **Server Performance** tab redesigned: summary header, a tile for every PHP setting with a plain-English explanation and live match status, and a clearer danger zone.
 * **Scroll To Top** button: pick any WordPress Dashicon (all of them, searchable), choose an entrance animation (fade, slide, zoom, bounce) and hover effect, and add a scroll-progress ring — with a live preview and automatic reduced-motion support. The icon font loads only when a visitor scrolls.
 * **Cross-Browser Reload** and **Extensions** tabs redesigned to match: control cards, status tiles, icon choice cards, Enable all / Disable all for browsers, and a live preview with colour presets and a distance slider for the Scroll To Top button.

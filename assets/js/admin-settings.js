@@ -178,6 +178,72 @@
         );
     }
 
+    /** Long-running progress, shown top-right on every tab until it finishes. */
+    function ProgressToast(props) {
+        var st = props.state;
+        if (!st || st.status === 'idle') { return null; }
+
+        var running = st.status === 'running';
+        var pct = st.total > 0 ? Math.min(100, Math.round((st.processed / st.total) * 100)) : 0;
+        var type = running ? 'progress' : (st.status === 'done' ? 'success' : (st.status === 'stopped' ? 'info' : 'error'));
+        var title;
+        var line;
+
+        if (running) {
+            title = __('Optimizing media', 'reloadify-frontend-sync');
+            if (st.total === 0 && st.videos === 0) {
+                line = __('Starting\u2026', 'reloadify-frontend-sync');
+            } else if (st.remaining === 0 && st.videos > 0) {
+                line = wp.i18n.sprintf(
+                    /* translators: %d: number of videos still to compress */
+                    __('%d videos left \u00b7 compressing videos', 'reloadify-frontend-sync'), st.videos);
+            } else {
+                line = wp.i18n.sprintf(
+                    /* translators: 1: images left, 2: percent complete */
+                    __('%1$d images left \u00b7 %2$d%% complete', 'reloadify-frontend-sync'), st.remaining, pct);
+            }
+        } else if (st.status === 'done') {
+            title = __('All media optimized', 'reloadify-frontend-sync');
+            line = st.processed > 0
+                ? wp.i18n.sprintf(
+                    /* translators: %d: number of images processed */
+                    __('%d images processed \u00b7 100% complete', 'reloadify-frontend-sync'), st.processed)
+                : __('Everything was already optimized.', 'reloadify-frontend-sync');
+        } else if (st.status === 'stopped') {
+            title = __('Optimization stopped', 'reloadify-frontend-sync');
+            line = wp.i18n.sprintf(
+                /* translators: %d: images still waiting */
+                __('%d images are still waiting. Start again any time.', 'reloadify-frontend-sync'), st.remaining || 0);
+        } else {
+            title = __('Optimization paused', 'reloadify-frontend-sync');
+            line = __('Some media could not be processed. Try again, or check the server\u2019s image library.', 'reloadify-frontend-sync');
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-toast reloadify-toast--' + type + ' reloadify-toast--progress', role: 'status', 'aria-live': 'polite' },
+            el(
+                'span',
+                { className: 'reloadify-toast-icon', 'aria-hidden': 'true' },
+                running ? el('span', { className: 'reloadify-spinner' }) : TOAST_GLYPHS[type === 'progress' ? 'info' : type]
+            ),
+            el(
+                'div',
+                { className: 'reloadify-toast-body' },
+                el('strong', { className: 'reloadify-toast-title' }, title),
+                el('span', { className: 'reloadify-toast-message' }, line),
+                (running || st.status === 'done') && el(
+                    'div',
+                    { className: 'reloadify-progress' + (running && st.total === 0 ? ' is-indeterminate' : ''), role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': st.status === 'done' ? 100 : pct },
+                    el('span', { style: { width: (st.status === 'done' ? 100 : pct) + '%' } })
+                )
+            ),
+            running
+                ? el('button', { type: 'button', className: 'reloadify-toast-stop', onClick: props.onStop }, __('Stop', 'reloadify-frontend-sync'))
+                : el('button', { type: 'button', className: 'reloadify-toast-close', 'aria-label': __('Dismiss', 'reloadify-frontend-sync'), onClick: props.onDismiss }, '\u00d7')
+        );
+    }
+
     function AutoSaveStatus(props) {
         var label;
         var cls = 'reloadify-autosave-status';
@@ -557,13 +623,18 @@
         var matchStatus = null;
         if (isRuntime && enabled) {
             var matches = String(props.live) === String(props.value);
+            var liveValue = props.live || __('(default)', 'reloadify-frontend-sync');
             matchStatus = el(
                 'div',
-                { className: 'reloadify-setting-status ' + (matches ? 'is-match' : 'is-mismatch') },
-                el(Ico, { name: matches ? 'check' : 'info', size: 13 }),
-                el('span', null, matches
-                    ? __('Matches the live server right now.', 'reloadify-frontend-sync')
-                    : __('Not applied yet on this page load \u2014 save your changes, then reload this page to confirm.', 'reloadify-frontend-sync'))
+                { className: 'reloadify-setting-status ' + (matches ? 'is-match' : 'is-mismatch'), role: 'status' },
+                el('span', { className: 'reloadify-setting-status-icon', 'aria-hidden': 'true' }, el(Ico, { name: matches ? 'check' : 'clock', size: 14 })),
+                el(
+                    'span',
+                    { className: 'reloadify-setting-status-text' },
+                    matches
+                        ? el('span', null, __('Updated \u2014 the server is now using', 'reloadify-frontend-sync'), ' ', el('strong', null, liveValue))
+                        : el('span', null, __('Saved \u2014 applies on the next page load. The server is currently using', 'reloadify-frontend-sync'), ' ', el('strong', null, liveValue))
+                )
             );
         }
 
@@ -1082,12 +1153,6 @@
         var stateSaving = useState(false);
         var saving = stateSaving[0], setSaving = stateSaving[1];
 
-        var stateRunning = useState(false);
-        var running = stateRunning[0], setRunning = stateRunning[1];
-
-        var stateProgress = useState(null);
-        var progress = stateProgress[0], setProgress = stateProgress[1];
-
         var stateQuality = useState(media.quality || 80);
         var quality = stateQuality[0], setQuality = stateQuality[1];
 
@@ -1166,52 +1231,38 @@
             return function () { clearTimeout(timer); };
         }, [media.enabled, media.format_preference, quality]);
 
+        var bf = props.backfill || { status: 'idle' };
+        var running = bf.status === 'running';
+        var pendingImages = (media.pending && media.pending.images) || 0;
+        var pendingVideos = (media.pending && media.pending.videos) || 0;
+        var pct = bf.total > 0 ? Math.min(100, Math.round((bf.processed / bf.total) * 100)) : 0;
+        var allDone = !running && pendingImages === 0 && pendingVideos === 0;
+
         function optimizeNow() {
-            setRunning(true);
-            setProgress(null);
-
-            function runBatch() {
-                wp.apiFetch({ path: '/reloadify/v1/media/backfill-now', method: 'POST' })
-                    .then(function (response) {
-                        setProgress(response);
-                        var stillWorking = response.images_remaining > 0 && response.images_processed > 0;
-                        if (stillWorking) {
-                            runBatch();
-                        } else {
-                            setRunning(false);
-                            wp.apiFetch({ path: '/reloadify/v1/media' }).then(function (fresh) { props.onChange(fresh); });
-                        }
-                    })
-                    .catch(function () {
-                        setRunning(false);
-                        props.onToast('error', __('Could not run existing-media optimization.', 'reloadify-frontend-sync'));
-                    });
-            }
-
-            runBatch();
+            props.onBackfillStart();
         }
 
-        var statusNode = null;
-        if (progress) {
-            var videosStuck = (progress.videos_unavailable || 0) > 0;
-            var stillPending = (progress.images_remaining || 0) > 0 || (progress.videos_remaining || 0) > 0;
+        var buttonLabel;
+        if (running) {
+            buttonLabel = bf.total > 0
+                ? wp.i18n.sprintf(
+                    /* translators: %d: percent complete */
+                    __('Optimizing\u2026 %d%%', 'reloadify-frontend-sync'), pct)
+                : __('Optimizing\u2026', 'reloadify-frontend-sync');
+        } else if (bf.status === 'done' || allDone) {
+            buttonLabel = __('All media optimized', 'reloadify-frontend-sync');
+        } else {
+            buttonLabel = __('Optimize existing media now', 'reloadify-frontend-sync');
+        }
 
-            if (!stillPending && !videosStuck) {
-                statusNode = el('span', { className: 'reloadify-media-backfill-status reloadify-media-backfill-status--ok' }, __('All optimized', 'reloadify-frontend-sync'));
-            } else if (videosStuck && !stillPending) {
-                statusNode = el('span', { className: 'reloadify-media-backfill-status reloadify-media-backfill-status--error' },
-                    wp.i18n.sprintf(
-                        /* translators: %d: number of videos that could not be compressed. */
-                        __('%d video(s) not compressed \u2014 ffmpeg isn\u2019t available on this server', 'reloadify-frontend-sync'),
-                        progress.videos_unavailable
-                    )
-                );
-            } else {
-                statusNode = el('span', { className: 'reloadify-media-backfill-status' },
-                    /* translators: 1: number of images still waiting, 2: number of videos still waiting. */
-                    wp.i18n.sprintf(__('%1$d images, %2$d videos left', 'reloadify-frontend-sync'), progress.images_remaining, progress.videos_remaining)
-                );
-            }
+        var waiting = null;
+        if (!running && (pendingImages > 0 || pendingVideos > 0)) {
+            waiting = el('span', { className: 'reloadify-media-waiting' },
+                wp.i18n.sprintf(
+                    /* translators: 1: images waiting, 2: videos waiting */
+                    __('%1$d images and %2$d videos waiting', 'reloadify-frontend-sync'), pendingImages, pendingVideos));
+        } else if (running) {
+            waiting = el('span', { className: 'reloadify-media-waiting' }, __('Runs in the background \u2014 you can switch tabs.', 'reloadify-frontend-sync'));
         }
 
         var formatOptions = [
@@ -1249,8 +1300,9 @@
                         );
                     })
                 ),
-                !caps.avif && el('p', { className: 'reloadify-media-format-note' },
-                    __('AVIF isn\u2019t available on this server \u2014 choosing Auto uses WebP.', 'reloadify-frontend-sync'))
+                el('p', { className: 'reloadify-media-format-note' }, caps.avif
+                    ? __('Auto uses WebP \u2014 fast to create and supported everywhere. AVIF makes slightly smaller files but takes several times longer to encode.', 'reloadify-frontend-sync')
+                    : __('AVIF isn\u2019t available on this server \u2014 Auto uses WebP, which is also the fastest to create.', 'reloadify-frontend-sync'))
             ),
             el(
                 'div',
@@ -1296,10 +1348,17 @@
                 { className: 'reloadify-media-backfill-row' },
                 el(
                     'button',
-                    { type: 'button', className: 'button button-small', onClick: optimizeNow, disabled: running },
-                    running ? __('Optimizing\u2026', 'reloadify-frontend-sync') : __('Optimize existing media now', 'reloadify-frontend-sync')
+                    {
+                        type: 'button',
+                        className: 'reloadify-optimize-btn' + (running ? ' is-running' : '') + ((bf.status === 'done' || allDone) ? ' is-done' : ''),
+                        onClick: optimizeNow,
+                        disabled: running || allDone,
+                        'aria-busy': running
+                    },
+                    running ? el('span', { className: 'reloadify-spinner reloadify-spinner--light' }) : el(Ico, { name: (bf.status === 'done' || allDone) ? 'check' : 'bolt', size: 15 }),
+                    buttonLabel
                 ),
-                statusNode
+                waiting
             )
         );
 
@@ -1424,7 +1483,7 @@
                 'div',
                 { className: 'reloadify-toggle-grid' },
                 el(SpeedBoostCard, { speed: props.speed, onChange: props.onSpeedChange, onToast: props.onToast }),
-                el(MediaOptimizationCard, { media: props.media, onChange: props.onMediaChange, onToast: props.onToast }),
+                el(MediaOptimizationCard, { media: props.media, onChange: props.onMediaChange, onToast: props.onToast, backfill: props.backfill, onBackfillStart: props.onBackfillStart }),
                 el(DeleteOnUninstallCard, { cleanup: props.cleanup, onChange: props.onCleanupChange, onToast: props.onToast })
             ),
 
@@ -1982,6 +2041,86 @@
 
         var toastTimer = useRef(null);
 
+        // Existing-media optimization lives here, not inside the Media card, so it
+        // keeps running -- and keeps reporting progress -- while the person moves
+        // between tabs.
+        var backfillState = useState({ status: 'idle', processed: 0, remaining: 0, total: 0, videos: 0 });
+        var backfill = backfillState[0], setBackfill = backfillState[1];
+        var backfillRun = useRef({ running: false, cancel: false, processed: 0, total: 0, lastVideos: -1, stalls: 0 });
+        var backfillHide = useRef(null);
+
+        function endBackfill(status, extra) {
+            var run = backfillRun.current;
+            run.running = false;
+            clearTimeout(backfillHide.current);
+
+            wp.apiFetch({ path: '/reloadify/v1/media' }).then(function (fresh) { setMedia(fresh); }).catch(function () {});
+
+            setBackfill(Object.assign({ status: status, processed: run.processed, remaining: 0, total: run.total, videos: 0 }, extra || {}));
+
+            var wait = status === 'error' ? 12000 : (status === 'stopped' ? 4500 : 5000);
+            backfillHide.current = setTimeout(function () {
+                setBackfill({ status: 'idle', processed: 0, remaining: 0, total: 0, videos: 0 });
+            }, wait);
+        }
+
+        function backfillStep() {
+            var run = backfillRun.current;
+
+            if (run.cancel) {
+                endBackfill('stopped', { remaining: run.lastRemaining || 0 });
+                return;
+            }
+
+            wp.apiFetch({ path: '/reloadify/v1/media/backfill-now', method: 'POST' })
+                .then(function (r) {
+                    var done = r.images_processed || 0;
+                    var remaining = r.images_remaining || 0;
+                    var videos = r.videos_remaining || 0;
+
+                    run.processed += done;
+                    run.total = Math.max(run.total, run.processed + remaining);
+                    run.lastRemaining = remaining;
+
+                    var videoLeft = videos > 0 && r.ffmpeg_available;
+                    var progressed = done > 0 || (run.lastVideos >= 0 && videos < run.lastVideos);
+                    run.lastVideos = videos;
+
+                    if (remaining === 0 && !videoLeft) {
+                        endBackfill('done', { unavailable: r.videos_unavailable || 0 });
+                        return;
+                    }
+
+                    run.stalls = progressed ? 0 : run.stalls + 1;
+                    if (run.stalls >= 2) {
+                        endBackfill('error', { remaining: remaining, videos: videos });
+                        return;
+                    }
+
+                    setBackfill({ status: 'running', processed: run.processed, remaining: remaining, total: run.total, videos: videoLeft ? videos : 0 });
+                    backfillStep();
+                })
+                .catch(function () {
+                    endBackfill('error', { remaining: run.lastRemaining || 0 });
+                });
+        }
+
+        function startBackfill() {
+            if (backfillRun.current.running) { return; }
+            clearTimeout(backfillHide.current);
+
+            var pending = (media.pending && media.pending.images) || 0;
+            var pendingVideos = (media.pending && media.pending.videos) || 0;
+
+            backfillRun.current = { running: true, cancel: false, processed: 0, total: pending, lastVideos: -1, stalls: 0, lastRemaining: pending };
+            setBackfill({ status: 'running', processed: 0, remaining: pending, total: pending, videos: pendingVideos });
+            backfillStep();
+        }
+
+        function stopBackfill() {
+            backfillRun.current.cancel = true;
+        }
+
         function showToast(type, message, title) {
             if (toastTimer.current) { clearTimeout(toastTimer.current); }
             setToast({ type: type, message: message, title: title || null });
@@ -2091,7 +2230,12 @@
         return el(
             'div',
             { className: 'reloadify-app' },
-            el(Toast, { toast: toast, onDismiss: dismissToast }),
+            el(
+                'div',
+                { className: 'reloadify-toast-stack' },
+                el(ProgressToast, { state: backfill, onStop: stopBackfill, onDismiss: function () { clearTimeout(backfillHide.current); setBackfill({ status: 'idle', processed: 0, remaining: 0, total: 0, videos: 0 }); } }),
+                el(Toast, { toast: toast, onDismiss: dismissToast })
+            ),
             el(
                 'div',
                 { className: 'reloadify-hero' },
@@ -2122,7 +2266,7 @@
                     ? el(ReloadTab, { settings: settings, onChange: setSettings, onExpire: refreshSettings, onToast: showToast })
                     : tab === 'extras'
                         ? el(ExtrasTab, { extras: extras, onChange: setExtras, onToast: showToast })
-                        : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup })
+                        : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup, backfill: backfill, onBackfillStart: startBackfill })
             )
         );
     }
