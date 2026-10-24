@@ -75,15 +75,9 @@ class Reloadify_Admin {
 					'options'      => Reloadify_Speed::get_options(),
 					'optionLabels' => Reloadify_Speed::option_labels(),
 				],
-				'media'       => [
-					'enabled'            => Reloadify_Media::is_enabled(),
-					'items'              => Reloadify_Media::items(),
-					'format_preference'  => Reloadify_Media::format_preference(),
-					'format_capabilities' => Reloadify_Media::capabilities(),
-				],
-				'cleanup'     => [
-					'enabled' => Reloadify_Cleanup::is_enabled(),
-				],
+				'dashicons'   => Reloadify_Extras::dashicon_names(),
+				'media'       => Reloadify_Media::payload(),
+				'cleanup'     => Reloadify_Cleanup::payload(),
 				'extras'      => Reloadify_Extras::get_settings(),
 			],
 		] );

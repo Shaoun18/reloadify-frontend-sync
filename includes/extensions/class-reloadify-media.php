@@ -16,6 +16,9 @@ class Reloadify_Media {
 	const BACKFILL_META_KEY  = '_reloadify_media_optimized';
 	const VIDEO_BACKFILL_META_KEY = '_reloadify_media_video_optimized';
 	const STATS_META_KEY     = '_reloadify_media_stats';
+	const QUALITY_OPTION_KEY = 'reloadify_media_quality';
+	const TOTALS_TRANSIENT   = 'reloadify_media_totals';
+	const DEFAULT_QUALITY    = 80;
 	const BACKFILL_BATCH_SIZE = 3;
 
 	/**
@@ -26,7 +29,14 @@ class Reloadify_Media {
 	 * minutes. Now each request keeps converting until this budget is spent,
 	 * so the same library finishes in a fraction of the round trips.
 	 */
-	const MANUAL_TIME_BUDGET = 15;
+	const MANUAL_TIME_BUDGET = 12;
+	const MANUAL_FETCH       = 12;
+	const PREVIEW_WIDTH      = 480;
+	const PREVIEW_DIR        = 'reloadify-preview';
+
+	/** Set while a backfill runs, so the (expensive) savings sampling backs off. */
+	private static $in_backfill = false;
+	private static $need_samples = null;
 
 	/**
 	 * Opt-in since 1.2.0 -- conversion rewrites real files in the uploads
@@ -54,18 +64,35 @@ class Reloadify_Media {
 
 	/**
 	 * 'auto' (default) picks the best format this server actually
-	 * supports, AVIF first. 'webp' / 'avif' let the person pin a specific
+	 * supports, WebP first (it encodes far faster). 'webp' / 'avif' let the person pin a specific
 	 * format instead of leaving the choice to the plugin.
 	 */
 	public static function format_preference() {
 		$value = get_option( self::FORMAT_OPTION_KEY, 'auto' );
-		return in_array( $value, [ 'auto', 'webp', 'avif' ], true ) ? $value : 'auto';
+		return in_array( $value, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $value : 'auto';
 	}
 
 	public static function set_format_preference( $format ) {
-		$format = in_array( $format, [ 'auto', 'webp', 'avif' ], true ) ? $format : 'auto';
+		$format = in_array( $format, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $format : 'auto';
 		update_option( self::FORMAT_OPTION_KEY, $format );
 		return $format;
+	}
+
+	/**
+	 * Quality ceiling for generated JPEG / WebP / AVIF sizes (40-95, default
+	 * 80). It only ever tightens: an encoder whose own default is already lower
+	 * is left alone.
+	 */
+	public static function quality() {
+		$value = (int) get_option( self::QUALITY_OPTION_KEY, self::DEFAULT_QUALITY );
+		return max( 40, min( 95, $value ) );
+	}
+
+	public static function set_quality( $quality ) {
+		$quality = max( 40, min( 95, (int) $quality ) );
+		update_option( self::QUALITY_OPTION_KEY, $quality );
+		delete_transient( self::TOTALS_TRANSIENT );
+		return $quality;
 	}
 
 	/**
@@ -89,12 +116,25 @@ class Reloadify_Media {
 	}
 
 	/**
-	 * AVIF compresses smaller than WebP at the same visual quality when a
+	 * AVIF compresses a little smaller than WebP at the same visual quality when a
 	 * host supports it; WebP is the safe, far more common fallback.
 	 */
 	public static function preferred_image_format() {
+		return self::resolve_format( self::format_preference() );
+	}
+
+	/**
+	 * Which format a given preference actually produces on THIS server
+	 * ('original' keeps the uploaded format, so nothing is converted).
+	 *
+	 * @return string|null 'avif', 'webp', or null for no conversion.
+	 */
+	public static function resolve_format( $pref ) {
 		$caps = self::capabilities();
-		$pref = self::format_preference();
+
+		if ( 'original' === $pref ) {
+			return null;
+		}
 
 		if ( 'webp' === $pref ) {
 			return ! empty( $caps['webp'] ) ? 'webp' : null;
@@ -107,12 +147,17 @@ class Reloadify_Media {
 			return ! empty( $caps['webp'] ) ? 'webp' : null;
 		}
 
-		if ( ! empty( $caps['avif'] ) ) {
-			return 'avif';
-		}
-
+		// Auto: WebP. AVIF compresses a little better, but it takes several times
+		// longer to encode -- on every upload, for every thumbnail size -- which
+		// made uploads and "Optimize existing media" painfully slow. AVIF stays
+		// one click away for sites that prefer the smallest files; Auto only uses
+		// it when WebP isn't available at all.
 		if ( ! empty( $caps['webp'] ) ) {
 			return 'webp';
+		}
+
+		if ( ! empty( $caps['avif'] ) ) {
+			return 'avif';
 		}
 
 		return null;
@@ -131,7 +176,12 @@ class Reloadify_Media {
 
 		$pref = self::format_preference();
 
-		if ( $preferred ) {
+		if ( 'original' === $pref ) {
+			$items[] = [
+				'key'   => 'image_format',
+				'label' => __( 'Original format selected: images keep the format you uploaded and only the quality ceiling below is applied', 'reloadify-frontend-sync' ),
+			];
+		} elseif ( $preferred ) {
 			if ( 'avif' === $pref && 'webp' === $preferred ) {
 				$items[] = [
 					'key'   => 'image_format',
@@ -156,7 +206,11 @@ class Reloadify_Media {
 
 		$items[] = [
 			'key'   => 'image_quality',
-			'label' => __( 'Image quality is capped at a visually-lossless level — only ever tightens an unusually high setting, never loosens one you already chose', 'reloadify-frontend-sync' ),
+			'label' => sprintf(
+				/* translators: %d: quality ceiling in percent */
+				__( 'Image quality is capped at %d%% — it only ever tightens an unusually high setting, never loosens one you already chose', 'reloadify-frontend-sync' ),
+				self::quality()
+			),
 		];
 
 		$items[] = [
@@ -189,6 +243,335 @@ class Reloadify_Media {
 		return $items;
 	}
 
+	/**
+	 * Measured savings across optimized images, for the two summary tiles.
+	 * Cached for five minutes -- it walks post meta -- and cleared whenever a
+	 * new measurement is recorded or the quality changes.
+	 *
+	 * @return array{images:int,avg_percent:int,saved_bytes:int}
+	 */
+	public static function stats() {
+		$cached = get_transient( self::TOTALS_TRANSIENT );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$ids = get_posts(
+			[
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 300,
+				'fields'         => 'ids',
+				'meta_key'       => self::STATS_META_KEY, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- bounded to 300 rows, result cached.
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
+				'no_found_rows'  => true,
+			]
+		);
+
+		$count = 0;
+		$pct   = 0.0;
+		$saved = 0.0;
+
+		foreach ( $ids as $id ) {
+			$m = get_post_meta( $id, self::STATS_META_KEY, true );
+			if ( ! is_array( $m ) || empty( $m['sample_original_bytes'] ) || empty( $m['sample_optimized_bytes'] ) ) {
+				continue;
+			}
+
+			$orig = (int) $m['sample_original_bytes'];
+			$opt  = (int) $m['sample_optimized_bytes'];
+			if ( $orig <= 0 || $opt <= 0 ) {
+				continue;
+			}
+
+			$count++;
+			$pct += max( 0, 100 * ( 1 - $opt / $orig ) );
+
+			// Scale the one measured size up to every generated size of the image.
+			$meta        = wp_get_attachment_metadata( $id );
+			$sizes_total = 0;
+			if ( is_array( $meta ) && ! empty( $meta['sizes'] ) ) {
+				foreach ( $meta['sizes'] as $size ) {
+					$sizes_total += isset( $size['filesize'] ) ? (int) $size['filesize'] : 0;
+				}
+			}
+
+			$ratio  = $orig / $opt;
+			$saved += ( $sizes_total > 0 && $ratio > 1 ) ? $sizes_total * ( $ratio - 1 ) : max( 0, $orig - $opt );
+		}
+
+		$result = [
+			'images'      => $count,
+			'avg_percent' => $count ? (int) round( $pct / $count ) : 0,
+			'saved_bytes' => (int) round( $saved ),
+		];
+
+		set_transient( self::TOTALS_TRANSIENT, $result, 5 * MINUTE_IN_SECONDS );
+
+		return $result;
+	}
+
+	/** One shape for the REST responses and the settings screen. */
+	public static function payload() {
+		$caps = self::capabilities();
+
+		return [
+			'enabled'             => self::is_enabled(),
+			'items'               => self::items(),
+			'format_preference'   => self::format_preference(),
+			'format_capabilities' => [
+				'webp' => (bool) $caps['webp'],
+				'avif' => (bool) $caps['avif'],
+			],
+			'quality'             => self::quality(),
+			'stats'               => self::stats(),
+			'pending'             => [
+				'images' => self::count_pending( 'image' ),
+				'videos' => self::count_pending( 'video' ),
+			],
+		];
+	}
+
+	/**
+	 * Real before/after for the preview panel: the newest JPEG/PNG in the
+	 * library, scaled to preview size, encoded once the way WordPress would
+	 * without this plugin and once with the chosen format and quality. Both
+	 * sizes are measured, not guessed, and both images come back inline so
+	 * moving the slider shows the actual result.
+	 *
+	 * @param string|null $format  auto|webp|avif|original (default: saved choice).
+	 * @param int|null    $quality 40-95 (default: saved choice).
+	 * @return array
+	 */
+	public static function preview( $format = null, $quality = null ) {
+		$format  = in_array( $format, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $format : self::format_preference();
+		$quality = ( null === $quality ) ? self::quality() : max( 40, min( 95, (int) $quality ) );
+		$target  = self::resolve_format( $format );
+
+		$ids = get_posts(
+			[
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'post_mime_type' => [ 'image/jpeg', 'image/png' ],
+				'posts_per_page' => 8,
+				'fields'         => 'ids',
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
+				'no_found_rows'  => true,
+			]
+		);
+
+		$file = '';
+		$id   = 0;
+		foreach ( $ids as $candidate ) {
+			$path = get_attached_file( $candidate );
+			if ( $path && file_exists( $path ) && filesize( $path ) > 4096 ) {
+				$file = $path;
+				$id   = (int) $candidate;
+				break;
+			}
+		}
+
+		if ( ! $file ) {
+			return [ 'available' => false, 'reason' => 'no_image' ];
+		}
+
+		$mime   = get_post_mime_type( $id );
+		$cache  = self::TOTALS_TRANSIENT . '_p' . md5( $id . '|' . filemtime( $file ) . '|' . (string) $target . '|' . $quality );
+		$cached = get_transient( $cache );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		if ( ! function_exists( 'wp_get_image_editor' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		$after_mime = $target ? ( 'avif' === $target ? 'image/avif' : 'image/webp' ) : $mime;
+		$after_ext  = $target ? $target : ( 'image/png' === $mime ? 'png' : 'jpg' );
+		$before_ext = ( 'image/png' === $mime ) ? 'png' : 'jpg';
+
+		// Decoding the full-size original is by far the slowest step (a 12-megapixel
+		// photo costs a couple of hundred milliseconds EACH time), and a preview only
+		// needs a few hundred pixels. A small copy is made once per image and every
+		// slider position after that starts from it.
+		$source = self::preview_source( $id, $file, $mime );
+
+		// What WordPress would save without this plugin never changes while the
+		// slider moves, so it is measured once per image, not once per position.
+		$before_cache = self::TOTALS_TRANSIENT . '_b' . md5( $id . '|' . filemtime( $file ) );
+		$before       = get_transient( $before_cache );
+
+		// What an upload would really get: the ceiling only tightens, so an encoder
+		// whose own default is already lower keeps it. The preview must show that,
+		// not a quality the plugin would never apply.
+		$effective = min( $quality, self::default_quality( $after_mime ) );
+
+		$tmp = trailingslashit( get_temp_dir() ) . 'reloadify-preview-' . wp_generate_password( 8, false );
+
+		if ( ! is_array( $before ) ) {
+			$before = self::encode_preview( $source, $tmp . '-before.' . $before_ext, $mime, self::default_quality( $mime ) );
+			if ( $before ) {
+				set_transient( $before_cache, $before, 10 * MINUTE_IN_SECONDS );
+			}
+		}
+
+		$after = self::encode_preview( $source, $tmp . '-after.' . $after_ext, $after_mime, $effective );
+
+		if ( ! $before || ! $after ) {
+			return [ 'available' => false, 'reason' => 'encode_failed' ];
+		}
+
+		$meta   = wp_get_attachment_metadata( $id );
+		$result = [
+			'available'      => true,
+			'name'           => wp_basename( $file ),
+			'width'          => isset( $meta['width'] ) ? (int) $meta['width'] : $before['width'],
+			'height'         => isset( $meta['height'] ) ? (int) $meta['height'] : $before['height'],
+			'original_bytes' => (int) filesize( $file ),
+			'before'         => $before,
+			'after'          => $after,
+			'format'         => $target ? $target : 'original',
+			'quality'        => $quality,
+			'effective_quality' => $effective,
+			'saved_percent'  => $before['bytes'] > 0 ? (int) round( ( 1 - $after['bytes'] / $before['bytes'] ) * 100 ) : 0,
+		];
+
+		set_transient( $cache, $result, HOUR_IN_SECONDS );
+
+		return $result;
+	}
+
+	/**
+	 * A small copy of the image used as the starting point for previews. Kept
+	 * in uploads/reloadify-preview (cleaned up with the plugin's cached files);
+	 * if it can't be written the original is used, just more slowly.
+	 */
+	private static function preview_source( $id, $file, $mime ) {
+		$upload = wp_upload_dir();
+
+		if ( ! empty( $upload['error'] ) || empty( $upload['basedir'] ) ) {
+			return $file;
+		}
+
+		$dir = trailingslashit( $upload['basedir'] ) . self::PREVIEW_DIR;
+		$ext = ( 'image/png' === $mime ) ? 'png' : 'jpg';
+		$out = $dir . '/src-' . (int) $id . '-' . substr( md5( (string) filemtime( $file ) ), 0, 8 ) . '.' . $ext;
+
+		if ( file_exists( $out ) ) {
+			return $out;
+		}
+
+		if ( ! wp_mkdir_p( $dir ) ) {
+			return $file;
+		}
+
+		// Old copies of the same image (it was edited) would otherwise pile up.
+		foreach ( (array) glob( $dir . '/src-' . (int) $id . '-*' ) as $stale ) {
+			wp_delete_file( $stale );
+		}
+
+		$editor = wp_get_image_editor( $file );
+		if ( is_wp_error( $editor ) ) {
+			return $file;
+		}
+
+		$size = $editor->get_size();
+		if ( ! empty( $size['width'] ) && $size['width'] > self::PREVIEW_WIDTH ) {
+			$editor->resize( self::PREVIEW_WIDTH, null, false );
+		}
+
+		// Near-lossless: it is only the common starting point for both sides.
+		remove_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10 );
+		remove_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10 );
+		$editor->set_quality( 95 );
+		$saved = $editor->save( $out, $mime );
+		if ( self::is_enabled() ) {
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+			add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
+		}
+
+		return ( ! is_wp_error( $saved ) && file_exists( $out ) ) ? $out : $file;
+	}
+
+	/** WordPress's own default quality per output format. */
+	private static function default_quality( $mime ) {
+		$defaults = [
+			'image/jpeg' => 82,
+			'image/webp' => 86,
+			'image/avif' => 63,
+		];
+
+		return isset( $defaults[ $mime ] ) ? $defaults[ $mime ] : 82;
+	}
+
+	/**
+	 * Encodes one preview image and returns its size plus an inline data URI,
+	 * or null on failure. The temp file never outlives this call.
+	 *
+	 * @return array|null
+	 */
+	private static function encode_preview( $source, $dest, $mime, $quality ) {
+		$editor = wp_get_image_editor( $source );
+		if ( is_wp_error( $editor ) ) {
+			return null;
+		}
+
+		$size = $editor->get_size();
+		if ( ! empty( $size['width'] ) && $size['width'] > 640 ) {
+			$editor->resize( 640, null, false );
+		}
+
+		// Our own filters would re-map the format and cap the quality to the SAVED
+		// settings -- the preview has to show the settings being tried.
+		//
+		// The quality goes in through the wp_editor_set_quality filter, not
+		// $editor->set_quality(): when the output format differs from the source
+		// (JPEG -> WebP) WordPress re-derives the quality at save time, so a value
+		// set on the editor is silently ignored -- every slider position would show
+		// the same file size.
+		$force_quality = static function () use ( $quality ) {
+			return $quality;
+		};
+
+		// Both are needed: the editor already derived a quality for the source
+		// format when it loaded (same-format saves use it), and the filter covers
+		// the re-derivation that happens when the format changes.
+		$editor->set_quality( $quality );
+
+		remove_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10 );
+		remove_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10 );
+		add_filter( 'wp_editor_set_quality', $force_quality, 99 );
+
+		$saved = $editor->save( $dest, $mime );
+
+		remove_filter( 'wp_editor_set_quality', $force_quality, 99 );
+		if ( self::is_enabled() ) {
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+			add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
+		}
+
+		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! file_exists( $saved['path'] ) ) {
+			return null;
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading the temp file this method just wrote.
+		$bytes_raw = file_get_contents( $saved['path'] );
+		$out_mime  = ! empty( $saved['mime-type'] ) ? $saved['mime-type'] : $mime;
+		$result    = [
+			'bytes'  => (int) filesize( $saved['path'] ),
+			'width'  => (int) $saved['width'],
+			'height' => (int) $saved['height'],
+			'mime'   => $out_mime,
+			'uri'    => ( false !== $bytes_raw ) ? 'data:' . $out_mime . ';base64,' . base64_encode( $bytes_raw ) : '', // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- inline image preview, not obfuscation.
+		];
+
+		wp_delete_file( $saved['path'] );
+
+		return $result;
+	}
+
 	public static function init() {
 		add_filter( 'cron_schedules', [ __CLASS__, 'add_five_minute_schedule' ] );
 
@@ -199,10 +582,11 @@ class Reloadify_Media {
 		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
 		add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'record_image_stats' ], 20, 2 );
+		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'mark_converted_on_upload' ], 30, 2 );
 
 		add_action( 'add_attachment', [ __CLASS__, 'maybe_schedule_video_compression' ] );
 		add_action( self::CRON_HOOK_VIDEO, [ __CLASS__, 'compress_video' ] );
-		add_action( self::CRON_HOOK_BACKFILL, [ __CLASS__, 'backfill_existing_images' ] );
+		add_action( self::CRON_HOOK_BACKFILL, [ __CLASS__, 'cron_backfill_batch' ] );
 		add_action( self::CRON_HOOK_VIDEO_BACKFILL, [ __CLASS__, 'backfill_existing_videos' ] );
 
 		// Lazy loading.
@@ -276,9 +660,7 @@ class Reloadify_Media {
 	}
 
 	/**
-	 * Caps quality at 82 -- WordPress's own long-standing default JPEG
-	 * quality, and a level broadly considered visually indistinguishable
-	 * from higher settings. 
+	 * Caps quality at the ceiling chosen in the settings (default 80).
 	 */
 	public static function cap_quality( $quality, $mime_type ) {
 		$capped_mimes = [ 'image/jpeg', 'image/webp', 'image/avif' ];
@@ -287,10 +669,81 @@ class Reloadify_Media {
 			return $quality;
 		}
 
-		return min( (int) $quality, 82 );
+		return min( (int) $quality, self::quality() );
 	}
 
-	public static function backfill_existing_images( $batch_size = 0 ) {
+	/**
+	 * IDs still waiting on the background job. One plain NOT EXISTS query: the
+	 * WP_Query meta_query this replaced built a LEFT JOIN that gets slow on a
+	 * large library, and it ran on every round trip.
+	 *
+	 * @return int[]
+	 */
+	private static function pending_ids( $type, $limit ) {
+		global $wpdb;
+
+		$limit = max( 1, (int) $limit );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded maintenance query over attachments; result is never cacheable between batches.
+		if ( 'video' === $type ) {
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT p.ID FROM {$wpdb->posts} p
+					WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type LIKE %s
+					AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )
+					ORDER BY p.ID ASC LIMIT %d",
+					'video/%',
+					self::VIDEO_BACKFILL_META_KEY,
+					$limit
+				)
+			);
+		} else {
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT p.ID FROM {$wpdb->posts} p
+					WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
+					AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )
+					ORDER BY p.ID ASC LIMIT %d",
+					self::BACKFILL_META_KEY,
+					$limit
+				)
+			);
+		}
+		// phpcs:enable
+
+		return array_map( 'intval', (array) $ids );
+	}
+
+	/**
+	 * Has this image already been converted? Images uploaded while the feature
+	 * was on, or processed by an earlier run, need no second pass -- regenerating
+	 * every thumbnail again was the bulk of the time "Optimize existing media"
+	 * spent.
+	 */
+	private static function sizes_already_converted( $attachment_id, $target ) {
+		$meta = wp_get_attachment_metadata( $attachment_id );
+
+		// Nothing to convert (an image smaller than every thumbnail size).
+		if ( ! is_array( $meta ) || empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
+			return true;
+		}
+
+		$mime = ( 'avif' === $target ) ? 'image/avif' : 'image/webp';
+
+		foreach ( $meta['sizes'] as $size ) {
+			if ( empty( $size['mime-type'] ) || $mime !== $size['mime-type'] ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Converts pending images, stopping when the deadline passes. Returns how
+	 * many images left the pending list (converted or found already done).
+	 */
+	public static function backfill_existing_images( $batch_size = 0, $deadline = 0 ) {
 		if ( ! self::is_enabled() ) {
 			return 0;
 		}
@@ -301,35 +754,21 @@ class Reloadify_Media {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
-		$query = new WP_Query( [
-			'post_type'      => 'attachment',
-			'post_mime_type' => [ 'image/jpeg', 'image/png' ],
-			'post_status'    => 'inherit',
-			'posts_per_page' => $batch_size,
-			'fields'         => 'ids',
-			'orderby'        => 'ID',
-			'order'          => 'ASC',
-			'no_found_rows'  => true,
-			'cache_results'  => false,
-		
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
-			'meta_query'     => [
-				[
-					'key'     => self::BACKFILL_META_KEY,
-					'compare' => 'NOT EXISTS',
-				],
-			],
-		] );
-
 		// With no WebP/AVIF support on this server there is nothing to convert
 		// to, and regenerating every thumbnail would burn CPU and rewrite files
 		// for no gain -- just record the image as checked.
-		$can_convert = (bool) self::preferred_image_format();
+		$target       = self::preferred_image_format();
+		$done         = 0;
+		self::$in_backfill = true;
 
-		foreach ( $query->posts as $attachment_id ) {
+		foreach ( self::pending_ids( 'image', $batch_size ) as $attachment_id ) {
+			if ( $deadline && microtime( true ) >= $deadline ) {
+				break;
+			}
+
 			$file = get_attached_file( $attachment_id );
 
-			if ( $can_convert && $file && file_exists( $file ) ) {
+			if ( $target && $file && file_exists( $file ) && ! self::sizes_already_converted( $attachment_id, $target ) ) {
 				$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
 				if ( $metadata ) {
 					wp_update_attachment_metadata( $attachment_id, $metadata );
@@ -337,34 +776,87 @@ class Reloadify_Media {
 			}
 
 			update_post_meta( $attachment_id, self::BACKFILL_META_KEY, 1 );
+			$done++;
 		}
 
-		return count( $query->posts );
+		self::$in_backfill = false;
+
+		return $done;
+	}
+
+	/**
+	 * WP-Cron runner. Works through the queue for a short budget, then books
+	 * itself again so conversion carries on in the background without anyone
+	 * keeping a browser tab open.
+	 */
+	public static function cron_backfill_batch() {
+		if ( function_exists( 'wp_raise_memory_limit' ) ) {
+			wp_raise_memory_limit( 'image' );
+		}
+
+		$deadline = microtime( true ) + 20;
+		$done     = self::backfill_existing_images( self::MANUAL_FETCH, $deadline );
+
+		if ( $done > 0 && self::count_pending( 'image' ) > 0 && ! wp_next_scheduled( self::CRON_HOOK_BACKFILL, [] ) ) {
+			wp_schedule_single_event( time() + 15, self::CRON_HOOK_BACKFILL );
+		}
+	}
+
+	/**
+	 * Records an image uploaded while the feature is on as already optimized,
+	 * so the backfill doesn't convert it a second time.
+	 */
+	public static function mark_converted_on_upload( $metadata, $attachment_id ) {
+		$target = self::preferred_image_format();
+
+		if ( $target && in_array( get_post_mime_type( $attachment_id ), [ 'image/jpeg', 'image/png' ], true )
+			&& is_array( $metadata ) && ! empty( $metadata['sizes'] ) ) {
+			$mime = ( 'avif' === $target ) ? 'image/avif' : 'image/webp';
+			$all  = true;
+
+			foreach ( $metadata['sizes'] as $size ) {
+				if ( empty( $size['mime-type'] ) || $mime !== $size['mime-type'] ) {
+					$all = false;
+					break;
+				}
+			}
+
+			if ( $all ) {
+				update_post_meta( $attachment_id, self::BACKFILL_META_KEY, 1 );
+			}
+		}
+
+		return $metadata;
 	}
 
 	/**
 	 * How many existing images are still waiting on the background job.
 	 */
 	public static function count_pending( $type ) {
-		$args = [
-			'post_type'      => 'attachment',
-			'post_status'    => 'inherit',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-		
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
-			'meta_query'     => [
-				[
-					'key'     => ( 'video' === $type ) ? self::VIDEO_BACKFILL_META_KEY : self::BACKFILL_META_KEY,
-					'compare' => 'NOT EXISTS',
-				],
-			],
-		];
+		global $wpdb;
 
-		$args['post_mime_type'] = ( 'video' === $type ) ? 'video' : [ 'image/jpeg', 'image/png' ];
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- cheap COUNT used by the progress display; a cached value would be wrong a second later.
+		if ( 'video' === $type ) {
+			return (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM {$wpdb->posts} p
+					WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type LIKE %s
+					AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )",
+					'video/%',
+					self::VIDEO_BACKFILL_META_KEY
+				)
+			);
+		}
 
-		$query = new WP_Query( $args );
-		return (int) $query->found_posts;
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->posts} p
+				WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
+				AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )",
+				self::BACKFILL_META_KEY
+			)
+		);
+		// phpcs:enable
 	}
 
 	/**
@@ -400,18 +892,16 @@ class Reloadify_Media {
 			@set_time_limit( 0 );
 		}
 
-		$started          = microtime( true );
+		$deadline         = microtime( true ) + self::MANUAL_TIME_BUDGET;
 		$images_processed = 0;
 
 		// Keep converting for as long as the budget allows instead of stopping
 		// after a single small batch -- far fewer HTTP round trips for the same
 		// number of images.
 		do {
-			$converted = self::backfill_existing_images( self::BACKFILL_BATCH_SIZE );
+			$converted         = self::backfill_existing_images( self::MANUAL_FETCH, $deadline );
 			$images_processed += $converted;
-
-			$elapsed = microtime( true ) - $started;
-		} while ( $converted > 0 && $elapsed < self::MANUAL_TIME_BUDGET );
+		} while ( $converted > 0 && microtime( true ) < $deadline );
 
 		$images_remaining = self::count_pending( 'image' );
 
@@ -433,10 +923,34 @@ class Reloadify_Media {
 		];
 	}
 
+	/**
+	 * The savings figure is an average, so it does not need a measurement for
+	 * every image. Measuring one means decoding the full-size original a second
+	 * time and encoding it again -- on a 12-megapixel photo that was close to half
+	 * of the total upload time. A few measurements get the tile started, after
+	 * that one image in five keeps it current.
+	 */
+	private static function should_sample_stats( $attachment_id ) {
+		if ( null === self::$need_samples ) {
+			$stats               = self::stats();
+			self::$need_samples = ( $stats['images'] < 8 );
+		}
+
+		if ( self::$need_samples ) {
+			return true;
+		}
+
+		return 0 === ( (int) $attachment_id % ( self::$in_backfill ? 10 : 5 ) );
+	}
+
 	public static function record_image_stats( $metadata, $attachment_id ) {
 		$preferred = self::preferred_image_format();
 
 		if ( ! $preferred || empty( $metadata['sizes'] ) || empty( $metadata['file'] ) ) {
+			return $metadata;
+		}
+
+		if ( ! self::should_sample_stats( $attachment_id ) ) {
 			return $metadata;
 		}
 
@@ -500,6 +1014,8 @@ class Reloadify_Media {
 		}
 
 		$percent_saved = round( ( 1 - ( $optimized_bytes / $comparison_bytes ) ) * 100 );
+
+		delete_transient( self::TOTALS_TRANSIENT );
 
 		update_post_meta( $attachment_id, self::STATS_META_KEY, [
 			'type'                   => 'image',
@@ -633,7 +1149,6 @@ class Reloadify_Media {
 					'measured_at'       => time(),
 				] );
 			} elseif ( file_exists( $tmp_out ) ) {
-				
 				wp_delete_file( $tmp_out );
 			}
 		} elseif ( file_exists( $tmp_out ) ) {
@@ -651,46 +1166,27 @@ class Reloadify_Media {
 	 * green ("done") vs red ("blocked, here's why") instead of guessing.
 	 */
 	public static function video_backfill_status() {
-		$remaining = new WP_Query( [
-			'post_type'      => 'attachment',
-			'post_mime_type' => 'video',
-			'post_status'    => 'inherit',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
-			'meta_query'     => [
-				[
-					'key'     => self::VIDEO_BACKFILL_META_KEY,
-					'compare' => 'NOT EXISTS',
-				],
-			],
-		] );
+		global $wpdb;
 
-		$unavailable = new WP_Query( [
-			'post_type'      => 'attachment',
-			'post_mime_type' => 'video',
-			'post_status'    => 'inherit',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			
-			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- single indexed meta key ('NOT EXISTS'/'EXISTS' lookup) used only in an infrequent background backfill job, not on hot request paths.
-			'meta_query'     => [
-				[
-					'key'     => self::VIDEO_BACKFILL_META_KEY,
-					'value'   => 'unavailable',
-					'compare' => '=',
-				],
-			],
-		] );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- cheap COUNT for the progress display.
+		$unavailable = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->posts} p
+				INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s AND m.meta_value = %s
+				WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type LIKE %s",
+				self::VIDEO_BACKFILL_META_KEY,
+				'unavailable',
+				'video/%'
+			)
+		);
+		// phpcs:enable
 
 		return [
-			'remaining'   => (int) $remaining->found_posts,
-			'unavailable' => (int) $unavailable->found_posts,
+			'remaining'   => self::count_pending( 'video' ),
+			'unavailable' => $unavailable,
 		];
 	}
 
-	
 	private static function backfill_one_video_now() {
 		if ( ! self::ffmpeg_path() ) {
 			// Mark any still-pending videos as checked (not endlessly

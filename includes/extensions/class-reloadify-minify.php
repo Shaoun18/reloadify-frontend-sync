@@ -465,6 +465,7 @@ class Reloadify_Minify {
 		$options = wp_parse_args( $options, [
 			'remove_comments'    => true,
 			'collapse_whitespace' => true,
+			'trim_tags'          => true,
 			'minify_inline_js'   => true,
 			'minify_inline_css'  => true,
 		] );
@@ -511,7 +512,9 @@ class Reloadify_Minify {
 			if ( is_string( $collapsed ) ) {
 				$html = $collapsed;
 			}
+		}
 
+		if ( $options['trim_tags'] ) {
 			// Whitespace between block-level tags carries no meaning.
 			$collapsed = preg_replace( '#>\s+<(/?(?:html|head|body|div|section|article|aside|header|footer|nav|main|ul|ol|li|table|thead|tbody|tfoot|tr|td|th|form|fieldset|figure|h[1-6]|p|hr|br|meta|link|title|script|style)\b)#i', '><$1', $html );
 			if ( is_string( $collapsed ) ) {
@@ -524,6 +527,86 @@ class Reloadify_Minify {
 		}
 
 		return $html;
+	}
+
+	/** Folder for cached results of large inline blocks ('' = in-memory only). */
+	private static $cache_dir = '';
+	private static $memo      = [];
+
+	public static function set_cache_dir( $dir ) {
+		self::$cache_dir = is_string( $dir ) ? rtrim( $dir, '/\\' ) : '';
+	}
+
+	/**
+	 * Inline <script>/<style> bodies are part of the page, so without a cache
+	 * every uncached page view would run the (PHP-speed) minifier over them
+	 * again -- a page builder's inline CSS alone can be 100KB+. Large bodies
+	 * are therefore minified once and the result is reused by content hash.
+	 */
+	private static function minify_body( $type, $body ) {
+		$length = strlen( $body );
+
+		// Not worth the bytes (and bodies with a per-request nonce are small).
+		if ( $length < 3000 ) {
+			return ( 'js' === $type ) ? self::js( $body ) : self::css( $body );
+		}
+
+		// Past this size the PHP minifier costs more than it saves.
+		if ( $length > 400000 ) {
+			return $body;
+		}
+
+		$key = md5( $type . "\0" . $body );
+
+		if ( isset( self::$memo[ $key ] ) ) {
+			return self::$memo[ $key ];
+		}
+
+		$file = ( '' !== self::$cache_dir && is_dir( self::$cache_dir ) ) ? self::$cache_dir . '/inl-' . $key . '.txt' : '';
+
+		if ( '' !== $file && is_file( $file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local cache file written by this class.
+			$cached = @file_get_contents( $file );
+			if ( is_string( $cached ) ) {
+				self::$memo[ $key ] = $cached;
+				return $cached;
+			}
+		}
+
+		$result = ( 'js' === $type ) ? self::js( $body ) : self::css( $body );
+		self::$memo[ $key ] = $result;
+
+		if ( '' !== $file ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- derived cache file; failure just means it is recomputed next time.
+			@file_put_contents( $file, $result, LOCK_EX );
+
+			// Inline blocks that change (a rotating nonce inside a big script)
+			// would otherwise leave a file behind per variant forever.
+			if ( 1 === random_int( 1, 40 ) ) {
+				self::prune_inline_cache();
+			}
+		}
+
+		return $result;
+	}
+
+	private static function prune_inline_cache() {
+		$files = glob( self::$cache_dir . '/inl-*.txt' );
+
+		if ( ! is_array( $files ) || count( $files ) <= 200 ) {
+			return;
+		}
+
+		usort(
+			$files,
+			function ( $a, $b ) {
+				return (int) @filemtime( $a ) - (int) @filemtime( $b );
+			}
+		);
+
+		foreach ( array_slice( $files, 0, count( $files ) - 150 ) as $old ) {
+			@unlink( $old ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- own cache file.
+		}
 	}
 
 	/**
@@ -555,9 +638,9 @@ class Reloadify_Minify {
 			if ( stripos( $open, ' src=' ) !== false ) {
 				return $block;
 			}
-			$body = self::js( $body );
+			$body = self::minify_body( 'js', $body );
 		} else {
-			$body = self::css( $body );
+			$body = self::minify_body( 'css', $body );
 		}
 
 		return $open . $body . $parts[3];

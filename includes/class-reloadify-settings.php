@@ -164,8 +164,42 @@ class Reloadify_Settings {
 	 * per-post value, so any frontend tab -- whatever page it happens to be on --
 	 * reloads the moment anything is saved in the builder.
 	 */
+	/** True once a bump has been queued for the end of this request. */
+	private static $bump_pending = false;
+
+	/**
+	 * Records that the site changed.
+	 *
+	 * The write is deferred to the end of the request. save_post (and most
+	 * other triggers) fire in the MIDDLE of a save: page builders and WooCommerce
+	 * still write meta, regenerate caches and render after it. Reloading the
+	 * preview at that moment showed the old content and needed a second
+	 * reload. Waiting for `shutdown` means the data is complete when the tabs
+	 * hear about it -- and a save that touches dozens of options still costs a
+	 * single timestamp write.
+	 */
 	public static function bump_site_updated_at() {
-		$ts = time();
+		if ( did_action( 'shutdown' ) ) {
+			self::flush_site_bump();
+			return;
+		}
+
+		if ( self::$bump_pending ) {
+			return;
+		}
+
+		self::$bump_pending = true;
+		add_action( 'shutdown', [ __CLASS__, 'flush_site_bump' ], PHP_INT_MAX );
+	}
+
+	public static function flush_site_bump() {
+		self::$bump_pending = false;
+
+		// Always strictly newer than the last bump: two saves inside the same
+		// second used to share one timestamp, and the second never reloaded.
+		$previous = (int) get_option( 'reloadify_last_site_update', 0 );
+		$ts       = max( time(), $previous + 1 );
+
 		update_option( 'reloadify_last_site_update', $ts, false );
 		self::write_timestamp_file( $ts );
 	}
@@ -210,15 +244,34 @@ class Reloadify_Settings {
 			$htaccess_content .= "</IfModule>\n";
 			
 			// FIXED: Catch errors - don't crash if write fails
-			$written = @file_put_contents( $htaccess, $htaccess_content, LOCK_EX );
-			if ( false === $written && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- gated behind WP_DEBUG_LOG, only runs on write failure, never in normal production operation.
-				error_log( '[Reloadify] Failed to write .htaccess in ' . $htaccess );
-			}
+			// A failed write is non-fatal: the timestamp file below is what matters.
+			@file_put_contents( $htaccess, $htaccess_content, LOCK_EX );
 		}
 
-		// Timestamp file write (this is the critical part - must succeed)
-		return false !== @file_put_contents( $dir . '/timestamp.json', wp_json_encode( self::timestamp_payload( $ts ) ), LOCK_EX );
+		// Timestamp file write (this is the critical part - must succeed).
+		//
+		// Written to a temp file and renamed into place. A plain
+		// file_put_contents() truncates the file first, so a tab polling at
+		// that instant read an empty or half-written file, failed to parse it,
+		// and gave up on the static file.
+		$target  = $dir . '/timestamp.json';
+		$payload = wp_json_encode( self::timestamp_payload( $ts ) );
+		$temp    = $dir . '/timestamp-' . uniqid( '', true ) . '.tmp';
+
+		if ( false !== @file_put_contents( $temp, $payload, LOCK_EX ) ) {
+			// rename() on purpose: it replaces the file in one atomic step, so a tab
+			// polling at that instant sees the old or the new content, never neither.
+			// WP_Filesystem::move() deletes the destination first -- measured under
+			// load, 86% of concurrent reads then hit a missing file.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
+			if ( @rename( $temp, $target ) ) {
+				return true;
+			}
+
+			wp_delete_file( $temp );
+		}
+
+		return false !== @file_put_contents( $target, $payload, LOCK_EX );
 	}
 
 	/**
@@ -249,6 +302,24 @@ class Reloadify_Settings {
 		if ( ! empty( $upload['error'] ) ) {
 			return '';
 		}
-		return trailingslashit( $upload['baseurl'] ) . 'reloadify-reload/timestamp.json';
+
+		$url = trailingslashit( set_url_scheme( $upload['baseurl'] ) ) . 'reloadify-reload/timestamp.json';
+
+		// Same site, so hand the browser a path on whatever origin it is already
+		// using. An absolute URL breaks the moment the site is opened through a
+		// different host name or scheme than the one stored in WordPress
+		// (localhost vs. mysite.test, http vs. https): the request goes
+		// cross-origin, is blocked, and polling falls back to admin-ajax.
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$url_host  = wp_parse_url( $url, PHP_URL_HOST );
+
+		if ( $home_host && $url_host && 0 === strcasecmp( $home_host, $url_host ) ) {
+			$path = wp_parse_url( $url, PHP_URL_PATH );
+			if ( $path ) {
+				return $path;
+			}
+		}
+
+		return $url;
 	}
 }

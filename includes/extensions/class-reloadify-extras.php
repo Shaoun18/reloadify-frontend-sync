@@ -21,8 +21,62 @@ class Reloadify_Extras {
 				'position'   => 'right', // 'left' or 'right'
 				'bg_color'   => '#4f46e5',
 				'show_after' => 300, // pixels scrolled before the button appears
+				'icon'       => 'default', // 'default' (built-in chevron) or any 'dashicons-*' class name
+				'animation'  => 'slide',   // entrance: fade | slide | zoom | bounce
+				'hover'      => 'lift',    // hover effect: none | lift | pulse | wiggle
+				'progress_ring' => true,   // ring around the button that fills as the page is scrolled
 			],
 		];
+	}
+
+	const ANIMATIONS = [ 'fade', 'slide', 'zoom', 'bounce' ];
+	const HOVERS     = [ 'none', 'lift', 'pulse', 'wiggle' ];
+
+	/**
+	 * Every icon in WordPress's own Dashicons set, read from the stylesheet
+	 * that ships with the installed WordPress version -- so the list is always
+	 * "all of them" for this site, including icons added in newer releases.
+	 * Cached for a week per WordPress version.
+	 *
+	 * @return string[] Class names such as 'dashicons-arrow-up-alt'.
+	 */
+	public static function dashicon_names() {
+		$cache_key = 'reloadify_dashicons_' . md5( get_bloginfo( 'version' ) );
+		$cached    = get_transient( $cache_key );
+
+		if ( is_array( $cached ) && $cached ) {
+			return $cached;
+		}
+
+		$names = [];
+
+		foreach ( [ 'dashicons.css', 'dashicons.min.css' ] as $file ) {
+			$path = ABSPATH . WPINC . '/css/' . $file;
+
+			if ( ! is_readable( $path ) ) {
+				continue;
+			}
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading a stylesheet that ships with WordPress, on the local filesystem.
+			$css = file_get_contents( $path );
+
+			if ( is_string( $css ) && preg_match_all( '/\.(dashicons-[a-z0-9-]+)::?before/', $css, $matches ) ) {
+				$names = array_values( array_diff( array_unique( $matches[1] ), [ 'dashicons-before' ] ) );
+			}
+
+			if ( $names ) {
+				break;
+			}
+		}
+
+		if ( ! $names ) {
+			$names = [ 'dashicons-arrow-up', 'dashicons-arrow-up-alt', 'dashicons-arrow-up-alt2', 'dashicons-upload', 'dashicons-controls-play', 'dashicons-editor-expand', 'dashicons-admin-site', 'dashicons-star-filled', 'dashicons-heart', 'dashicons-yes' ];
+		}
+
+		sort( $names );
+		set_transient( $cache_key, $names, WEEK_IN_SECONDS );
+
+		return $names;
 	}
 
 	public static function get_settings() {
@@ -45,10 +99,25 @@ class Reloadify_Extras {
 				'position'   => ( isset( $top['position'] ) && 'left' === $top['position'] ) ? 'left' : $defaults['scroll_top']['position'],
 				'bg_color'   => ( isset( $top['bg_color'] ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $top['bg_color'] ) ) ? $top['bg_color'] : $defaults['scroll_top']['bg_color'],
 				'show_after' => isset( $top['show_after'] ) ? max( 0, (int) $top['show_after'] ) : $defaults['scroll_top']['show_after'],
+				'icon'       => self::clean_icon( isset( $top['icon'] ) ? $top['icon'] : 'default' ),
+				'animation'  => ( isset( $top['animation'] ) && in_array( $top['animation'], self::ANIMATIONS, true ) ) ? $top['animation'] : $defaults['scroll_top']['animation'],
+				'hover'      => ( isset( $top['hover'] ) && in_array( $top['hover'], self::HOVERS, true ) ) ? $top['hover'] : $defaults['scroll_top']['hover'],
+				'progress_ring' => array_key_exists( 'progress_ring', $top ) ? ! empty( $top['progress_ring'] ) : $defaults['scroll_top']['progress_ring'],
 			],
 		];
 
 		return $merged;
+	}
+
+	/** Only 'default' or a real Dashicons class name is ever stored. */
+	private static function clean_icon( $icon ) {
+		$icon = is_string( $icon ) ? sanitize_html_class( $icon ) : 'default';
+
+		if ( 'default' === $icon || '' === $icon ) {
+			return 'default';
+		}
+
+		return in_array( $icon, self::dashicon_names(), true ) ? $icon : 'default';
 	}
 
 	public static function sanitize( $incoming ) {
@@ -160,10 +229,20 @@ class Reloadify_Extras {
 			true
 		);
 
+		$icon = $settings['scroll_top']['icon'];
+
 		wp_localize_script( 'reloadify-scroll-top', 'ReloadifyScrollTop', [
 			'position'  => $settings['scroll_top']['position'],
 			'bgColor'   => $settings['scroll_top']['bg_color'],
 			'showAfter' => (int) $settings['scroll_top']['show_after'],
+			'icon'      => $icon,
+			'animation' => $settings['scroll_top']['animation'],
+			'hover'     => $settings['scroll_top']['hover'],
+			'ring'      => $settings['scroll_top']['progress_ring'] ? 1 : 0,
+			'label'     => __( 'Scroll to top', 'reloadify-frontend-sync' ),
+			// The icon font is fetched by the script itself, and only for visitors who
+			// actually scroll -- the built-in chevron needs no font at all.
+			'iconCss'   => ( 'default' !== $icon ) ? includes_url( 'css/dashicons.min.css' ) : '',
 		] );
 	}
 }

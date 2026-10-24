@@ -102,6 +102,16 @@ class Reloadify_Rest {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/media/preview',
+			[
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => [ __CLASS__, 'media_preview' ],
+				'permission_callback' => [ __CLASS__, 'permission_check' ],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/media/backfill-now',
 			[
 				'methods'             => WP_REST_Server::EDITABLE,
@@ -281,65 +291,67 @@ class Reloadify_Rest {
 
 	public static function run_media_backfill_now() {
 		$result = Reloadify_Media::run_backfill_batch_now();
+
+		// If the person closes the tab mid-run, WP-Cron picks up where this left off.
+		if ( ! empty( $result['images_remaining'] ) && ! wp_next_scheduled( Reloadify_Media::CRON_HOOK_BACKFILL, [] ) ) {
+			wp_schedule_single_event( time() + 30, Reloadify_Media::CRON_HOOK_BACKFILL );
+		}
 		return rest_ensure_response( $result );
 	}
 
 	public static function get_media() {
-		$caps = Reloadify_Media::capabilities();
-		return rest_ensure_response( [
-			'enabled'            => Reloadify_Media::is_enabled(),
-			'items'              => Reloadify_Media::items(),
-			'format_preference'  => Reloadify_Media::format_preference(),
-			'format_capabilities' => [
-				'webp' => (bool) $caps['webp'],
-				'avif' => (bool) $caps['avif'],
-			],
-		] );
+		return rest_ensure_response( Reloadify_Media::payload() );
 	}
 
 	public static function update_media( WP_REST_Request $request ) {
-		$body    = $request->get_json_params();
-		$body    = is_array( $body ) ? $body : [];
+		$body = $request->get_json_params();
+		$body = is_array( $body ) ? $body : [];
+
 		// Only touch the on/off switch when the request actually carries it. A
 		// request that only changes the image format used to switch Media
 		// Optimization off (and clear its schedule) as a side effect.
-		$enabled = array_key_exists( 'enabled', $body )
-			? Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) )
-			: Reloadify_Media::is_enabled();
+		if ( array_key_exists( 'enabled', $body ) ) {
+			Reloadify_Media::set_enabled( ! empty( $body['enabled'] ) );
+		}
 
 		if ( isset( $body['format_preference'] ) ) {
 			Reloadify_Media::set_format_preference( sanitize_key( $body['format_preference'] ) );
 		}
 
-		$caps = Reloadify_Media::capabilities();
+		if ( isset( $body['quality'] ) ) {
+			Reloadify_Media::set_quality( (int) $body['quality'] );
+		}
 
-		return rest_ensure_response( [
-			'enabled'            => $enabled,
-			'items'              => Reloadify_Media::items(),
-			'format_preference'  => Reloadify_Media::format_preference(),
-			'format_capabilities' => [
-				'webp' => (bool) $caps['webp'],
-				'avif' => (bool) $caps['avif'],
-			],
-		] );
+		return rest_ensure_response( Reloadify_Media::payload() );
+	}
+
+	/** Before/after for the preview panel; accepts unsaved format/quality so the slider can show its effect. */
+	public static function media_preview( WP_REST_Request $request ) {
+		$body    = $request->get_json_params();
+		$body    = is_array( $body ) ? $body : [];
+		$format  = isset( $body['format'] ) ? sanitize_key( $body['format'] ) : null;
+		$quality = isset( $body['quality'] ) ? (int) $body['quality'] : null;
+
+		return rest_ensure_response( Reloadify_Media::preview( $format, $quality ) );
 	}
 
 	public static function get_cleanup() {
-		return rest_ensure_response( [
-			'enabled' => Reloadify_Cleanup::is_enabled(),
-		] );
+		return rest_ensure_response( Reloadify_Cleanup::payload() );
 	}
 
 	public static function update_cleanup( WP_REST_Request $request ) {
-		$body    = $request->get_json_params();
-		$body    = is_array( $body ) ? $body : [];
-		$enabled = array_key_exists( 'enabled', $body )
-			? Reloadify_Cleanup::set_enabled( ! empty( $body['enabled'] ) )
-			: Reloadify_Cleanup::is_enabled();
+		$body = $request->get_json_params();
+		$body = is_array( $body ) ? $body : [];
 
-		return rest_ensure_response( [
-			'enabled' => $enabled,
-		] );
+		if ( array_key_exists( 'enabled', $body ) ) {
+			Reloadify_Cleanup::set_enabled( ! empty( $body['enabled'] ) );
+		}
+
+		if ( isset( $body['scope'] ) && is_array( $body['scope'] ) ) {
+			Reloadify_Cleanup::set_scope( $body['scope'] );
+		}
+
+		return rest_ensure_response( Reloadify_Cleanup::payload() );
 	}
 
 	public static function get_extras() {

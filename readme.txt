@@ -4,7 +4,7 @@ Tags: reload, auto-refresh, elementor, divi, performance
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,6 +106,34 @@ Your feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.3.0 =
+* New **Speed Boost** rules, all on by default and each with its own switch: Remove query strings (a file keeps its `?ver=` for 7 days after it changes, so updates are never hidden), Lazy-load images and iframes (first two images stay eager; galleries and sliders are skipped), and Defer non-critical scripts (stand-alone head scripts nothing else depends on — never jQuery, WooCommerce, builders or sliders).
+* **Speed Boost** panel: compact rows, one aligned toggle column and an "N enabled" counter.
+* **Media Optimization**: image format selector (Auto, WebP, AVIF, Original), a compression-quality slider (40–95%), summary tiles for average and total savings, and a real before/after preview measured on your newest image that updates as you move the slider.
+* **Delete Data on Uninstall**: choose what is removed — plugin settings, cached files, local storage (per-image optimization records) and logs & diagnostics — with a warning. Your Media Library files are never deleted.
+* Every change in these three panels shows a confirmation toast.
+* **Media Optimization is much faster:** ~10× faster before/after preview, Auto now uses WebP (AVIF encodes several times slower), images converted at upload are not converted again, and the bulk job does more per request.
+* **Optimize existing media now** runs in the background — switch tabs while a progress notification shows "N images left · X% complete" and hides when done. The button changes colour as it works.
+* **Server Performance:** larger text, and each live setting now says "Updated — the server is now using …" so the new value is obvious.
+* **Server Performance** tab redesigned: summary header, a tile for every PHP setting with a plain-English explanation and live match status, and a clearer danger zone.
+* **Scroll To Top** button: pick any WordPress Dashicon (all of them, searchable), choose an entrance animation (fade, slide, zoom, bounce) and hover effect, and add a scroll-progress ring — with a live preview and automatic reduced-motion support. The icon font loads only when a visitor scrolls.
+* **Cross-Browser Reload** and **Extensions** tabs redesigned to match: control cards, status tiles, icon choice cards, Enable all / Disable all for browsers, and a live preview with colour presets and a distance slider for the Scroll To Top button.
+
+= 1.2.2 =
+* Fixed **Speed Boost** breaking the WooCommerce product gallery (image shown with a wrong height) — Delay JavaScript now only holds back third-party tracking/chat scripts; theme, WooCommerce and page-builder scripts always run normally.
+* Fixed the `window.et_pb_init_nav_menu is not a function` console error — listeners for events that already fired are now replayed only after every delayed script has run.
+* Fixed **Speed Boost** removing version query strings, which could leave visitors with stale CSS/JS after an update. The feature was removed.
+* New **Speed Boost** options (each can be switched off): browser caching and gzip for images, fonts and video (Apache `.htaccess`), skip the Dashicons font for logged-out visitors, weekly cleanup of expired transients, and REST/oEmbed discovery links dropped from `<head>`.
+* Speed Boost rules in `.htaccess` and its scheduled cleanup are removed on deactivation and uninstall.
+* Fixed **auto-reload stopping after a while** — a change that arrived while no tab held the active slot was silently dropped, a claim left behind by a closed or frozen tab blocked every other tab, one failed read of the timestamp file switched polling to admin-ajax for good, and a hidden tab's timers were throttled to once a minute. Missed changes are now applied as soon as the tab becomes active.
+* Speed Boost passes panel redesigned: every pass is its own card with an icon, a short description and a switch, all on by default, with a toast when one is switched on or off.
+* Reload now fires after the save has finished (the timestamp is written at the end of the request) and two saves in the same second both reload.
+* Added a correct `wpml-config.xml` for WPML/Polylang and refreshed the `.pot` file.
+* Removed all console output and debug logging, and the discouraged `load_plugin_textdomain()` call (WordPress.org loads translations automatically).
+* Fixed PHPCS errors (`rename()`, `mt_rand()`) and the stack trace when activating from WP-CLI.
+* Faster site: far fewer disk operations per page for Speed Boost (no `realpath()` per file, one `stat()` per asset, cache folder listed once per request).
+* Faster site: the timestamp file is written atomically, polling URLs follow the host you are browsing on, hidden non-active tabs stop polling, admin-ajax verification runs far less often, large inline CSS/JS is minified once and cached, minification has a per-request time budget, and repeated saves in one request no longer rewrite the timestamp file each time.
 
 = 1.2.1 =
 * Fixed **Active Tab** incorrectly switching to **All Tabs**.
