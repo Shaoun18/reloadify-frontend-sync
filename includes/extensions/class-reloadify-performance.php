@@ -219,7 +219,7 @@ class Reloadify_Performance {
 			return [
 				'success'     => false,
 				'path'        => $path,
-				'message'     => __( 'No values to write. Did you set values for opcache.memory_consumption, opcache.interned_strings_buffer, opcache.max_accelerated_files, realpath_cache_size, and/or realpath_cache_ttl?', 'reloadify-frontend-sync' ),
+				'message'     => __( 'No values to write. Set values for opcache.memory_consumption, opcache.interned_strings_buffer, opcache.max_accelerated_files, realpath_cache_size, and/or realpath_cache_ttl first.', 'reloadify-frontend-sync' ),
 				'backup_path' => $backup_path,
 			];
 		}
@@ -246,7 +246,7 @@ class Reloadify_Performance {
 			'success'     => true,
 			'path'        => $path,
 			'backup_path' => $backup_path,
-			'message'     => __( 'Written to the real php.ini. This does NOT take effect until PHP itself restarts — this plugin cannot do that for you (restart PHP-FPM/Apache, or just restart your local dev server). If anything breaks, restore the backup file listed above and restart PHP again.', 'reloadify-frontend-sync' ),
+				'message'     => __( 'Written to the active php.ini. This does NOT take effect until PHP itself restarts — restart PHP-FPM, Apache, or the local development server. If anything breaks, restore the backup file listed above and restart PHP.', 'reloadify-frontend-sync' ),
 		];
 	}
 
@@ -335,7 +335,7 @@ class Reloadify_Performance {
 			return [
 				'success' => false,
 				'path'    => $path,
-				'message' => __( 'This server doesn\'t appear to be running Apache with mod_php (detected via SERVER_SOFTWARE). .htaccess modifications only work on Apache with mod_php. Most managed hosts use Nginx or PHP-FPM now. Contact your host to confirm your setup.', 'reloadify-frontend-sync' ),
+				'message' => __( 'This server does not appear to be running Apache with mod_php (detected via SERVER_SOFTWARE). .htaccess modifications only work on Apache with mod_php. Most managed hosts use Nginx or PHP-FPM. Contact the hosting provider to confirm the setup.', 'reloadify-frontend-sync' ),
 			];
 		}
 
@@ -421,7 +421,7 @@ class Reloadify_Performance {
 		return [
 			'success' => true,
 			'path'    => $path,
-			'message' => __( 'Written to .htaccess successfully. This only takes effect on Apache with mod_php. If you\'re on Nginx or PHP-FPM and still see errors, your host doesn\'t support .htaccess modifications (which is normal).', 'reloadify-frontend-sync' ),
+			'message' => __( 'Written to .htaccess successfully. This only takes effect on Apache with mod_php. Nginx and PHP-FPM do not support .htaccess modifications, which is normal.', 'reloadify-frontend-sync' ),
 			'backup_path' => $backup_path,
 		];
 	}

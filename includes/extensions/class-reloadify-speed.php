@@ -210,7 +210,7 @@ class Reloadify_Speed
 		return [
 			[
 				'key' => 'minify_assets',
-				'label' => __('Minifies your CSS and JavaScript files and serves cached copies from the uploads folder — originals are never modified, and anything already minified is skipped', 'reloadify-frontend-sync'),
+				'label' => __('Minifies CSS and JavaScript files and serves cached copies from the uploads folder — originals are never modified, and already-minified files are skipped', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'minify_html',
@@ -230,7 +230,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'delay_js',
-				'label' => __('Delays third-party tracking, advertising and chat scripts (Google Analytics/Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar) until the first interaction or 7 seconds — your theme, WooCommerce and page-builder scripts always load normally, so layouts and galleries are never affected', 'reloadify-frontend-sync'),
+				'label' => __('Delays third-party tracking, advertising and chat scripts (Google Analytics/Tag Manager, Meta Pixel, Hotjar, Intercom, Tawk.to and similar) until the first interaction or 7 seconds — theme, WooCommerce and page-builder scripts always load normally, so layouts and galleries are never affected', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'emojis',
@@ -242,11 +242,11 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'opcache',
-				'label' => __('Turns PHP OPcache on if your host has it available but left it off', 'reloadify-frontend-sync'),
+				'label' => __('Turns PHP OPcache on when the server supports it but it is disabled', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'backend_headroom',
-				'label' => __('Raises wp-admin\'s memory_limit and max_execution_time headroom (never below what your host already allows) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched', 'reloadify-frontend-sync'),
+				'label' => __('Raises wp-admin\'s memory_limit and max_execution_time headroom (never below the server allowance) so heavy builders like Divi/Elementor are less likely to hit a slow or failed save — frontend visitor requests are never touched', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'heartbeat',
@@ -258,7 +258,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'self_pingbacks',
-				'label' => __('Stops WordPress from pinging itself when one of your own posts links to another — removes a pointless outbound HTTP request and a comments-table write on every such save', 'reloadify-frontend-sync'),
+				'label' => __('Stops WordPress from pinging itself when one post links to another — removes a needless outbound HTTP request and a comments-table write on every such save', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'xmlrpc',
@@ -270,7 +270,7 @@ class Reloadify_Speed
 			],
 			[
 				'key' => 'browser_cache',
-				'label' => __('Adds compression (gzip) and long-lived browser caching for images, fonts and video to your .htaccess on Apache — fewer bytes and fewer requests on every repeat visit. CSS and JS keep WordPress\'s own versioning, so updates always show immediately. Skipped automatically on Nginx or when .htaccess isn\'t writable', 'reloadify-frontend-sync'),
+				'label' => __('Adds compression (gzip) and long-lived browser caching for images, fonts and video to .htaccess on Apache — fewer bytes and fewer requests on every repeat visit. CSS and JS keep WordPress\'s versioning, so updates always show immediately. Skipped automatically on Nginx or when .htaccess is not writable', 'reloadify-frontend-sync'),
 			],
 			[
 				'key' => 'dashicons',

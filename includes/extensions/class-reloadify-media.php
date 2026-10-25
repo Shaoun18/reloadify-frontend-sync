@@ -179,7 +179,7 @@ class Reloadify_Media {
 		if ( 'original' === $pref ) {
 			$items[] = [
 				'key'   => 'image_format',
-				'label' => __( 'Original format selected: images keep the format you uploaded and only the quality ceiling below is applied', 'reloadify-frontend-sync' ),
+				'label' => __( 'Original format selected: images keep the uploaded format and only the quality ceiling below is applied', 'reloadify-frontend-sync' ),
 			];
 		} elseif ( $preferred ) {
 			if ( 'avif' === $pref && 'webp' === $preferred ) {
@@ -192,7 +192,7 @@ class Reloadify_Media {
 					'key'   => 'image_format',
 					'label' => sprintf(
 						/* translators: %s: AVIF or WEBP */
-						__( 'New image uploads automatically get %s versions generated alongside the original — your server supports it', 'reloadify-frontend-sync' ),
+						__( 'New image uploads automatically get %s versions generated alongside the original — supported by the server', 'reloadify-frontend-sync' ),
 						strtoupper( $preferred )
 					),
 				];
@@ -200,7 +200,7 @@ class Reloadify_Media {
 		} else {
 			$items[] = [
 				'key'   => 'image_format',
-				'label' => __( 'Your server\'s image library doesn\'t support WebP or AVIF, so format conversion is skipped — quality-capped compression below still applies', 'reloadify-frontend-sync' ),
+				'label' => __( 'The server image library does not support WebP or AVIF, so format conversion is skipped — quality-capped compression below still applies', 'reloadify-frontend-sync' ),
 			];
 		}
 
@@ -208,7 +208,7 @@ class Reloadify_Media {
 			'key'   => 'image_quality',
 			'label' => sprintf(
 				/* translators: %d: quality ceiling in percent */
-				__( 'Image quality is capped at %d%% — it only ever tightens an unusually high setting, never loosens one you already chose', 'reloadify-frontend-sync' ),
+				__( 'Image quality is capped at %d%% — it only tightens an unusually high setting and never loosens an existing one', 'reloadify-frontend-sync' ),
 				self::quality()
 			),
 		];

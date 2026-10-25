@@ -2,9 +2,26 @@
 	'use strict';
 
 	function init() {
+		// Do not render inside visual-builder canvases. This is intentionally also
+		// checked in JavaScript so cached assets cannot add the button to a builder
+		// preview after the server-side guard has skipped it.
+		var builderFlags = ['elementor-preview', 'et_fb', 'et_pb_preview', 'fl_builder', 'fl_builder_ui', 'ct_builder', 'brizy-edit', 'brizy-edit-iframe', 'bricks', 'tve', 'vc_editable', 'customize_changeset_uuid'];
+		var query = (window.location.search || '').toLowerCase();
+		var bodyClasses = document.body ? (' ' + document.body.className + ' ') : '';
+		var isBuilderPreview = builderFlags.some(function (flag) { return query.indexOf(flag) !== -1; }) || / (elementor-editor-active|et-fb|fl-builder-edit|bricks-is-frontend|vc_editor) /.test(bodyClasses);
+
+		if (isBuilderPreview) {
+			return;
+		}
+
 		var cfg = window.ReloadifyScrollTop || {};
 		var showAfter = typeof cfg.showAfter === 'number' ? cfg.showAfter : 300;
 		var position = cfg.position === 'left' ? 'left' : 'right';
+		var verticalPosition = cfg.verticalPosition === 'top' ? 'top' : 'bottom';
+		var horizontalOffset = parseInt(cfg.horizontalOffset, 10);
+		var verticalOffset = parseInt(cfg.verticalOffset, 10);
+		horizontalOffset = Math.min(1000, Math.max(0, isNaN(horizontalOffset) ? 24 : horizontalOffset));
+		verticalOffset = Math.min(1000, Math.max(0, isNaN(verticalOffset) ? 28 : verticalOffset));
 		var bg = /^#[0-9a-fA-F]{6}$/.test(cfg.bgColor || '') ? cfg.bgColor : '#4f46e5';
 		var animation = ['fade', 'slide', 'zoom', 'bounce'].indexOf(cfg.animation) !== -1 ? cfg.animation : 'slide';
 		var hover = ['none', 'lift', 'pulse', 'wiggle'].indexOf(cfg.hover) !== -1 ? cfg.hover : 'lift';
@@ -19,8 +36,8 @@
 
 		var style = document.createElement('style');
 		style.textContent =
-			'.reloadify-scroll-top{position:fixed;bottom:28px;z-index:99999;width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.24);opacity:0;visibility:hidden;padding:0;transition:opacity .28s ease,transform .28s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,visibility .28s;-webkit-tap-highlight-color:transparent;}' +
-			'.reloadify-scroll-top--right{right:24px;}.reloadify-scroll-top--left{left:24px;}' +
+			'.reloadify-scroll-top{position:fixed;z-index:99999;width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.24);opacity:0;visibility:hidden;padding:0;transition:opacity .28s ease,transform .28s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,visibility .28s;-webkit-tap-highlight-color:transparent;}' +
+			'.reloadify-scroll-top--right{right:var(--reloadify-horizontal-offset);}.reloadify-scroll-top--left{left:var(--reloadify-horizontal-offset);}.reloadify-scroll-top--bottom{bottom:var(--reloadify-vertical-offset);}.reloadify-scroll-top--top{top:var(--reloadify-vertical-offset);}' +
 			'.rst-anim-slide{transform:translateY(18px);}.rst-anim-zoom{transform:scale(.4);}.rst-anim-fade,.rst-anim-bounce{transform:none;}' +
 			'.reloadify-scroll-top.is-visible{opacity:1;visibility:visible;transform:none;}' +
 			'.rst-anim-bounce.is-visible{animation:rst-bounce-in .6s cubic-bezier(.34,1.56,.64,1) both;}' +
@@ -37,7 +54,7 @@
 			'@keyframes rst-bounce-in{0%{opacity:0;transform:translateY(26px) scale(.7);}55%{opacity:1;transform:translateY(-7px) scale(1.06);}78%{transform:translateY(2px) scale(.98);}100%{transform:none;}}' +
 			'@keyframes rst-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}' +
 			'@keyframes rst-nudge{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}' +
-			'@media (max-width:600px){.reloadify-scroll-top{width:44px;height:44px;bottom:18px;}.reloadify-scroll-top--right{right:16px;}.reloadify-scroll-top--left{left:16px;}}' +
+			'@media (max-width:600px){.reloadify-scroll-top{width:44px;height:44px;}}' +
 			'@media (prefers-reduced-motion:reduce){.reloadify-scroll-top,.rst-ring-bar{transition:opacity .15s linear;}.reloadify-scroll-top,.reloadify-scroll-top *{animation:none!important;}.reloadify-scroll-top.is-visible,.reloadify-scroll-top.is-visible:hover{transform:none;}}';
 		document.head.appendChild(style);
 
@@ -45,8 +62,10 @@
 		btn.type = 'button';
 		btn.setAttribute('aria-label', label);
 		btn.title = label;
-		btn.className = 'reloadify-scroll-top reloadify-scroll-top--' + position + ' rst-anim-' + animation + ' rst-hover-' + hover;
+		btn.className = 'reloadify-scroll-top reloadify-scroll-top--' + position + ' reloadify-scroll-top--' + verticalPosition + ' rst-anim-' + animation + ' rst-hover-' + hover;
 		btn.style.background = bg;
+		btn.style.setProperty('--reloadify-horizontal-offset', horizontalOffset + 'px');
+		btn.style.setProperty('--reloadify-vertical-offset', verticalOffset + 'px');
 
 		var progressBar = null;
 
