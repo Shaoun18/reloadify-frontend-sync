@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Reloadify Frontend Sync, please report it privately by email rather than using the public issue tracker.
+To report a security vulnerability in Reloadify Frontend Sync, use private email rather than the public issue tracker.
 
 **Security contact:** cse.engrchandrashill@tutanota.de
 
@@ -82,7 +82,7 @@ Reloadify Frontend Sync is designed to use WordPress core APIs and does not bund
 2. **Use Current WordPress:** Keep WordPress and PHP updated.
 3. **Use Strong Credentials:** Protect administrator accounts with strong passwords.
 4. **Limit Developer Mode:** Enable Developer Mode only while actively developing or testing.
-5. **Maintain Backups:** Keep regular backups of your WordPress site.
+5. **Maintain Backups:** Keep regular backups of the WordPress site.
 6. **Review Extensions:** Enable optional features such as SVG uploads only when needed.
 7. **Use Security Tools:** Consider using established WordPress security and monitoring solutions.
 

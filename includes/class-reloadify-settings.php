@@ -38,7 +38,7 @@ class Reloadify_Settings {
 	 * they actually need to test in it.
 	 */
 	public static function default_enabled_browsers() {
-		return [ 'chrome', 'brave', 'edge', 'firefox', 'safari' ];
+		return [ 'chrome', 'edge', 'safari' ];
 	}
 
 	public static function default_settings() {
@@ -50,7 +50,9 @@ class Reloadify_Settings {
 
 			$browsers[ $browser ] = [
 				'normal'    => $is_default_on,
-				'incognito' => $is_default_on,
+				// Incognito mode requires Developer Mode because it cannot
+				// reliably run when Developer Mode is disabled.
+				'incognito' => false,
 			];
 		}
 
@@ -59,7 +61,7 @@ class Reloadify_Settings {
 			'dev_mode_enabled_at'     => 0,
 			'poll_interval'           => 2000,
 			'reload_mode'             => 'soft', // 'soft' or 'hard'
-			// Off by default: only the tab you're actually looking at reloads.
+			// Off by default: only the currently viewed tab reloads.
 			// Turn it on to reload every open tab/window at once.
 			'all_tabs_reload_enabled' => false,
 			'browsers'                => $browsers,
@@ -126,6 +128,14 @@ class Reloadify_Settings {
 		}
 
 		$merged['dev_mode_enabled'] = ! empty( $merged['dev_mode_enabled'] );
+		// Incognito polling is intentionally unavailable outside Developer
+		// Mode. Apply this at read time as well so older saved settings cannot
+		// keep private-window reload active after this rule is introduced.
+		if ( ! $merged['dev_mode_enabled'] ) {
+			foreach ( self::supported_browsers() as $browser ) {
+				$merged['browsers'][ $browser ]['incognito'] = false;
+			}
+		}
 		$merged['all_tabs_reload_enabled'] = ! empty( $merged['all_tabs_reload_enabled'] );
 		$merged['dev_mode_enabled_at'] = (int) ( isset( $merged['dev_mode_enabled_at'] ) ? $merged['dev_mode_enabled_at'] : 0 );
 		$merged['poll_interval']    = max( 300, (int) $merged['poll_interval'] );
@@ -152,7 +162,10 @@ class Reloadify_Settings {
 			$row = isset( $incoming_browsers[ $browser ] ) ? $incoming_browsers[ $browser ] : [];
 			$clean['browsers'][ $browser ] = [
 				'normal'    => ! empty( $row['normal'] ),
-				'incognito' => ! empty( $row['incognito'] ),
+				// Enforce the same rule on every REST/API save. This prevents
+				// stale browser settings from re-enabling Incognito mode while
+				// Developer Mode is off.
+				'incognito' => $clean['dev_mode_enabled'] && ! empty( $row['incognito'] ),
 			];
 		}
 

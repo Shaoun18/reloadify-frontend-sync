@@ -73,7 +73,7 @@
             'opcache.revalidate_freq': __('Seconds between those edit checks.', 'reloadify-frontend-sync'),
             'max_input_time': __('Seconds PHP may spend reading request data.', 'reloadify-frontend-sync'),
             'post_max_size': __('Largest request body PHP accepts.', 'reloadify-frontend-sync'),
-            'upload_max_filesize': __('Largest single file you can upload.', 'reloadify-frontend-sync'),
+            'upload_max_filesize': __('Largest permitted upload file.', 'reloadify-frontend-sync'),
             'opcache.memory_consumption': __('Memory (MB) reserved for compiled scripts.', 'reloadify-frontend-sync'),
             'opcache.interned_strings_buffer': __('Memory (MB) for strings shared between scripts.', 'reloadify-frontend-sync'),
             'opcache.max_accelerated_files': __('How many files opcache can hold.', 'reloadify-frontend-sync'),
@@ -86,21 +86,21 @@
     var PERF_GROUPS = {
         runtime: {
             title: __('Applied automatically by this plugin', 'reloadify-frontend-sync'),
-            hint: __('Changed live via ini_set() on every request \u2014 no server access needed.', 'reloadify-frontend-sync'),
+            hint: __('These settings affect WordPress requests immediately when enabled. The current server value is shown beside each field, and no server-file edit or restart is required.', 'reloadify-frontend-sync'),
             subtitle: __('Changed live on every request \u2014 no server access needed', 'reloadify-frontend-sync'),
             icon: 'bolt',
             keys: ['memory_limit', 'max_execution_time', 'opcache.enable', 'opcache.validate_timestamps', 'opcache.revalidate_freq']
         },
         host: {
-            title: __('Requires your host / server config', 'reloadify-frontend-sync'),
-            hint: __('PHP locks these before WordPress loads. Auto-attempt below writes .user.ini / .htaccess.', 'reloadify-frontend-sync'),
+            title: __('Requires hosting / server configuration', 'reloadify-frontend-sync'),
+            hint: __('PHP reads these limits before WordPress starts. Reloadify can attempt to save supported values in .user.ini or .htaccess, but success depends on the web-server configuration.', 'reloadify-frontend-sync'),
             subtitle: __('PHP locks these before WordPress loads', 'reloadify-frontend-sync'),
             icon: 'server',
             keys: ['max_input_time', 'post_max_size', 'upload_max_filesize']
         },
         opcache: {
             title: __('Startup-only PHP settings — danger zone', 'reloadify-frontend-sync'),
-            hint: __('opcache sizing and the realpath cache are both locked in once at PHP startup \u2014 .user.ini and .htaccess can\u2019t reach them at all, only a real php.ini edit can.', 'reloadify-frontend-sync'),
+            hint: __('These settings are fixed when PHP starts. They cannot be changed by WordPress, .user.ini, or .htaccess. Change them only in php.ini on a local development server, then restart PHP.', 'reloadify-frontend-sync'),
             subtitle: __('Locked in once when PHP starts \u2014 local development only', 'reloadify-frontend-sync'),
             icon: 'warn',
             keys: ['opcache.memory_consumption', 'opcache.interned_strings_buffer', 'opcache.max_accelerated_files', 'realpath_cache_size', 'realpath_cache_ttl']
@@ -252,7 +252,7 @@
             label = __('Saving\u2026', 'reloadify-frontend-sync');
             cls += ' is-saving';
         } else if (props.state === 'error') {
-            label = __('Couldn\u2019t save \u2014 will retry on your next change', 'reloadify-frontend-sync');
+            label = __('Couldn\u2019t save \u2014 will retry after the next change', 'reloadify-frontend-sync');
             cls += ' is-error';
         } else {
             label = __('Saved automatically', 'reloadify-frontend-sync');
@@ -272,7 +272,7 @@
     }
 
     /* ---------------- Info Icon ---------------- */
-    
+
     function InfoIcon(props) {
         var stateOpen = useState(false);
         var open = stateOpen[0], setOpen = stateOpen[1];
@@ -310,8 +310,13 @@
 
     function BrowserCard(props) {
         var row = props.value || { normal: false, incognito: false };
+        var incognitoAvailable = !!props.developerModeEnabled;
 
         function set(field, val) {
+            if ('incognito' === field && !incognitoAvailable) {
+                return;
+            }
+
             var next = { normal: row.normal, incognito: row.incognito };
             next[field] = val;
             props.onChange(props.name, next);
@@ -336,7 +341,7 @@
             }
         }
 
-        var enabled = row.normal || row.incognito;
+        var enabled = row.normal || (incognitoAvailable && row.incognito);
 
         return el(
             'div',
@@ -352,9 +357,35 @@
             ),
             el(
                 'div',
-                { className: 'reloadify-browser-card-row' },
-                el('span', { className: 'reloadify-browser-row-label' }, el(Ico, { name: 'mask', size: 13 }), __('Incognito', 'reloadify-frontend-sync')),
-                el(Switch, { checked: row.incognito, onChange: function (e) { set('incognito', e.target.checked); } })
+                { className: 'reloadify-browser-card-row' + (!incognitoAvailable ? ' is-disabled' : '') },
+                el(
+                    'span',
+                    {
+                        className: 'reloadify-browser-row-label',
+                        title: !incognitoAvailable ? __('Enable Developer Mode to use Incognito reload.', 'reloadify-frontend-sync') : ''
+                    },
+                    el(Ico, { name: 'mask', size: 13 }),
+                    __('Incognito', 'reloadify-frontend-sync')
+                ),
+                el(
+                    'span',
+                    {
+                        className: 'reloadify-incognito-switch',
+                        onClick: function (e) {
+                            if (!incognitoAvailable) {
+                                e.preventDefault();
+                                if (props.onToast) {
+                                    props.onToast('info', __('Enable Developer Mode first, then enable Incognito mode.', 'reloadify-frontend-sync'));
+                                }
+                            }
+                        }
+                    },
+                    el(Switch, {
+                        checked: incognitoAvailable && row.incognito,
+                        disabled: !incognitoAvailable,
+                        onChange: function (e) { set('incognito', e.target.checked); }
+                    })
+                )
             )
         );
     }
@@ -436,10 +467,14 @@
 
         function setAllBrowsers(on) {
             var browsers = {};
-            BROWSERS.forEach(function (name) { browsers[name] = { normal: on, incognito: on }; });
+            BROWSERS.forEach(function (name) {
+                browsers[name] = { normal: on, incognito: settings.dev_mode_enabled ? on : false };
+            });
             patch({ browsers: browsers });
             props.onToast(on ? 'success' : 'info', on
-                ? __('All browsers enabled (normal and incognito)', 'reloadify-frontend-sync')
+                ? (settings.dev_mode_enabled
+                    ? __('All browser modes enabled', 'reloadify-frontend-sync')
+                    : __('All normal browser modes enabled. Enable Developer Mode to use Incognito reload.', 'reloadify-frontend-sync'))
                 : __('All browsers disabled', 'reloadify-frontend-sync'));
         }
 
@@ -466,7 +501,7 @@
                 el(ReloadControl, {
                     icon: 'power',
                     title: __('Developer Mode', 'reloadify-frontend-sync'),
-                    hint: __('Off by default \u2014 leaving it on adds real load to a live site. Now stays on until you switch it off yourself.', 'reloadify-frontend-sync'),
+                    hint: __('Developer Mode reloads previews for every site visitor, including regular visitors. Enable it only while testing or building because it adds extra server requests. It is off by default.', 'reloadify-frontend-sync'),
                     status: settings.dev_mode_enabled ? __('On', 'reloadify-frontend-sync') : __('Off', 'reloadify-frontend-sync'),
                     on: !!settings.dev_mode_enabled,
                     onChange: function () {
@@ -478,7 +513,7 @@
                 el(ReloadControl, {
                     icon: 'tabs',
                     title: __('Reload all tabs', 'reloadify-frontend-sync'),
-                    hint: __('Off by default: only the tab you are actually looking at reloads, so background tabs keep their scroll position and form state. Turn it on to refresh every open tab and window at once.', 'reloadify-frontend-sync'),
+                    hint: __('When disabled, only the active preview tab reloads after a change. Other tabs keep their scroll position and form data. Enable this setting only when every open preview should reload together.', 'reloadify-frontend-sync'),
                     status: settings.all_tabs_reload_enabled ? __('All tabs', 'reloadify-frontend-sync') : __('Active tab only', 'reloadify-frontend-sync'),
                     on: !!settings.all_tabs_reload_enabled,
                     onChange: function () {
@@ -494,7 +529,7 @@
                     el('span', { className: 'reloadify-tile-meta' }, settings.reload_mode === 'hard' ? __('Fetches fresh from the server', 'reloadify-frontend-sync') : __('Uses the browser cache', 'reloadify-frontend-sync'))),
                 el(ReloadTile, {
                     icon: 'clock', tone: 'indigo', label: __('Last change detected', 'reloadify-frontend-sync'),
-                    hint: __('Ticks up on any wp-admin save. Not resetting on Check now usually means the save didn\u2019t submit.', 'reloadify-frontend-sync'),
+                    hint: __('Shows when Reloadify last detected a completed WordPress content update. “Check now” refreshes this status only; it does not save content or reload a page.', 'reloadify-frontend-sync'),
                     value: settings.last_change_detected ? timeAgo(settings.last_change_detected) : '\u2014'
                 },
                     el('button', { type: 'button', className: 'reloadify-ghost-btn', onClick: checkNow, disabled: checking }, checking ? __('Checking\u2026', 'reloadify-frontend-sync') : __('Check now', 'reloadify-frontend-sync')))
@@ -518,7 +553,7 @@
                 el(CardHeading, {
                     title: __('Browsers & windows', 'reloadify-frontend-sync'),
                     subtitle: __('Choose where auto-reload runs \u2014 normal and incognito windows are separate', 'reloadify-frontend-sync'),
-                    hint: __('Incognito detection is best-effort, not a guarantee \u2014 browsers keep patching the signals it relies on, so it can occasionally miss.', 'reloadify-frontend-sync'),
+                    hint: __('Private or incognito windows are detected when the browser permits it. Some browsers hide this information, so private-window detection cannot be guaranteed in every browser.', 'reloadify-frontend-sync'),
                     aside: el(
                         'div',
                         { className: 'reloadify-heading-actions' },
@@ -531,7 +566,14 @@
                     'div',
                     { className: 'reloadify-browser-grid' },
                     BROWSERS.map(function (name) {
-                        return el(BrowserCard, { key: name, name: name, value: settings.browsers[name], onChange: updateBrowser, onToast: props.onToast });
+                        return el(BrowserCard, {
+                            key: name,
+                            name: name,
+                            value: settings.browsers[name],
+                            developerModeEnabled: !!settings.dev_mode_enabled,
+                            onChange: updateBrowser,
+                            onToast: props.onToast
+                        });
                     })
                 )
             )
@@ -579,10 +621,10 @@
                 el(
                     'div',
                     { className: 'reloadify-modal-body' },
-                    el('p', { className: 'reloadify-hint' }, __('These values cannot be set by any WordPress plugin at runtime \u2014 PHP locks them before WordPress loads. Paste the block that matches your hosting setup, or send it to your host.', 'reloadify-frontend-sync')),
+                    el('p', { className: 'reloadify-hint' }, __('These values cannot be set by any WordPress plugin at runtime \u2014 PHP locks them before WordPress loads. Paste the block that matches the hosting setup, or send it to the hosting provider.', 'reloadify-frontend-sync')),
 
                     el('h3', null, __('php.ini', 'reloadify-frontend-sync')),
-                    el('p', { className: 'reloadify-hint' }, __('Paste this whole block into your real php.ini and restart PHP. It\u2019s the only file that can set opcache.* and realpath_cache_* \u2014 if your host only gives you .user.ini access, ask them to apply the opcache / realpath_cache lines for you, since .user.ini can\u2019t set those either, only the three below it.', 'reloadify-frontend-sync')),
+                    el('p', { className: 'reloadify-hint' }, __('Paste this whole block into the active php.ini and restart PHP. It is the only file that can set opcache.* and realpath_cache_* \u2014 if hosting only provides .user.ini access, ask the hosting provider to apply the opcache / realpath_cache lines, since .user.ini cannot set those directives.', 'reloadify-frontend-sync')),
                     el('pre', { className: 'reloadify-code' }, ini),
                     el('button', { className: 'button', onClick: function () { copy(ini, 'php.ini'); } }, __('Copy', 'reloadify-frontend-sync')),
 
@@ -830,7 +872,7 @@
 
     function passDescription(key) {
         var text = {
-            minify_js: __('Reduce script payload size, including large inline scripts. Cached copies only \u2014 your originals are never touched.', 'reloadify-frontend-sync'),
+            minify_js: __('Reduce script payload size, including large inline scripts. Only cached copies are used \u2014 original files are never modified.', 'reloadify-frontend-sync'),
             minify_css: __('Trim stylesheets and inline styles, keeping images and fonts working by rewriting their paths.', 'reloadify-frontend-sync'),
             minify_html: __('Remove unnecessary markup: whitespace between tags in the HTML WordPress sends.', 'reloadify-frontend-sync'),
             remove_html_comments: __('Drop developer comments from the page source (conditional comments are kept).', 'reloadify-frontend-sync'),
@@ -1047,7 +1089,7 @@
                 'div',
                 { className: 'reloadify-warning', role: 'note' },
                 el('strong', null, __('Review before enabling', 'reloadify-frontend-sync')),
-                el('span', null, __('Deleting the plugin then permanently removes the selected data \u2014 it cannot be undone. Your Media Library files are never touched.', 'reloadify-frontend-sync'))
+                el('span', null, __('Deleting the plugin then permanently removes the selected data \u2014 it cannot be undone. Media Library files are never touched.', 'reloadify-frontend-sync'))
             )
         );
 
@@ -1262,7 +1304,7 @@
                     /* translators: 1: images waiting, 2: videos waiting */
                     __('%1$d images and %2$d videos waiting', 'reloadify-frontend-sync'), pendingImages, pendingVideos));
         } else if (running) {
-            waiting = el('span', { className: 'reloadify-media-waiting' }, __('Runs in the background \u2014 you can switch tabs.', 'reloadify-frontend-sync'));
+            waiting = el('span', { className: 'reloadify-media-waiting' }, __('Runs in the background \u2014 switching tabs is safe.', 'reloadify-frontend-sync'));
         }
 
         var formatOptions = [
@@ -1342,7 +1384,7 @@
                         : __('Appears after images are optimized', 'reloadify-frontend-sync')))
             ),
             el(BeforeAfterPreview, { preview: preview, loading: previewLoading }),
-            el('p', { className: 'reloadify-tip' }, __('Tip: your original files are always kept, so nothing is lost if you change your mind.', 'reloadify-frontend-sync')),
+            el('p', { className: 'reloadify-tip' }, __('Tip: original files are always kept, so nothing is lost when settings change.', 'reloadify-frontend-sync')),
             el(
                 'div',
                 { className: 'reloadify-media-backfill-row' },
@@ -1461,8 +1503,8 @@
                 el(
                     'div',
                     { className: 'reloadify-perf-hero-text' },
-                    el('h2', null, __('Server Performance', 'reloadify-frontend-sync'), el(InfoIcon, { text: __('Only PHP settings still changeable at runtime update live here. The rest need a server-side change.', 'reloadify-frontend-sync') })),
-                    el('p', null, __('See what is live, what needs your host, and what is locked at PHP startup.', 'reloadify-frontend-sync')),
+                    el('h2', null, __('Server Performance', 'reloadify-frontend-sync'), el(InfoIcon, { text: __('Some PHP settings can be applied immediately for WordPress requests. Settings marked “Manual only” or “Local dev only” require server configuration changes and, in some cases, a PHP restart.', 'reloadify-frontend-sync') })),
+            el('p', null, __('See what is live, what needs hosting-level configuration, and what is locked at PHP startup.', 'reloadify-frontend-sync')),
                     el(
                         'div',
                         { className: 'reloadify-perf-hero-stats' },
@@ -1535,7 +1577,7 @@
                             el(Ico, { name: 'file', size: 15 }),
                             __('Generate config snippet', 'reloadify-frontend-sync')
                         ),
-                        el(InfoIcon, { text: __('Writes .user.ini / .htaccess. Safe to try \u2014 it just fails quietly if unsupported.', 'reloadify-frontend-sync') }),
+                        el(InfoIcon, { text: __('This attempts to save supported PHP limits in .user.ini or .htaccess. It works only on compatible servers. If the server does not support either file, no setting is changed and a result message explains why.', 'reloadify-frontend-sync') }),
                         el(ApplyResults, { results: applyResults })
                     ),
 
@@ -1553,7 +1595,7 @@
                             { className: 'reloadify-danger-facts' },
                             el('li', null, __('These five values are fixed when PHP starts, so only a real php.ini edit can change them.', 'reloadify-frontend-sync')),
                             el('li', null, __('A mistake can bring PHP down for every site on the server.', 'reloadify-frontend-sync')),
-                            el('li', null, __('Nothing changes until PHP is restarted \u2014 this plugin cannot restart it for you.', 'reloadify-frontend-sync'))
+                            el('li', null, __('Nothing changes until PHP is restarted \u2014 this plugin cannot restart PHP automatically.', 'reloadify-frontend-sync'))
                         ),
                         el(
                             'div',
@@ -1567,7 +1609,7 @@
                             'details',
                             { className: 'reloadify-danger-details' },
                             el('summary', null, __('Read the full explanation', 'reloadify-frontend-sync')),
-                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is editing your real php.ini file and restarting PHP \u2014 no plugin can do it any other way, and .user.ini / .htaccess genuinely cannot reach them regardless of what\u2019s written there. This action edits that file directly. A mistake here, or running it on a shared or live server, can bring down PHP for every site on that server until someone fixes it by hand. Only use this on a local site you fully control and can easily reinstall (Local, XAMPP, MAMP, Laragon, or your own Docker setup).', 'reloadify-frontend-sync'))
+                            el('p', null, __('These five settings (opcache sizing plus the realpath cache) are locked in when PHP starts up, so the only way to change them is by editing the active php.ini file and restarting PHP \u2014 no plugin can do it another way, and .user.ini / .htaccess cannot reach them. This action edits that file directly. A mistake here, or using it on a shared or live server, can bring down PHP for every site on that server until someone fixes it manually. Use only on a local site that is fully controlled and can be reinstalled easily (Local, XAMPP, MAMP, Laragon, or Docker).', 'reloadify-frontend-sync'))
                         ),
                         el(
                             'label',
@@ -1647,7 +1689,7 @@
                     );
                 })
             ),
-            el('p', { className: 'reloadify-tip' }, __('Tip: only enable this if the people who can upload files are people you trust.', 'reloadify-frontend-sync'))
+            el('p', { className: 'reloadify-tip' }, __('Tip: enable this only when every account with upload permission is trusted.', 'reloadify-frontend-sync'))
         );
     }
 
@@ -1684,6 +1726,14 @@
 
     function ScrollTopPreview(props) {
         var left = props.position === 'left';
+        var top = props.verticalPosition === 'top';
+        var horizontalOffset = Math.min(72, Math.max(8, 10 + ((parseInt(props.horizontalOffset, 10) || 0) * 0.14)));
+        var verticalOffset = Math.min(72, Math.max(8, 8 + ((parseInt(props.verticalOffset, 10) || 0) * 0.14)));
+        var buttonStyle = { background: props.color };
+        buttonStyle[left ? 'left' : 'right'] = horizontalOffset + 'px';
+        buttonStyle[left ? 'right' : 'left'] = 'auto';
+        buttonStyle[top ? 'top' : 'bottom'] = verticalOffset + 'px';
+        buttonStyle[top ? 'bottom' : 'top'] = 'auto';
         var c = 2 * Math.PI * 21;
         return el(
             'div',
@@ -1695,8 +1745,8 @@
                 'span',
                 {
                     key: props.replayKey,
-                    className: 'reloadify-st-btn reloadify-st-anim-' + props.animation + ' reloadify-st-hover-' + props.hover + (left ? ' is-left' : ''),
-                    style: { background: props.color }
+                    className: 'reloadify-st-btn reloadify-st-anim-' + props.animation + ' reloadify-st-hover-' + props.hover + (left ? ' is-left' : '') + (top ? ' is-top' : ''),
+                    style: buttonStyle
                 },
                 props.ring && el(
                     'svg',
@@ -1839,10 +1889,29 @@
             props.onToast(next ? 'success' : 'info', next ? __('Scroll To Top Button enabled', 'reloadify-frontend-sync') : __('Scroll To Top Button disabled', 'reloadify-frontend-sync'));
         }
 
-        function setPosition(position) {
-            if ((cfg.position === 'left' ? 'left' : 'right') === position) { return; }
-            patch({ position: position });
-            props.onToast('success', position === 'left' ? __('Button placed bottom left', 'reloadify-frontend-sync') : __('Button placed bottom right', 'reloadify-frontend-sync'));
+        function setPosition(position, verticalPosition) {
+            if ((cfg.position === 'left' ? 'left' : 'right') === position && (cfg.vertical_position === 'top' ? 'top' : 'bottom') === verticalPosition) { return; }
+            patch({ position: position, vertical_position: verticalPosition });
+            props.onToast('success', wp.i18n.sprintf(
+                /* translators: 1: vertical edge (Top or Bottom), 2: horizontal edge (Left or Right). */
+                __('Button placed %1$s %2$s', 'reloadify-frontend-sync'),
+                verticalPosition === 'top' ? __('Top', 'reloadify-frontend-sync') : __('Bottom', 'reloadify-frontend-sync'),
+                position === 'left' ? __('left', 'reloadify-frontend-sync') : __('right', 'reloadify-frontend-sync')
+            ));
+        }
+
+        function setOffset(field, raw) {
+            var value = Math.min(1000, Math.max(0, parseInt(raw, 10) || 0));
+            if (value === (parseInt(cfg[field], 10) || 0)) { return; }
+            var change = {};
+            change[field] = value;
+            patch(change);
+        }
+
+        function announceOffset(label, value) {
+            props.onToast('success', wp.i18n.sprintf(
+                /* translators: 1: edge label, 2: pixel distance. */
+                __('%1$s spacing set to %2$d px', 'reloadify-frontend-sync'), label, value));
         }
 
         function setColor(value) {
@@ -1884,6 +1953,11 @@
         }
 
         var position = cfg.position === 'left' ? 'left' : 'right';
+        var verticalPosition = cfg.vertical_position === 'top' ? 'top' : 'bottom';
+        var horizontalOffset = parseInt(cfg.horizontal_offset, 10);
+        var verticalOffset = parseInt(cfg.vertical_offset, 10);
+        horizontalOffset = Math.min(1000, Math.max(0, isNaN(horizontalOffset) ? 24 : horizontalOffset));
+        verticalOffset = Math.min(1000, Math.max(0, isNaN(verticalOffset) ? 28 : verticalOffset));
         var distance = Math.max(0, parseInt(cfg.show_after, 10) || 0);
         var animation = ANIMATION_CHOICES.indexOf(cfg.animation) !== -1 ? cfg.animation : 'slide';
         var hover = HOVER_CHOICES.indexOf(cfg.hover) !== -1 ? cfg.hover : 'lift';
@@ -1906,13 +1980,43 @@
                 el(
                     'div',
                     { className: 'reloadify-st-col' },
-                    el(ScrollTopPreview, { color: color, position: position, on: on, icon: icon, animation: animation, hover: hover, ring: ringOn, replayKey: replayKey, onReplay: function () { setReplayKey(replayKey + 1); } }),
+                    el(ScrollTopPreview, { color: color, position: position, verticalPosition: verticalPosition, horizontalOffset: horizontalOffset, verticalOffset: verticalOffset, on: on, icon: icon, animation: animation, hover: hover, ring: ringOn, replayKey: replayKey, onReplay: function () { setReplayKey(replayKey + 1); } }),
                     el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Position', 'reloadify-frontend-sync'))),
                     el(
                         'div',
                         { className: 'reloadify-choice-row reloadify-choice-row--compact', role: 'radiogroup', 'aria-label': __('Position', 'reloadify-frontend-sync') },
-                        el(ChoiceCard, { selected: position === 'right', onSelect: function () { setPosition('right'); }, icon: 'arrowUp', title: __('Bottom right', 'reloadify-frontend-sync'), text: __('Default, out of the way of most site chrome.', 'reloadify-frontend-sync') }),
-                        el(ChoiceCard, { selected: position === 'left', onSelect: function () { setPosition('left'); }, icon: 'arrowUp', title: __('Bottom left', 'reloadify-frontend-sync'), text: __('Use this if a chat widget already sits bottom right.', 'reloadify-frontend-sync') })
+                        el(ChoiceCard, { selected: position === 'right' && verticalPosition === 'bottom', onSelect: function () { setPosition('right', 'bottom'); }, icon: 'arrowUp', title: __('Bottom right', 'reloadify-frontend-sync'), text: __('Default, out of the way of most site chrome.', 'reloadify-frontend-sync') }),
+                        el(ChoiceCard, { selected: position === 'left' && verticalPosition === 'bottom', onSelect: function () { setPosition('left', 'bottom'); }, icon: 'arrowUp', title: __('Bottom left', 'reloadify-frontend-sync'), text: __('Use this if a chat widget already sits bottom right.', 'reloadify-frontend-sync') }),
+                        el(ChoiceCard, { selected: position === 'right' && verticalPosition === 'top', onSelect: function () { setPosition('right', 'top'); }, icon: 'arrowUp', title: __('Top right', 'reloadify-frontend-sync'), text: __('Keeps the button above lower-screen controls.', 'reloadify-frontend-sync') }),
+                        el(ChoiceCard, { selected: position === 'left' && verticalPosition === 'top', onSelect: function () { setPosition('left', 'top'); }, icon: 'arrowUp', title: __('Top left', 'reloadify-frontend-sync'), text: __('Places the button near the upper-left edge.', 'reloadify-frontend-sync') })
+                    ),
+                    el(
+                        'div',
+                        { className: 'reloadify-st-offset-grid' },
+                        el(
+                            'label',
+                            { className: 'reloadify-st-offset' },
+                            el('span', null, position === 'left' ? __('Distance from left', 'reloadify-frontend-sync') : __('Distance from right', 'reloadify-frontend-sync')),
+                            el('input', {
+                                type: 'number', min: 0, max: 1000, step: 1, value: horizontalOffset,
+                                'aria-label': position === 'left' ? __('Distance from left in pixels', 'reloadify-frontend-sync') : __('Distance from right in pixels', 'reloadify-frontend-sync'),
+                                onChange: function (e) { setOffset('horizontal_offset', e.target.value); },
+                                onBlur: function () { announceOffset(position === 'left' ? __('Left', 'reloadify-frontend-sync') : __('Right', 'reloadify-frontend-sync'), horizontalOffset); }
+                            }),
+                            el('em', null, 'px')
+                        ),
+                        el(
+                            'label',
+                            { className: 'reloadify-st-offset' },
+                            el('span', null, verticalPosition === 'top' ? __('Distance from top', 'reloadify-frontend-sync') : __('Distance from bottom', 'reloadify-frontend-sync')),
+                            el('input', {
+                                type: 'number', min: 0, max: 1000, step: 1, value: verticalOffset,
+                                'aria-label': verticalPosition === 'top' ? __('Distance from top in pixels', 'reloadify-frontend-sync') : __('Distance from bottom in pixels', 'reloadify-frontend-sync'),
+                                onChange: function (e) { setOffset('vertical_offset', e.target.value); },
+                                onBlur: function () { announceOffset(verticalPosition === 'top' ? __('Top', 'reloadify-frontend-sync') : __('Bottom', 'reloadify-frontend-sync'), verticalOffset); }
+                            }),
+                            el('em', null, 'px')
+                        )
                     ),
                     el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Button colour', 'reloadify-frontend-sync'))),
                     el(
@@ -2026,7 +2130,7 @@
 
         var extrasState = useState(initial.extras || {
             svg_support: { enabled: true },
-            scroll_top: { enabled: true, position: 'right', bg_color: '#4f46e5', show_after: 300 }
+            scroll_top: { enabled: true, position: 'right', vertical_position: 'bottom', horizontal_offset: 24, vertical_offset: 28, bg_color: '#4f46e5', show_after: 300 }
         });
         var extras = extrasState[0], setExtras = extrasState[1];
 
@@ -2243,7 +2347,7 @@
                     'div',
                     null,
                     el('h1', null, __('Reloadify Frontend Sync', 'reloadify-frontend-sync')),
-                    el('p', null, __('Cross-browser live reload for page-builder QA \u2014 and a clear picture of which server settings this plugin can and can\u2019t change for you.', 'reloadify-frontend-sync'))
+                    el('p', null, __('Cross-browser live reload for page-builder QA \u2014 with a clear picture of which server settings the plugin can and cannot change.', 'reloadify-frontend-sync'))
                 ),
                 el(
                     'div',

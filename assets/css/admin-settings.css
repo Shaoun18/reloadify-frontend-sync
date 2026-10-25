@@ -1397,6 +1397,7 @@
     justify-content: center;
     width: 22px;
     height: 22px;
+    border: 0;
     border-radius: 50%;
     background: #eef2ff;
     color: #4338ca;
@@ -1845,6 +1846,26 @@
     border-top: 1px dashed #eceef5;
 }
 
+.reloadify-browser-card-row.is-disabled {
+    opacity: 0.55;
+}
+
+.reloadify-browser-card-row.is-disabled .reloadify-switch-slider {
+    cursor: not-allowed;
+}
+
+.reloadify-browser-card-row.is-disabled .reloadify-switch input:disabled + .reloadify-switch-slider {
+    background-color: #e5e7eb;
+}
+
+.reloadify-incognito-switch {
+    display: inline-flex;
+}
+
+.reloadify-browser-card-row.is-disabled .reloadify-incognito-switch {
+    cursor: not-allowed;
+}
+
 .reloadify-browser-row-label {
     display: inline-flex;
     align-items: center;
@@ -1990,6 +2011,51 @@
     margin-top: 14px;
 }
 
+.reloadify-st-offset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.reloadify-st-offset {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 74px auto;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #3730a3;
+    background: #f8f9fd;
+    border: 1px solid #e8eaf2;
+    border-radius: 12px;
+}
+
+.reloadify-st-offset input {
+    width: 74px;
+    min-width: 0;
+    padding: 6px 7px;
+    font: inherit;
+    font-size: 13px;
+    color: #111827;
+    background: #fff;
+    border: 1px solid #c7d2fe;
+    border-radius: 7px;
+}
+
+.reloadify-st-offset input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.16);
+}
+
+.reloadify-st-offset em {
+    font-style: normal;
+    font-weight: 600;
+    color: #6b7280;
+}
+
 @media (max-width: 1100px) {
     .reloadify-overview {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2004,6 +2070,10 @@
 @media (max-width: 600px) {
     .reloadify-overview,
     .reloadify-choice-row--compact {
+        grid-template-columns: 1fr;
+    }
+
+    .reloadify-st-offset-grid {
         grid-template-columns: 1fr;
     }
 }

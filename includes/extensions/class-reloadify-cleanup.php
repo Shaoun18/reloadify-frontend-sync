@@ -91,7 +91,7 @@ class Reloadify_Cleanup {
 			],
 			'storage'  => [
 				'title' => __( 'Local storage', 'reloadify-frontend-sync' ),
-				'text'  => __( 'Per-image and per-video optimization records kept in your database.', 'reloadify-frontend-sync' ),
+				'text'  => __( 'Per-image and per-video optimization records kept in the WordPress database.', 'reloadify-frontend-sync' ),
 			],
 			'logs'     => [
 				'title' => __( 'Logs & diagnostics', 'reloadify-frontend-sync' ),

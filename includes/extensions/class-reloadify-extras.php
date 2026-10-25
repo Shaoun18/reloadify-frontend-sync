@@ -17,13 +17,16 @@ class Reloadify_Extras {
 				'enabled' => false,
 			],
 			'scroll_top' => [
-				'enabled'    => false,
-				'position'   => 'right', // 'left' or 'right'
-				'bg_color'   => '#4f46e5',
-				'show_after' => 300, // pixels scrolled before the button appears
-				'icon'       => 'default', // 'default' (built-in chevron) or any 'dashicons-*' class name
-				'animation'  => 'slide',   // entrance: fade | slide | zoom | bounce
-				'hover'      => 'lift',    // hover effect: none | lift | pulse | wiggle
+				'enabled'           => false,
+				'position'          => 'right',  // Horizontal edge: 'left' or 'right'.
+				'vertical_position' => 'bottom', // Vertical edge: 'top' or 'bottom'.
+				'horizontal_offset' => 24,       // Pixels from the selected horizontal edge.
+				'vertical_offset'   => 28,       // Pixels from the selected vertical edge.
+				'bg_color'          => '#4f46e5',
+				'show_after'        => 300, // Pixels scrolled before the button appears.
+				'icon'              => 'default', // 'default' (built-in chevron) or any 'dashicons-*' class name.
+				'animation'         => 'slide',   // Entrance: fade | slide | zoom | bounce.
+				'hover'             => 'lift',    // Hover effect: none | lift | pulse | wiggle.
 				'progress_ring' => true,   // ring around the button that fills as the page is scrolled
 			],
 		];
@@ -95,13 +98,16 @@ class Reloadify_Extras {
 				'enabled' => array_key_exists( 'enabled', $svg ) ? ! empty( $svg['enabled'] ) : $defaults['svg_support']['enabled'],
 			],
 			'scroll_top' => [
-				'enabled'    => array_key_exists( 'enabled', $top ) ? ! empty( $top['enabled'] ) : $defaults['scroll_top']['enabled'],
-				'position'   => ( isset( $top['position'] ) && 'left' === $top['position'] ) ? 'left' : $defaults['scroll_top']['position'],
-				'bg_color'   => ( isset( $top['bg_color'] ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $top['bg_color'] ) ) ? $top['bg_color'] : $defaults['scroll_top']['bg_color'],
-				'show_after' => isset( $top['show_after'] ) ? max( 0, (int) $top['show_after'] ) : $defaults['scroll_top']['show_after'],
-				'icon'       => self::clean_icon( isset( $top['icon'] ) ? $top['icon'] : 'default' ),
-				'animation'  => ( isset( $top['animation'] ) && in_array( $top['animation'], self::ANIMATIONS, true ) ) ? $top['animation'] : $defaults['scroll_top']['animation'],
-				'hover'      => ( isset( $top['hover'] ) && in_array( $top['hover'], self::HOVERS, true ) ) ? $top['hover'] : $defaults['scroll_top']['hover'],
+				'enabled'           => array_key_exists( 'enabled', $top ) ? ! empty( $top['enabled'] ) : $defaults['scroll_top']['enabled'],
+				'position'          => ( isset( $top['position'] ) && 'left' === $top['position'] ) ? 'left' : $defaults['scroll_top']['position'],
+				'vertical_position' => ( isset( $top['vertical_position'] ) && 'top' === $top['vertical_position'] ) ? 'top' : $defaults['scroll_top']['vertical_position'],
+				'horizontal_offset' => isset( $top['horizontal_offset'] ) ? min( 1000, max( 0, (int) $top['horizontal_offset'] ) ) : $defaults['scroll_top']['horizontal_offset'],
+				'vertical_offset'   => isset( $top['vertical_offset'] ) ? min( 1000, max( 0, (int) $top['vertical_offset'] ) ) : $defaults['scroll_top']['vertical_offset'],
+				'bg_color'          => ( isset( $top['bg_color'] ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $top['bg_color'] ) ) ? $top['bg_color'] : $defaults['scroll_top']['bg_color'],
+				'show_after'        => isset( $top['show_after'] ) ? max( 0, (int) $top['show_after'] ) : $defaults['scroll_top']['show_after'],
+				'icon'              => self::clean_icon( isset( $top['icon'] ) ? $top['icon'] : 'default' ),
+				'animation'         => ( isset( $top['animation'] ) && in_array( $top['animation'], self::ANIMATIONS, true ) ) ? $top['animation'] : $defaults['scroll_top']['animation'],
+				'hover'             => ( isset( $top['hover'] ) && in_array( $top['hover'], self::HOVERS, true ) ) ? $top['hover'] : $defaults['scroll_top']['hover'],
 				'progress_ring' => array_key_exists( 'progress_ring', $top ) ? ! empty( $top['progress_ring'] ) : $defaults['scroll_top']['progress_ring'],
 			],
 		];
@@ -210,8 +216,29 @@ class Reloadify_Extras {
 
 	/* ---------------- Scroll to top ---------------- */
 
+	/**
+	 * Page builders load a real frontend document inside an editing canvas.
+	 * The floating button belongs to visitor-facing pages only, not that canvas.
+	 */
+	private static function is_visual_builder_request() {
+		if ( function_exists( 'is_customize_preview' ) && is_customize_preview() ) {
+			return true;
+		}
+
+		$builder_flags = [ 'et_fb', 'et_pb_preview', 'elementor-preview', 'fl_builder', 'fl_builder_ui', 'ct_builder', 'brizy-edit', 'brizy-edit-iframe', 'bricks', 'tve', 'vc_editable', 'customize_changeset_uuid' ];
+
+		foreach ( $builder_flags as $flag ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only URL detection; no request value is processed or saved.
+			if ( isset( $_GET[ $flag ] ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public static function maybe_enqueue_scroll_top() {
-		if ( is_admin() ) {
+		if ( is_admin() || self::is_visual_builder_request() ) {
 			return;
 		}
 
@@ -232,14 +259,17 @@ class Reloadify_Extras {
 		$icon = $settings['scroll_top']['icon'];
 
 		wp_localize_script( 'reloadify-scroll-top', 'ReloadifyScrollTop', [
-			'position'  => $settings['scroll_top']['position'],
-			'bgColor'   => $settings['scroll_top']['bg_color'],
-			'showAfter' => (int) $settings['scroll_top']['show_after'],
-			'icon'      => $icon,
-			'animation' => $settings['scroll_top']['animation'],
-			'hover'     => $settings['scroll_top']['hover'],
-			'ring'      => $settings['scroll_top']['progress_ring'] ? 1 : 0,
-			'label'     => __( 'Scroll to top', 'reloadify-frontend-sync' ),
+			'position'         => $settings['scroll_top']['position'],
+			'verticalPosition' => $settings['scroll_top']['vertical_position'],
+			'horizontalOffset' => (int) $settings['scroll_top']['horizontal_offset'],
+			'verticalOffset'   => (int) $settings['scroll_top']['vertical_offset'],
+			'bgColor'          => $settings['scroll_top']['bg_color'],
+			'showAfter'        => (int) $settings['scroll_top']['show_after'],
+			'icon'             => $icon,
+			'animation'        => $settings['scroll_top']['animation'],
+			'hover'            => $settings['scroll_top']['hover'],
+			'ring'             => $settings['scroll_top']['progress_ring'] ? 1 : 0,
+			'label'            => __( 'Scroll to top', 'reloadify-frontend-sync' ),
 			// The icon font is fetched by the script itself, and only for visitors who
 			// actually scroll -- the built-in chevron needs no font at all.
 			'iconCss'   => ( 'default' !== $icon ) ? includes_url( 'css/dashicons.min.css' ) : '',

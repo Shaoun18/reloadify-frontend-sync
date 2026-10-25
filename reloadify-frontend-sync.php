@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
- * Description:       Automatically reloads the frontend across all open browsers whenever WordPress content updates—works with any theme, plugin, or page builder.
+ * Description:       Automatically refresh frontend previews after content updates with cross-browser live reload, server performance controls, and image/media optimization.
  * Version:           1.3.0
  * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
