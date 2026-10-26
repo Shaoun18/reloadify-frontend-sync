@@ -146,6 +146,8 @@ class Reloadify_Speed
 			'browser_cache'       => true,
 			'dashicons'           => true,
 			'db_cleanup'          => true,
+			// Opt-in (1.3.1): freshness over a few extra revalidations.
+			'prevent_browser_cache' => false,
 		];
 	}
 
@@ -198,6 +200,7 @@ class Reloadify_Speed
 			'browser_cache'       => __('Browser caching & compression for images, fonts and text (Apache)', 'reloadify-frontend-sync'),
 			'dashicons'           => __('Skip the Dashicons font for logged-out visitors', 'reloadify-frontend-sync'),
 			'db_cleanup'          => __('Weekly cleanup of expired transients in the database', 'reloadify-frontend-sync'),
+			'prevent_browser_cache' => __('Prevent stale browser cache (always serve the latest CSS, JS, images and pages)', 'reloadify-frontend-sync'),
 		];
 	}
 
@@ -281,6 +284,10 @@ class Reloadify_Speed
 				'label' => __('Deletes expired transients from the options table once a week — without an object cache they pile up and slow down every options query', 'reloadify-frontend-sync'),
 			],
 			[
+				'key' => 'prevent_browser_cache',
+				'label' => __('Keeps browsers from showing old files after you edit something: local CSS/JS get a ?ver= based on the file\'s own modification time (caching still works until the file really changes), replaced images get a fresh URL, pages are always revalidated, and pages restored from the back/forward cache reload after 5 minutes. Takes priority over "Remove query strings" and also applies inside page-builder editors', 'reloadify-frontend-sync'),
+			],
+			[
 				'key' => 'embeds',
 				'label' => __('Stops wp-embed.min.js from loading on the frontend for visitors — it only resizes embedded-post iframes, which most sites never use, so it\'s one less script on every page', 'reloadify-frontend-sync'),
 			],
@@ -352,6 +359,21 @@ class Reloadify_Speed
 			add_action('wp_enqueue_scripts', [__CLASS__, 'dequeue_dashicons'], 100);
 		}
 
+		// Freshness hooks run everywhere (builder frames included): a builder
+		// showing yesterday's CSS is exactly the problem this solves.
+		if (! empty($options['prevent_browser_cache'])) {
+			add_filter('style_loader_src', [__CLASS__, 'version_asset_src'], 10000, 1);
+			add_filter('script_loader_src', [__CLASS__, 'version_asset_src'], 10000, 1);
+			// Only rendered <img> markup is touched (src + srcset). The raw
+			// attachment URL / image-src filters are deliberately NOT hooked:
+			// WooCommerce, SEO, image-optimizer and offload plugins use those
+			// values to find files on disk, and a ?ver= there would break them.
+			add_filter('wp_get_attachment_image_attributes', [__CLASS__, 'version_image_attributes'], 10000, 1);
+			add_filter('wp_calculate_image_srcset', [__CLASS__, 'version_srcset'], 10000, 1);
+			add_action('send_headers', [__CLASS__, 'send_freshness_header']);
+			add_action('wp_footer', [__CLASS__, 'print_bfcache_guard'], 10000);
+		}
+
 		// Everything below changes front-end output -- never in wp-admin, and
 		// never inside a page builder's editor frame.
 		if (! is_admin() && ! self::is_builder_request()) {
@@ -367,7 +389,8 @@ class Reloadify_Speed
 				add_action('template_redirect', [__CLASS__, 'start_html_buffer'], 1);
 			}
 
-			if (! empty($options['remove_query_strings'])) {
+			// A stripped ?ver= and "always fresh" contradict each other.
+			if (! empty($options['remove_query_strings']) && empty($options['prevent_browser_cache'])) {
 				add_filter('script_loader_src', [__CLASS__, 'strip_version_query'], 15, 1);
 				add_filter('style_loader_src', [__CLASS__, 'strip_version_query'], 15, 1);
 			}
@@ -419,6 +442,152 @@ class Reloadify_Speed
 		}
 
 		return $memo[$src];
+	}
+
+	/* ---------------- Prevent stale browser cache ---------------- */
+
+	/**
+	 * Local CSS/JS: ?ver= becomes the file's modification time, so the
+	 * browser keeps its copy until the file actually changes and refetches
+	 * the moment it does. Remote files are left alone.
+	 */
+	public static function version_asset_src($src)
+	{
+		static $memo = [];
+
+		if (! is_string($src) || '' === $src) {
+			return $src;
+		}
+
+		if (isset($memo[$src])) {
+			return $memo[$src];
+		}
+
+		$memo[$src] = $src;
+		$path       = self::url_to_path(strtok($src, '?#'));
+
+		if ($path) {
+			$mtime = @filemtime($path);
+			if ($mtime) {
+				$memo[$src] = add_query_arg('ver', (int) $mtime, $src);
+			}
+		}
+
+		return $memo[$src];
+	}
+
+	/** True where a versioned media URL must NOT be produced (admin, REST, AJAX, feeds). */
+	private static function skip_media_versioning()
+	{
+		return is_admin() || (defined('REST_REQUEST') && REST_REQUEST) || (function_exists('wp_doing_ajax') && wp_doing_ajax()) || (function_exists('is_feed') && did_action('wp') && is_feed());
+	}
+
+	private static function upload_url_mtime($url)
+	{
+		static $memo = [];
+
+		if (isset($memo[$url])) {
+			return $memo[$url];
+		}
+
+		$memo[$url] = 0;
+		$dir        = wp_get_upload_dir();
+
+		if (empty($dir['baseurl']) || empty($dir['basedir']) || false !== strpos($url, '?')) {
+			return 0;
+		}
+
+		$base = set_url_scheme($dir['baseurl']);
+		$full = set_url_scheme($url);
+
+		if (0 !== strpos($full, $base . '/')) {
+			return 0;
+		}
+
+		$relative = ltrim(substr($full, strlen($base)), '/');
+		if ('' === $relative || false !== strpos($relative, '..') || false !== strpos($relative, '%')) {
+			return 0;
+		}
+
+		$memo[$url] = (int) @filemtime(trailingslashit($dir['basedir']) . $relative);
+
+		return $memo[$url];
+	}
+
+	private static function version_media_url($url)
+	{
+		if (! is_string($url) || '' === $url || self::skip_media_versioning()) {
+			return $url;
+		}
+
+		$mtime = self::upload_url_mtime($url);
+
+		return $mtime ? add_query_arg('ver', $mtime, $url) : $url;
+	}
+
+	/** src of images printed through wp_get_attachment_image(); srcset is handled by version_srcset(). */
+	public static function version_image_attributes($attr)
+	{
+		if (is_array($attr) && ! empty($attr['src'])) {
+			$attr['src'] = self::version_media_url($attr['src']);
+		}
+
+		return $attr;
+	}
+
+	public static function version_srcset($sources)
+	{
+		if (is_array($sources)) {
+			foreach ($sources as $width => $source) {
+				if (is_array($source) && ! empty($source['url'])) {
+					$sources[$width]['url'] = self::version_media_url($source['url']);
+				}
+			}
+		}
+
+		return $sources;
+	}
+
+	/**
+	 * Asks browsers to revalidate the page itself instead of reusing a stored
+	 * copy. Steps aside for logged-out visitors when a page-cache plugin is
+	 * active (WP_CACHE), so it never fights the cache's own headers.
+	 */
+	public static function send_freshness_header()
+	{
+		if (headers_sent() || is_admin() || (defined('REST_REQUEST') && REST_REQUEST) || (function_exists('wp_doing_ajax') && wp_doing_ajax())) {
+			return;
+		}
+
+		if (! is_user_logged_in() && defined('WP_CACHE') && WP_CACHE) {
+			return;
+		}
+
+		header('Cache-Control: no-cache, must-revalidate, max-age=0');
+	}
+
+	/**
+	 * Cache-Control cannot reach pages restored from the back/forward cache,
+	 * so a restored snapshot older than 5 minutes is reloaded.
+	 */
+	public static function print_bfcache_guard()
+	{
+		if (is_admin() || self::is_builder_request() || is_feed() || is_embed() || is_customize_preview()) {
+			return;
+		}
+
+		// AMP forbids custom JavaScript.
+		if ((function_exists('is_amp_endpoint') && is_amp_endpoint()) || (function_exists('amp_is_request') && amp_is_request())) {
+			return;
+		}
+
+		// Never throw away what someone is typing into a shop form.
+		if ((function_exists('is_checkout') && is_checkout()) || (function_exists('is_cart') && is_cart()) || (function_exists('is_account_page') && is_account_page())) {
+			return;
+		}
+
+		// wp_print_inline_script_tag() carries a CSP nonce when one is configured.
+		wp_print_inline_script_tag("(function(){var t=Date.now();window.addEventListener('pageshow',function(e){if(e.persisted&&Date.now()-t>300000){window.location.reload();}});})();", ['id' => 'reloadify-bfcache-guard']);
 	}
 
 	/* ---------------- Lazy loading ---------------- */

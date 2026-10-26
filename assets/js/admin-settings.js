@@ -834,7 +834,7 @@
 
     /* ---------------- Speed Boost Card ---------------- */
 
-    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace', 'remove_query_strings', 'lazy_load_images', 'defer_js', 'delay_js', 'browser_cache', 'dashicons', 'db_cleanup'];
+    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace', 'remove_query_strings', 'lazy_load_images', 'defer_js', 'delay_js', 'browser_cache', 'dashicons', 'db_cleanup', 'prevent_browser_cache'];
 
     /* One small inline SVG per pass (24x24, stroke icons) so the list stays dependency-free. */
     var PASS_ICONS = {
@@ -849,7 +849,8 @@
         delay_js: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
         browser_cache: 'M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5',
         dashicons: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7L12 3z',
-        db_cleanup: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6'
+        db_cleanup: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6',
+        prevent_browser_cache: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3zM9 12l2 2 4-4'
     };
 
     function passTitle(key) {
@@ -865,7 +866,8 @@
             delay_js: __('Delay tracking & chat scripts', 'reloadify-frontend-sync'),
             browser_cache: __('Browser caching & compression', 'reloadify-frontend-sync'),
             dashicons: __('Skip Dashicons for visitors', 'reloadify-frontend-sync'),
-            db_cleanup: __('Weekly transient cleanup', 'reloadify-frontend-sync')
+            db_cleanup: __('Weekly transient cleanup', 'reloadify-frontend-sync'),
+            prevent_browser_cache: __('Prevent stale browser cache', 'reloadify-frontend-sync')
         };
         return titles[key] || key;
     }
@@ -883,7 +885,8 @@
             delay_js: __('Hold back analytics, ads and chat widgets until the first interaction.', 'reloadify-frontend-sync'),
             browser_cache: __('Reuse repeat-visit assets: gzip plus long-lived caching for images, fonts and video (Apache .htaccess).', 'reloadify-frontend-sync'),
             dashicons: __('Skip the Dashicons font for logged-out visitors unless a stylesheet depends on it.', 'reloadify-frontend-sync'),
-            db_cleanup: __('Delete expired transients once a week to keep database queries fast.', 'reloadify-frontend-sync')
+            db_cleanup: __('Delete expired transients once a week to keep database queries fast.', 'reloadify-frontend-sync'),
+            prevent_browser_cache: __("Always serve the latest files: local CSS/JS get a version from the file's modified time, replaced images get a fresh URL and pages are revalidated. Caching still works until something changes.", 'reloadify-frontend-sync')
         };
         return text[key] || '';
     }
@@ -1705,7 +1708,12 @@
             none: __('None', 'reloadify-frontend-sync'),
             lift: __('Lift', 'reloadify-frontend-sync'),
             pulse: __('Pulse', 'reloadify-frontend-sync'),
-            wiggle: __('Nudge', 'reloadify-frontend-sync')
+            wiggle: __('Nudge', 'reloadify-frontend-sync'),
+            solid: __('Solid', 'reloadify-frontend-sync'),
+            outline: __('Outline', 'reloadify-frontend-sync'),
+            link: __('Text link', 'reloadify-frontend-sync'),
+            button: __('Button press', 'reloadify-frontend-sync'),
+            scroll: __('Auto on scroll', 'reloadify-frontend-sync')
         }[key] || key;
     }
 
@@ -2090,6 +2098,263 @@
         );
     }
 
+
+    /* ---------------- Read More + Load More cards (v1.4.0) ---------------- */
+
+    var RM_STYLES = ['solid', 'outline', 'link'];
+    var RM_ANIMS = ['none', 'fade', 'slide'];
+    var LM_TRIGGERS = ['button', 'scroll'];
+    var LM_COLUMNS = ['1', '2', '3', '4', '5', '6'];
+    var HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+    function TextField(props) {
+        var st = useState(props.value);
+        var draft = st[0], setDraft = st[1];
+
+        return el(
+            'label',
+            { className: 'reloadify-text-field' },
+            el('span', null, props.label),
+            el('input', {
+                type: 'text', value: draft, maxLength: props.max || 60,
+                onChange: function (e) { setDraft(e.target.value); props.onChange(e.target.value); },
+                onBlur: function () { setDraft(props.value); }
+            })
+        );
+    }
+
+    function NumberField(props) {
+        return el(
+            'label',
+            { className: 'reloadify-text-field reloadify-text-field--short' },
+            el('span', null, props.label),
+            el('input', {
+                type: 'number', min: props.min, max: props.max, step: 1, value: props.value,
+                onChange: function (e) {
+                    var v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) { props.onChange(Math.min(props.max, Math.max(props.min, v))); }
+                }
+            })
+        );
+    }
+
+    function ColorField(props) {
+        var st = useState(props.value);
+        var draft = st[0], setDraft = st[1];
+        var color = HEX_RE.test(draft) ? draft : props.value;
+
+        function commit(value) {
+            setDraft(value);
+            if (HEX_RE.test(value)) { props.onChange(value); }
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-color-field' },
+            el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, props.label)),
+            el(
+                'div',
+                { className: 'reloadify-color-row' },
+                el(
+                    'div',
+                    { className: 'reloadify-swatches', role: 'group', 'aria-label': props.label },
+                    SCROLL_COLORS.map(function (swatch) {
+                        var active = swatch.toLowerCase() === String(props.value).toLowerCase();
+                        return el('button', {
+                            key: swatch, type: 'button', className: 'reloadify-swatch' + (active ? ' is-active' : ''),
+                            style: { background: swatch }, title: swatch.toUpperCase(), 'aria-label': swatch.toUpperCase(), 'aria-pressed': active,
+                            onClick: function () { commit(swatch); }
+                        }, active && el(Ico, { name: 'check', size: 13 }));
+                    })
+                ),
+                el('input', { type: 'color', className: 'reloadify-color-input', value: color, 'aria-label': props.label, onChange: function (e) { commit(e.target.value); } }),
+                el('input', {
+                    type: 'text', className: 'reloadify-hex-input', value: draft, maxLength: 7, spellCheck: false, 'aria-label': props.label + ' hex',
+                    onChange: function (e) { commit(e.target.value); },
+                    onBlur: function () { if (!HEX_RE.test(draft)) { setDraft(props.value); } }
+                })
+            )
+        );
+    }
+
+    function SnippetBox(props) {
+        var st = useState(false);
+        var copied = st[0], setCopied = st[1];
+
+        function copy() {
+            function done() {
+                setCopied(true);
+                setTimeout(function () { setCopied(false); }, 1500);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(props.code).then(done);
+            }
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-snippet' },
+            el('div', { className: 'reloadify-snippet-title' }, props.title),
+            el(
+                'div',
+                { className: 'reloadify-snippet-row' },
+                el('code', { className: 'reloadify-snippet-code' }, props.code),
+                el('button', { type: 'button', className: 'button', onClick: copy }, copied ? __('Copied', 'reloadify-frontend-sync') : __('Copy', 'reloadify-frontend-sync'))
+            )
+        );
+    }
+
+    function SwitchRow(props) {
+        return el(
+            'div',
+            { className: 'reloadify-pass reloadify-pass--wide' + (props.checked ? ' is-on' : ' is-off') },
+            el(IconChip, { name: props.icon, tone: props.checked ? 'green' : 'gray' }),
+            el('div', { className: 'reloadify-pass-text' }, el('strong', { className: 'reloadify-pass-title' }, props.title), props.text ? el('span', { className: 'reloadify-pass-desc' }, props.text) : null),
+            el(Switch, { checked: props.checked, onChange: props.onChange })
+        );
+    }
+
+    function ReadMoreCard(props) {
+        var cfg = props.extras.read_more;
+        var on = !!cfg.enabled;
+
+
+        var settled = useSettled(function (message) { props.onToast('success', message); }, 700);
+
+        function patch(change, message, tone) {
+            props.update({ read_more: Object.assign({}, cfg, change) });
+            if (message) { props.onToast(tone || 'success', message); }
+        }
+
+        /* Typing, colour dragging and number fields: one toast once the user pauses. */
+        function patchSettled(change, message) {
+            props.update({ read_more: Object.assign({}, cfg, change) });
+            settled(message);
+        }
+
+        function toggle() {
+            var next = !on;
+            patch({ enabled: next });
+            props.onToast(next ? 'success' : 'info', next ? __('Read More enabled', 'reloadify-frontend-sync') : __('Read More disabled', 'reloadify-frontend-sync'));
+        }
+
+        var demoStyle = { background: cfg.bg_color, color: cfg.text_color, border: '2px solid ' + cfg.bg_color };
+        if (cfg.style === 'outline') { demoStyle = { background: 'transparent', color: cfg.bg_color, border: '2px solid ' + cfg.bg_color }; }
+        if (cfg.style === 'link') { demoStyle = { background: 'none', color: cfg.bg_color, border: 0, padding: 0, textDecoration: 'underline' }; }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            el(CardHead, {
+                title: __('Read More / Read Less', 'reloadify-frontend-sync'),
+                subtitle: __('Hide long text behind a button and open it without reloading the page', 'reloadify-frontend-sync'),
+                checked: on,
+                onChange: toggle
+            }),
+            el(
+                'div',
+                { className: 'reloadify-st-layout' + (on ? '' : ' is-inactive') },
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(TextField, { label: __('Open button text', 'reloadify-frontend-sync'), value: cfg.open_text, onChange: function (v) { patchSettled({ open_text: v }, __('Open button text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Close button text', 'reloadify-frontend-sync'), value: cfg.close_text, onChange: function (v) { patchSettled({ close_text: v }, __('Close button text updated', 'reloadify-frontend-sync')); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Button style', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Button style', 'reloadify-frontend-sync'), choices: RM_STYLES, value: cfg.style, onPick: function (v) { patch({ style: v }, __('Button style:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Open / close animation', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Animation', 'reloadify-frontend-sync'), choices: RM_ANIMS, value: cfg.animation, onPick: function (v) { patch({ animation: v }, __('Open / close animation:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el(ColorField, { label: __('Button colour', 'reloadify-frontend-sync'), value: cfg.bg_color, onChange: function (v) { patchSettled({ bg_color: v }, __('Button colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } }),
+                    el(ColorField, { label: __('Text colour', 'reloadify-frontend-sync'), value: cfg.text_color, onChange: function (v) { patchSettled({ text_color: v }, __('Text colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } })
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el('div', { className: 'reloadify-card-eyebrow' }, el('span', null, __('Preview', 'reloadify-frontend-sync'))),
+                    el('div', { className: 'reloadify-demo-box' }, el('span', { className: 'reloadify-demo-button', style: demoStyle }, cfg.open_text + ' \u25BE')),
+                    el(SwitchRow, {
+                        icon: 'arrowUp', checked: !!cfg.smooth_scroll,
+                        title: __('Scroll back when closing', 'reloadify-frontend-sync'),
+                        text: __('After closing a long text, bring the button back into view.', 'reloadify-frontend-sync'),
+                        onChange: function () { var next = !cfg.smooth_scroll; patch({ smooth_scroll: next }, next ? __('Scroll back when closing enabled', 'reloadify-frontend-sync') : __('Scroll back when closing disabled', 'reloadify-frontend-sync'), next ? 'success' : 'info'); }
+                    }),
+                    el(SnippetBox, { title: __('Use it anywhere (Gutenberg Shortcode block, Elementor, Divi, templates)', 'reloadify-frontend-sync'), code: '[reloadify_read_more]Your hidden text[/reloadify_read_more]' }),
+                    el(SnippetBox, { title: __('Custom labels and style for one spot', 'reloadify-frontend-sync'), code: '[reloadify_read_more open="Show details" close="Hide details" style="outline"]\u2026[/reloadify_read_more]' }),
+                    el('p', { className: 'reloadify-tip' }, __('The hidden text stays in the page HTML, so search engines can read it. Everything opens automatically when the page is printed.', 'reloadify-frontend-sync'))
+                )
+            )
+        );
+    }
+
+    function LoadMoreCard(props) {
+        var cfg = props.extras.load_more;
+        var on = !!cfg.enabled;
+
+
+        var settled = useSettled(function (message) { props.onToast('success', message); }, 700);
+
+        function patch(change, message, tone) {
+            props.update({ load_more: Object.assign({}, cfg, change) });
+            if (message) { props.onToast(tone || 'success', message); }
+        }
+
+        /* Typing, colour dragging and number fields: one toast once the user pauses. */
+        function patchSettled(change, message) {
+            props.update({ load_more: Object.assign({}, cfg, change) });
+            settled(message);
+        }
+
+        function toggle() {
+            var next = !on;
+            patch({ enabled: next });
+            props.onToast(next ? 'success' : 'info', next ? __('Load More enabled', 'reloadify-frontend-sync') : __('Load More disabled', 'reloadify-frontend-sync'));
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            el(CardHead, {
+                title: __('Load More (AJAX)', 'reloadify-frontend-sync'),
+                subtitle: __('Show a first batch of posts or products and load the next ones without a page refresh', 'reloadify-frontend-sync'),
+                checked: on,
+                onChange: toggle
+            }),
+            el(
+                'div',
+                { className: 'reloadify-st-layout' + (on ? '' : ' is-inactive') },
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(TextField, { label: __('Button text', 'reloadify-frontend-sync'), value: cfg.button_text, onChange: function (v) { patchSettled({ button_text: v }, __('Button text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Text while loading', 'reloadify-frontend-sync'), value: cfg.loading_text, onChange: function (v) { patchSettled({ loading_text: v }, __('Loading text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Message when everything is loaded', 'reloadify-frontend-sync'), value: cfg.end_text, max: 90, onChange: function (v) { patchSettled({ end_text: v }, __('End message updated', 'reloadify-frontend-sync')); } }),
+                    el(
+                        'div',
+                        { className: 'reloadify-st-offset-grid' },
+                        el(NumberField, { label: __('Items per load', 'reloadify-frontend-sync'), min: 1, max: 24, value: cfg.per_page, onChange: function (v) { patchSettled({ per_page: v }, __('Items per load:', 'reloadify-frontend-sync') + ' ' + v); } }),
+                        el(NumberField, { label: __('Excerpt words', 'reloadify-frontend-sync'), min: 5, max: 80, value: cfg.excerpt_words, onChange: function (v) { patchSettled({ excerpt_words: v }, __('Excerpt words:', 'reloadify-frontend-sync') + ' ' + v); } })
+                    ),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Columns (desktop)', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Columns', 'reloadify-frontend-sync'), choices: LM_COLUMNS, value: String(cfg.columns), onPick: function (v) { patch({ columns: parseInt(v, 10) }, __('Columns:', 'reloadify-frontend-sync') + ' ' + v); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Load next items by', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Trigger', 'reloadify-frontend-sync'), choices: LM_TRIGGERS, value: cfg.trigger, onPick: function (v) { patch({ trigger: v }, __('Load next items by:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el(ColorField, { label: __('Button colour', 'reloadify-frontend-sync'), value: cfg.bg_color, onChange: function (v) { patchSettled({ bg_color: v }, __('Button colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } }),
+                    el(ColorField, { label: __('Button text colour', 'reloadify-frontend-sync'), value: cfg.text_color, onChange: function (v) { patchSettled({ text_color: v }, __('Text colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } })
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(SwitchRow, { icon: 'image', checked: !!cfg.show_image, title: __('Featured image', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_image; patch({ show_image: next }, __('Featured image', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SwitchRow, { icon: 'sparkle', checked: !!cfg.show_date, title: __('Publish date', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_date; patch({ show_date: next }, __('Publish date', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SwitchRow, { icon: 'check', checked: !!cfg.show_excerpt, title: __('Excerpt', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_excerpt; patch({ show_excerpt: next }, __('Excerpt', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SnippetBox, { title: __('Latest posts', 'reloadify-frontend-sync'), code: '[reloadify_load_more]' }),
+                    el(SnippetBox, { title: __('WooCommerce products (shows price)', 'reloadify-frontend-sync'), code: '[reloadify_load_more post_type="product" per_page="8" columns="4"]' }),
+                    el(SnippetBox, { title: __('One category, oldest first', 'reloadify-frontend-sync'), code: '[reloadify_load_more category="news" order="ASC" per_page="6"]' }),
+                    el('p', { className: 'reloadify-tip' }, __('Only published, public posts are ever returned, and every request is signed so visitors cannot change the query. Theme developers can replace the card markup with the reloadify_load_more_item_html filter.', 'reloadify-frontend-sync'))
+                )
+            )
+        );
+    }
+
     function ExtrasTab(props) {
         var extras = props.extras;
 
@@ -2101,7 +2366,9 @@
             'div',
             { className: 'reloadify-tab-body reloadify-card-grid' },
             el(SvgSupportCard, { extras: extras, update: update, onToast: props.onToast }),
-            el(ScrollTopCard, { extras: extras, update: update, onToast: props.onToast })
+            el(ScrollTopCard, { extras: extras, update: update, onToast: props.onToast }),
+            el(ReadMoreCard, { extras: extras, update: update, onToast: props.onToast }),
+            el(LoadMoreCard, { extras: extras, update: update, onToast: props.onToast })
         );
     }
 
@@ -2130,7 +2397,9 @@
 
         var extrasState = useState(initial.extras || {
             svg_support: { enabled: true },
-            scroll_top: { enabled: true, position: 'right', vertical_position: 'bottom', horizontal_offset: 24, vertical_offset: 28, bg_color: '#4f46e5', show_after: 300 }
+            scroll_top: { enabled: true, position: 'right', vertical_position: 'bottom', horizontal_offset: 24, vertical_offset: 28, bg_color: '#4f46e5', show_after: 300 },
+            read_more: { enabled: false, open_text: 'Read more', close_text: 'Read less', style: 'solid', animation: 'slide', bg_color: '#4f46e5', text_color: '#ffffff', smooth_scroll: true },
+            load_more: { enabled: false, button_text: 'Load more', loading_text: 'Loading\u2026', end_text: 'You\u2019ve reached the end', per_page: 6, columns: 3, trigger: 'button', bg_color: '#4f46e5', text_color: '#ffffff', show_image: true, show_date: true, show_excerpt: true, excerpt_words: 20 }
         });
         var extras = extrasState[0], setExtras = extrasState[1];
 

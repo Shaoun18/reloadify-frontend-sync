@@ -3,7 +3,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Reloadify Frontend Sync 1.3.0\n"
+"Project-Id-Version: Reloadify Frontend Sync 1.4.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/reloadify-"
 "frontend-sync\n"
 "POT-Creation-Date: 2026-10-23 11:03-0500\n"
@@ -1846,4 +1846,32 @@ msgstr ""
 
 #: assets/js/admin-settings.js:1037
 msgid "will be removed on uninstall"
+msgstr ""
+
+#: includes/extensions/class-reloadify-speed.php
+msgid "Prevent stale browser cache (always serve the latest CSS, JS, images and pages)"
+msgstr ""
+
+#: assets/js/admin-settings.js
+msgid "Prevent stale browser cache"
+msgstr ""
+
+#: assets/js/admin-settings.js
+msgid "Read More / Read Less"
+msgstr ""
+
+#: assets/js/admin-settings.js
+msgid "Load More (AJAX)"
+msgstr ""
+
+#: includes/extensions/class-reloadify-content.php
+msgid "Could not load more. Please try again."
+msgstr ""
+
+#: includes/extensions/class-reloadify-content.php
+msgid "Try again"
+msgstr ""
+
+#: includes/extensions/class-reloadify-content.php
+msgid "Invalid request."
 msgstr ""
