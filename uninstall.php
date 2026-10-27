@@ -46,6 +46,7 @@ function reloadify_uninstall_cleanup_current_site() {
 		delete_option( 'reloadify_media_optimize_enabled' );
 		delete_option( 'reloadify_media_format_preference' );
 		delete_option( 'reloadify_media_quality' );
+		delete_option( 'reloadify_media_optimize_originals' );
 		delete_option( 'reloadify_extras_settings' );
 		delete_option( 'reloadify_cleanup_scope' );
 		delete_option( 'reloadify_delete_data_on_uninstall' );
@@ -60,6 +61,7 @@ function reloadify_uninstall_cleanup_current_site() {
 		// Per-attachment optimization records written by Media Optimization.
 		// The optimized files themselves are site content and stay.
 		delete_post_meta_by_key( '_reloadify_media_optimized' );
+		delete_post_meta_by_key( '_reloadify_media_original_optimized' );
 		delete_post_meta_by_key( '_reloadify_media_video_optimized' );
 		delete_post_meta_by_key( '_reloadify_media_stats' );
 	}

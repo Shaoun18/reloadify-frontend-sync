@@ -14,6 +14,8 @@ class Reloadify_Media {
 	const CRON_HOOK_VIDEO_BACKFILL = 'reloadify_media_backfill_video_batch';
 	const CRON_HOOK_VIDEO    = 'reloadify_media_compress_video';
 	const BACKFILL_META_KEY  = '_reloadify_media_optimized';
+	const ORIGINALS_OPTION_KEY = 'reloadify_media_optimize_originals';
+	const ORIGINAL_META_KEY = '_reloadify_media_original_optimized';
 	const VIDEO_BACKFILL_META_KEY = '_reloadify_media_video_optimized';
 	const STATS_META_KEY     = '_reloadify_media_stats';
 	const QUALITY_OPTION_KEY = 'reloadify_media_quality';
@@ -76,6 +78,26 @@ class Reloadify_Media {
 		$format = in_array( $format, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $format : 'auto';
 		update_option( self::FORMAT_OPTION_KEY, $format );
 		return $format;
+	}
+
+	/**
+	 * Opt-in (1.4.0): also re-compress the main uploaded file of each JPEG/PNG,
+	 * in place and in its own format. Off by default -- originals stay untouched
+	 * unless the site owner asks for this, because it replaces real files.
+	 */
+	public static function optimize_originals() {
+		return (bool) get_option( self::ORIGINALS_OPTION_KEY, false );
+	}
+
+	public static function set_optimize_originals( $enabled ) {
+		update_option( self::ORIGINALS_OPTION_KEY, (bool) $enabled );
+		delete_transient( self::TOTALS_TRANSIENT );
+
+		if ( self::optimize_originals() && self::is_enabled() ) {
+			self::schedule_backfill();
+		}
+
+		return self::optimize_originals();
 	}
 
 	/**
@@ -325,6 +347,7 @@ class Reloadify_Media {
 				'avif' => (bool) $caps['avif'],
 			],
 			'quality'             => self::quality(),
+			'optimize_originals'  => self::optimize_originals(),
 			'stats'               => self::stats(),
 			'pending'             => [
 				'images' => self::count_pending( 'image' ),
@@ -583,6 +606,7 @@ class Reloadify_Media {
 		add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'record_image_stats' ], 20, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'mark_converted_on_upload' ], 30, 2 );
+		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'optimize_original_on_upload' ], 35, 2 );
 
 		add_action( 'add_attachment', [ __CLASS__, 'maybe_schedule_video_compression' ] );
 		add_action( self::CRON_HOOK_VIDEO, [ __CLASS__, 'compress_video' ] );
@@ -673,6 +697,141 @@ class Reloadify_Media {
 	}
 
 	/**
+	 * SQL condition for "this image still needs work": not yet converted, or --
+	 * when Optimize original images is on -- its main file not yet handled.
+	 */
+	private static function image_pending_sql() {
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- both fragments are prepared below; they carry no user input.
+		$converted = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )", self::BACKFILL_META_KEY );
+
+		if ( ! self::optimize_originals() ) {
+			return $converted;
+		}
+
+		$original = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m2 WHERE m2.post_id = p.ID AND m2.meta_key = %s )", self::ORIGINAL_META_KEY );
+		// phpcs:enable
+
+		return '( ' . $converted . ' OR ' . $original . ' )';
+	}
+
+	/** Animated PNGs would lose their frames when re-encoded, so they are left alone. */
+	private static function is_animated_png( $file ) {
+		$head = file_get_contents( $file, false, null, 0, 8192 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local file header read, 8 KB.
+
+		return false !== $head && false !== strpos( $head, 'acTL' );
+	}
+
+	/**
+	 * Re-compresses one original file in place, in its own format. The new file
+	 * only replaces the old one when it is clearly smaller (3 % or more), so a
+	 * file can never grow. Returns the bytes saved (0 = left untouched).
+	 */
+	private static function recompress_in_place( $file, $mime ) {
+		if ( ! is_file( $file ) || ! is_writable( $file ) || ( 'image/png' === $mime && self::is_animated_png( $file ) ) ) {
+			return 0;
+		}
+
+		$editor = wp_get_image_editor( $file );
+
+		if ( is_wp_error( $editor ) ) {
+			return 0;
+		}
+
+		// Bake an EXIF rotation into the pixels before any metadata can be dropped.
+		if ( method_exists( $editor, 'maybe_exif_rotate' ) ) {
+			$editor->maybe_exif_rotate();
+		}
+
+		if ( 'image/jpeg' === $mime ) {
+			$editor->set_quality( self::quality() );
+		}
+
+		$tmp = trailingslashit( dirname( $file ) ) . '.reloadify-' . wp_generate_password( 8, false ) . ( 'image/png' === $mime ? '.png' : '.jpg' );
+
+		// Our own WebP/AVIF mapping is for generated sizes; the original keeps its format.
+		$had_filter = has_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ] );
+		if ( false !== $had_filter ) {
+			remove_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10 );
+		}
+
+		$result = $editor->save( $tmp, $mime );
+
+		if ( false !== $had_filter ) {
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+		}
+
+		if ( is_wp_error( $result ) || empty( $result['path'] ) || ! is_file( $result['path'] ) ) {
+			return 0;
+		}
+
+		$new = $result['path'];
+
+		if ( empty( $result['mime-type'] ) || $mime !== $result['mime-type'] ) {
+			wp_delete_file( $new );
+			return 0;
+		}
+
+		clearstatcache( true, $file );
+		clearstatcache( true, $new );
+
+		$before = (int) filesize( $file );
+		$after  = (int) filesize( $new );
+
+		if ( $after > 0 && $after < $before * 0.97 ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- same-directory swap of a file this plugin just wrote.
+			if ( @rename( $new, $file ) ) {
+				clearstatcache( true, $file );
+				return $before - $after;
+			}
+		}
+
+		wp_delete_file( $new );
+
+		return 0;
+	}
+
+	/**
+	 * Handles the main file of one attachment and marks it done, so the job never
+	 * revisits it. Returns the new file size when the file shrank, otherwise 0.
+	 */
+	private static function optimize_original_file( $attachment_id ) {
+		$file = get_attached_file( $attachment_id );
+		$mime = get_post_mime_type( $attachment_id );
+		$size = 0;
+
+		if ( $file && in_array( $mime, [ 'image/jpeg', 'image/png' ], true ) ) {
+			$saved = self::recompress_in_place( $file, $mime );
+
+			if ( $saved > 0 ) {
+				$size = (int) filesize( $file );
+			}
+
+			update_post_meta( $attachment_id, self::ORIGINAL_META_KEY, $saved );
+		} else {
+			update_post_meta( $attachment_id, self::ORIGINAL_META_KEY, 0 );
+		}
+
+		return $size;
+	}
+
+	/** New uploads: shrink the main file after the generated sizes exist (they stay based on the pristine original). */
+	public static function optimize_original_on_upload( $metadata, $attachment_id ) {
+		if ( ! self::optimize_originals() || metadata_exists( 'post', $attachment_id, self::ORIGINAL_META_KEY ) ) {
+			return $metadata;
+		}
+
+		$size = self::optimize_original_file( $attachment_id );
+
+		if ( $size > 0 && is_array( $metadata ) ) {
+			$metadata['filesize'] = $size;
+		}
+
+		return $metadata;
+	}
+
+	/**
 	 * IDs still waiting on the background job. One plain NOT EXISTS query: the
 	 * WP_Query meta_query this replaced built a LEFT JOIN that gets slow on a
 	 * large library, and it ran on every round trip.
@@ -702,9 +861,8 @@ class Reloadify_Media {
 				$wpdb->prepare(
 					"SELECT p.ID FROM {$wpdb->posts} p
 					WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
-					AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )
+					AND " . self::image_pending_sql() . "
 					ORDER BY p.ID ASC LIMIT %d",
-					self::BACKFILL_META_KEY,
 					$limit
 				)
 			);
@@ -772,6 +930,19 @@ class Reloadify_Media {
 				$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
 				if ( $metadata ) {
 					wp_update_attachment_metadata( $attachment_id, $metadata );
+				}
+			}
+
+			// Main file last, so the generated sizes above came from the untouched original.
+			if ( self::optimize_originals() && ! metadata_exists( 'post', $attachment_id, self::ORIGINAL_META_KEY ) ) {
+				$new_size = self::optimize_original_file( $attachment_id );
+
+				if ( $new_size > 0 ) {
+					$meta = wp_get_attachment_metadata( $attachment_id );
+					if ( is_array( $meta ) ) {
+						$meta['filesize'] = $new_size;
+						wp_update_attachment_metadata( $attachment_id, $meta );
+					}
 				}
 			}
 
@@ -848,13 +1019,11 @@ class Reloadify_Media {
 			);
 		}
 
+		// The only variable part is image_pending_sql(), which is already prepared; a second prepare() would have no placeholder to fill.
 		return (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$wpdb->posts} p
-				WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
-				AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )",
-				self::BACKFILL_META_KEY
-			)
+			"SELECT COUNT(*) FROM {$wpdb->posts} p
+			WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
+			AND " . self::image_pending_sql() // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		);
 		// phpcs:enable
 	}

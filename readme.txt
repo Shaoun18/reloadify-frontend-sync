@@ -113,6 +113,7 @@ Feedback helps improve the plugin and supports future updates.
 = 1.4.0 =
 * Added **Read More / Read Less**: `[reloadify_read_more]` hides text behind an accessible button and opens it without a page refresh (text stays in the HTML, prints expanded, respects reduced motion, opens on #anchor links).
 * Added **Load More (AJAX)**: `[reloadify_load_more]` prints the first batch of posts, pages, products or any public post type and loads the next batch through the REST API on a button press or when scrolling. Filter by category, tag, taxonomy, author or search; WooCommerce products show their price. Requests are signed, so only the query written in the shortcode can ever be loaded.
+* Added **Optimize original images** toggle to Media Optimization (off by default): re-compresses the main JPEG/PNG file in place, in its own format, only when the result is at least 3% smaller. Existing media is queued for it, and new uploads are handled after their sizes are generated.
 * Both tools have their own cards in the Extensions tab (texts, colours, animation, columns, trigger) with copy-ready shortcodes, are off by default, and load their CSS/JS only on pages that use them.
 
 = 1.3.1 =

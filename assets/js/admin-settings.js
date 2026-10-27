@@ -1286,6 +1286,21 @@
             }, 700);
         }
 
+        // Main (original) file: off keeps uploads untouched, on re-compresses them in place.
+        function toggleOriginals() {
+            var next = !media.optimize_originals;
+
+            if (next && !window.confirm(__('Optimize original images?\n\nThe main uploaded file of each JPEG and PNG will be replaced by a smaller re-compressed copy (same format, and only when it is smaller). Camera metadata may be removed and this cannot be undone. Make a backup first if you are unsure.', 'reloadify-frontend-sync'))) {
+                return;
+            }
+
+            save({ optimize_originals: next }, function (response) {
+                props.onToast(response.optimize_originals ? 'success' : 'info', response.optimize_originals
+                    ? __('Original images will be optimized', 'reloadify-frontend-sync')
+                    : __('Original images stay untouched', 'reloadify-frontend-sync'));
+            });
+        }
+
         // Real before/after for whatever format and quality are selected right now.
         useEffect(function () {
             if (!media.enabled) { return undefined; }
@@ -1327,7 +1342,7 @@
                     /* translators: %d: percent complete */
                     __('Optimizing\u2026 %d%%', 'reloadify-frontend-sync'), pct)
                 : __('Optimizing\u2026', 'reloadify-frontend-sync');
-        } else if (bf.status === 'done' || allDone) {
+        } else if ((bf.status === 'done' && pendingImages === 0) || allDone) {
             buttonLabel = __('All media optimized', 'reloadify-frontend-sync');
         } else {
             buttonLabel = __('Optimize existing media now', 'reloadify-frontend-sync');
@@ -1405,6 +1420,16 @@
                 el('p', { className: 'reloadify-media-format-note' },
                     __('A ceiling, never a boost: if an encoder\u2019s own default is already lower, it is kept.', 'reloadify-frontend-sync'))
             ),
+            el(SwitchRow, {
+                icon: 'image',
+                checked: !!media.optimize_originals,
+                disabled: saving || locked,
+                title: __('Optimize original images', 'reloadify-frontend-sync'),
+                text: media.optimize_originals
+                    ? __('On: the main image file is re-compressed in place (same format), only when that makes it smaller.', 'reloadify-frontend-sync')
+                    : __('Off: original uploads stay untouched; only the generated sizes are optimized.', 'reloadify-frontend-sync'),
+                onChange: toggleOriginals
+            }),
             locked ? el('p', { className: 'reloadify-media-lock-note', role: 'status' }, __('Format and quality are locked while your media is being optimized. They unlock as soon as it finishes.', 'reloadify-frontend-sync')) : null,
             el(
                 'div',
@@ -1421,7 +1446,9 @@
                         : __('Appears after images are optimized', 'reloadify-frontend-sync')))
             ),
             el(BeforeAfterPreview, { preview: preview, loading: previewLoading }),
-            el('p', { className: 'reloadify-tip' }, __('Tip: original files are always kept, so nothing is lost when settings change.', 'reloadify-frontend-sync')),
+            el('p', { className: 'reloadify-tip' }, media.optimize_originals
+                ? __('Original files are replaced by their optimized version when it is smaller. Generated sizes are made first, from the untouched original.', 'reloadify-frontend-sync')
+                : __('Tip: original files are always kept, so nothing is lost when settings change.', 'reloadify-frontend-sync')),
             el(
                 'div',
                 { className: 'reloadify-media-backfill-row' },
@@ -1429,12 +1456,12 @@
                     'button',
                     {
                         type: 'button',
-                        className: 'reloadify-optimize-btn' + (running ? ' is-running' : '') + ((bf.status === 'done' || allDone) ? ' is-done' : ''),
+                        className: 'reloadify-optimize-btn' + (running ? ' is-running' : '') + (((bf.status === 'done' && pendingImages === 0) || allDone) ? ' is-done' : ''),
                         onClick: optimizeNow,
                         disabled: running || allDone,
                         'aria-busy': running
                     },
-                    running ? el('span', { className: 'reloadify-spinner reloadify-spinner--light' }) : el(Ico, { name: (bf.status === 'done' || allDone) ? 'check' : 'bolt', size: 15 }),
+                    running ? el('span', { className: 'reloadify-spinner reloadify-spinner--light' }) : el(Ico, { name: ((bf.status === 'done' && pendingImages === 0) || allDone) ? 'check' : 'bolt', size: 15 }),
                     buttonLabel
                 ),
                 waiting
@@ -2685,10 +2712,35 @@
         );
     }
 
+    /*
+     * WordPress pins a tall admin menu from the page height it measured on load.
+     * This dashboard renders after load and changes height on every tab, so the
+     * menu can be left offset (an empty gap above "Dashboard"). Asking WordPress
+     * to re-measure whenever the page height changes keeps it in place.
+     */
+    function keepAdminMenuPinned(root) {
+        var timer = null;
+
+        function repin() {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                if (window.jQuery) { window.jQuery(document).trigger('wp-pin-menu'); }
+            }, 120);
+        }
+
+        if (window.ResizeObserver) {
+            new window.ResizeObserver(repin).observe(root);
+        }
+
+        window.addEventListener('load', repin);
+        repin();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         var root = document.getElementById('reloadify-settings-root');
         if (root) {
             render(el(App), root);
+            keepAdminMenuPinned(root);
         }
     });
 
