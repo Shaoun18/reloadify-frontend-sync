@@ -146,8 +146,7 @@ class Reloadify_Speed
 			'browser_cache'       => true,
 			'dashicons'           => true,
 			'db_cleanup'          => true,
-			// Opt-in (1.3.1): freshness over a few extra revalidations.
-			'prevent_browser_cache' => false,
+			'prevent_browser_cache' => true,
 		];
 	}
 

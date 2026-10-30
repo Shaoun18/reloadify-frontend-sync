@@ -62,6 +62,7 @@ function reloadify_uninstall_cleanup_current_site() {
 		// The optimized files themselves are site content and stay.
 		delete_post_meta_by_key( '_reloadify_media_optimized' );
 		delete_post_meta_by_key( '_reloadify_media_original_optimized' );
+		delete_post_meta_by_key( '_reloadify_media_main_checked' );
 		delete_post_meta_by_key( '_reloadify_media_video_optimized' );
 		delete_post_meta_by_key( '_reloadify_media_stats' );
 	}

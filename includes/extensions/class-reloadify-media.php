@@ -16,6 +16,7 @@ class Reloadify_Media {
 	const BACKFILL_META_KEY  = '_reloadify_media_optimized';
 	const ORIGINALS_OPTION_KEY = 'reloadify_media_optimize_originals';
 	const ORIGINAL_META_KEY = '_reloadify_media_original_optimized';
+	const MAIN_CHECK_META_KEY = '_reloadify_media_main_checked';
 	const VIDEO_BACKFILL_META_KEY = '_reloadify_media_video_optimized';
 	const STATS_META_KEY     = '_reloadify_media_stats';
 	const QUALITY_OPTION_KEY = 'reloadify_media_quality';
@@ -511,7 +512,7 @@ class Reloadify_Media {
 		$editor->set_quality( 95 );
 		$saved = $editor->save( $out, $mime );
 		if ( self::is_enabled() ) {
-			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 			add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
 		}
 
@@ -571,7 +572,7 @@ class Reloadify_Media {
 
 		remove_filter( 'wp_editor_set_quality', $force_quality, 99 );
 		if ( self::is_enabled() ) {
-			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 			add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
 		}
 
@@ -602,7 +603,7 @@ class Reloadify_Media {
 			return;
 		}
 
-		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 		add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'record_image_stats' ], 20, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'mark_converted_on_upload' ], 30, 2 );
@@ -663,12 +664,20 @@ class Reloadify_Media {
 	/* ---------------- Images ---------------- */
 
 	/**
-	 * Only remaps the source mimes WordPress already knows how to generate
-	 * intermediate sizes for. Leaves the original uploaded file's own mime
-	 * type alone -- this only affects the extra generated sizes (thumbnail,
-	 * medium, large, etc.), never the original.
+	 * Remaps JPEG/PNG to WebP/AVIF for the generated sizes only (thumbnail,
+	 * medium, large ...), whose file names end in -WIDTHxHEIGHT.
+	 *
+	 * WordPress asks this same filter about the full-size file too (the upload
+	 * itself, "-scaled" and "-rotated" copies). Converting that one replaced the
+	 * uploaded JPEG with a WebP that could even be larger, so those calls are
+	 * answered with the formats unchanged: the main file keeps its own format.
+	 * (Shrinking it is the separate "Optimize original images" option.)
 	 */
-	public static function set_output_format( $formats ) {
+	public static function set_output_format( $formats, $filename = '' ) {
+		if ( ! is_string( $filename ) || ! preg_match( '/-\d+x\d+\.[A-Za-z0-9]+$/', $filename ) ) {
+			return $formats;
+		}
+
 		$preferred = self::preferred_image_format();
 
 		if ( ! $preferred ) {
@@ -703,17 +712,78 @@ class Reloadify_Media {
 	private static function image_pending_sql() {
 		global $wpdb;
 
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- both fragments are prepared below; they carry no user input.
-		$converted = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s )", self::BACKFILL_META_KEY );
+		$keys = [ self::BACKFILL_META_KEY, self::MAIN_CHECK_META_KEY ];
 
-		if ( ! self::optimize_originals() ) {
-			return $converted;
+		if ( self::optimize_originals() ) {
+			$keys[] = self::ORIGINAL_META_KEY;
 		}
 
-		$original = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m2 WHERE m2.post_id = p.ID AND m2.meta_key = %s )", self::ORIGINAL_META_KEY );
-		// phpcs:enable
+		$parts = [];
 
-		return '( ' . $converted . ' OR ' . $original . ' )';
+		foreach ( $keys as $i => $key ) {
+			$alias   = 'm' . $i;
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the alias is a fixed "m0..m2"; the key goes through prepare().
+			$parts[] = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} {$alias} WHERE {$alias}.post_id = p.ID AND {$alias}.meta_key = %s )", $key );
+		}
+
+		return '( ' . implode( ' OR ', $parts ) . ' )';
+	}
+
+	/**
+	 * Earlier versions let WordPress convert the uploaded JPEG/PNG itself to WebP
+	 * (the "full" file), which for an already-compressed photo can come out
+	 * LARGER than the original. When that happened and the original is still on
+	 * disk, point the attachment back at the original. The WebP is left on disk
+	 * so any post that already embeds its URL keeps working.
+	 *
+	 * @return bool True when the attachment was restored.
+	 */
+	private static function restore_oversized_conversion( $attachment_id ) {
+		$meta = wp_get_attachment_metadata( $attachment_id );
+
+		if ( ! is_array( $meta ) || empty( $meta['original_image'] ) || empty( $meta['file'] ) ) {
+			return false;
+		}
+
+		$current = get_attached_file( $attachment_id );
+
+		if ( ! $current ) {
+			return false;
+		}
+
+		$original = trailingslashit( dirname( $current ) ) . wp_basename( $meta['original_image'] );
+
+		// Only a plain format swap (same name, other extension). "-scaled" and "-rotated" copies were edited, not just converted.
+		if ( strtolower( pathinfo( $current, PATHINFO_EXTENSION ) ) === strtolower( pathinfo( $original, PATHINFO_EXTENSION ) )
+			|| pathinfo( $current, PATHINFO_FILENAME ) !== pathinfo( $original, PATHINFO_FILENAME )
+			|| ! is_file( $current ) || ! is_file( $original ) ) {
+			return false;
+		}
+
+		$real = wp_check_filetype( $original );
+
+		if ( empty( $real['type'] ) || ! in_array( $real['type'], [ 'image/jpeg', 'image/png' ], true ) ) {
+			return false;
+		}
+
+		clearstatcache( true, $current );
+		clearstatcache( true, $original );
+
+		// The conversion helped: keep it.
+		if ( (int) filesize( $current ) < (int) filesize( $original ) ) {
+			return false;
+		}
+
+		update_attached_file( $attachment_id, $original );
+
+		$meta['file']     = _wp_relative_upload_path( $original );
+		$meta['filesize'] = (int) filesize( $original );
+		unset( $meta['original_image'] );
+
+		wp_update_attachment_metadata( $attachment_id, $meta );
+		wp_update_post( [ 'ID' => $attachment_id, 'post_mime_type' => $real['type'] ] );
+
+		return true;
 	}
 
 	/** Animated PNGs would lose their frames when re-encoded, so they are left alone. */
@@ -759,7 +829,7 @@ class Reloadify_Media {
 		$result = $editor->save( $tmp, $mime );
 
 		if ( false !== $had_filter ) {
-			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+			add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 		}
 
 		if ( is_wp_error( $result ) || empty( $result['path'] ) || ! is_file( $result['path'] ) ) {
@@ -801,7 +871,10 @@ class Reloadify_Media {
 		$mime = get_post_mime_type( $attachment_id );
 		$size = 0;
 
-		if ( $file && in_array( $mime, [ 'image/jpeg', 'image/png' ], true ) ) {
+		$real = $file ? wp_check_filetype( $file ) : [ 'type' => '' ];
+
+		// The file on disk must really be that format (a main file WordPress converted to WebP is left alone).
+		if ( $file && in_array( $mime, [ 'image/jpeg', 'image/png' ], true ) && $real['type'] === $mime ) {
 			$saved = self::recompress_in_place( $file, $mime );
 
 			if ( $saved > 0 ) {
@@ -924,6 +997,12 @@ class Reloadify_Media {
 				break;
 			}
 
+			// One-time check per image: undo a main-file WebP conversion that made the file bigger.
+			if ( ! metadata_exists( 'post', $attachment_id, self::MAIN_CHECK_META_KEY ) ) {
+				self::restore_oversized_conversion( $attachment_id );
+				update_post_meta( $attachment_id, self::MAIN_CHECK_META_KEY, 1 );
+			}
+
 			$file = get_attached_file( $attachment_id );
 
 			if ( $target && $file && file_exists( $file ) && ! self::sizes_already_converted( $attachment_id, $target ) ) {
@@ -979,6 +1058,9 @@ class Reloadify_Media {
 	 */
 	public static function mark_converted_on_upload( $metadata, $attachment_id ) {
 		$target = self::preferred_image_format();
+
+		// A fresh upload never has its main file converted any more, so there is nothing to undo later.
+		update_post_meta( $attachment_id, self::MAIN_CHECK_META_KEY, 1 );
 
 		if ( $target && in_array( get_post_mime_type( $attachment_id ), [ 'image/jpeg', 'image/png' ], true )
 			&& is_array( $metadata ) && ! empty( $metadata['sizes'] ) ) {
@@ -1166,7 +1248,7 @@ class Reloadify_Media {
 		// (always ~0% saved). Step aside for this one save.
 		remove_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10 );
 		$saved = $editor->save( $comparison_path, $mime );
-		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 1 );
+		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 
 		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! file_exists( $saved['path'] ) ) {
 			if ( file_exists( $comparison_path ) ) {

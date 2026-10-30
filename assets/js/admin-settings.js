@@ -2037,7 +2037,7 @@
 
         return el(
             'div',
-            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            { className: 'reloadify-section reloadify-card' },
             el(CardHead, {
                 title: __('Scroll To Top Button', 'reloadify-frontend-sync'),
                 subtitle: __('A small floating button that returns visitors to the top', 'reloadify-frontend-sync'),
@@ -2306,7 +2306,7 @@
 
         return el(
             'div',
-            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            { className: 'reloadify-section reloadify-card' },
             el(CardHead, {
                 title: __('Read More / Read Less', 'reloadify-frontend-sync'),
                 subtitle: __('Hide long text behind a button and open it without reloading the page', 'reloadify-frontend-sync'),
@@ -2373,7 +2373,7 @@
 
         return el(
             'div',
-            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            { className: 'reloadify-section reloadify-card' },
             el(CardHead, {
                 title: __('Load More (AJAX)', 'reloadify-frontend-sync'),
                 subtitle: __('Show a first batch of posts or products and load the next ones without a page refresh', 'reloadify-frontend-sync'),
@@ -2424,13 +2424,38 @@
             props.onChange(Object.assign({}, extras, change));
         }
 
+        var tools = [extras.svg_support, extras.scroll_top, extras.read_more, extras.load_more];
+        var enabledCount = tools.filter(function (tool) { return !!(tool && tool.enabled); }).length;
+        var cardProps = { extras: extras, update: update, onToast: props.onToast };
+
+        // Same layout as the Server Performance tab: a summary card, then columns of cards.
         return el(
             'div',
-            { className: 'reloadify-tab-body reloadify-card-grid' },
-            el(SvgSupportCard, { extras: extras, update: update, onToast: props.onToast }),
-            el(ScrollTopCard, { extras: extras, update: update, onToast: props.onToast }),
-            el(ReadMoreCard, { extras: extras, update: update, onToast: props.onToast }),
-            el(LoadMoreCard, { extras: extras, update: update, onToast: props.onToast })
+            { className: 'reloadify-tab-body' },
+            el(
+                'div',
+                { className: 'reloadify-perf-hero' },
+                el(IconChip, { name: 'sparkle', tone: 'indigo', size: 22 }),
+                el(
+                    'div',
+                    { className: 'reloadify-perf-hero-text' },
+                    el('h2', null, __('Extensions', 'reloadify-frontend-sync'), el(InfoIcon, { text: __('Optional front-end tools. Each one is off until you switch it on, and nothing is loaded on pages that do not use it.', 'reloadify-frontend-sync') })),
+                    el('p', null, __('Small add-ons for your media and pages \u2014 switch on only what you need.', 'reloadify-frontend-sync')),
+                    el(
+                        'div',
+                        { className: 'reloadify-perf-hero-stats' },
+                        el('span', { className: 'reloadify-stat-chip' + (enabledCount > 0 ? ' is-live' : '') }, enabledCount + ' / ' + tools.length + ' ' + __('enabled', 'reloadify-frontend-sync')),
+                        el('span', { className: 'reloadify-stat-chip' }, (tools.length - enabledCount) + ' ' + __('off', 'reloadify-frontend-sync'))
+                    )
+                )
+            ),
+            el(
+                'div',
+                { className: 'reloadify-ext-grid' },
+                el('div', { className: 'reloadify-ext-col' }, el(SvgSupportCard, cardProps), el(ReadMoreCard, cardProps)),
+                el('div', { className: 'reloadify-ext-col' }, el(ScrollTopCard, cardProps)),
+                el('div', { className: 'reloadify-ext-col' }, el(LoadMoreCard, cardProps))
+            )
         );
     }
 
