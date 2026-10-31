@@ -4,7 +4,7 @@
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
  * Description:       Automatically refresh frontend previews after content updates with cross-browser live reload, server performance controls, and image/media optimization.
- * Version:           1.3.0
+ * Version:           1.4.0
  * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.3.0');
+define('RELOADIFY_VERSION', '1.4.0');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -32,6 +32,7 @@ require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-speed.p
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-cleanup.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-media.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-extras.php';
+require_once RELOADIFY_PLUGIN_DIR . 'includes/extensions/class-reloadify-content.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/class-reloadify-rest.php';
 require_once RELOADIFY_PLUGIN_DIR . 'includes/admin/class-reloadify-admin-loader.php';
 
@@ -60,6 +61,7 @@ class Reloadify_Frontend_Sync
 		Reloadify_Speed::init();
 		Reloadify_Media::init();
 		Reloadify_Extras::init();
+		Reloadify_Content::init();
 
 		add_action('save_post', [$this, 'record_site_update'], 10, 3);
 		add_action('wp_trash_post', [$this, 'record_site_update_now']);
@@ -76,9 +78,13 @@ class Reloadify_Frontend_Sync
 		add_action('woocommerce_settings_saved', [$this, 'record_site_update_now']);
 
 		// WooCommerce hooks 
-		add_action('woocommerce_new_order', [$this, 'record_site_update_now']);
-		add_action('woocommerce_update_order', [$this, 'record_site_update_now']);
-		add_action('woocommerce_order_status_changed', [$this, 'record_site_update_now']);
+		// Orders only count as a site change when an admin edits them in
+		// wp-admin. An order placed at checkout, a payment-gateway callback
+		// or a cron job must never make the open checkout tab reload, or the
+		// shopper lands on an empty cart instead of the order-received page.
+		add_action('woocommerce_new_order', [$this, 'record_order_update']);
+		add_action('woocommerce_update_order', [$this, 'record_order_update']);
+		add_action('woocommerce_order_status_changed', [$this, 'record_order_update']);
 		add_action('updated_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('added_option', [$this, 'maybe_record_option_change'], 10, 1);
 		add_action('deleted_option', [$this, 'maybe_record_option_change'], 10, 1);
@@ -115,8 +121,48 @@ class Reloadify_Frontend_Sync
 
 	/* ---------------- Record site update. ---------------- */
 
+	/**
+	 * True while WooCommerce is serving a shopper (classic wc-ajax checkout,
+	 * Store API / block checkout, payment-gateway callbacks, pay-for-order).
+	 * Whatever those requests write is a purchase, not a content update.
+	 */
+	private function is_shopper_request()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended, WordPress.Security.NonceVerification.Missing -- read-only detection of WooCommerce request markers; nothing is processed or saved.
+		if (isset($_GET['wc-ajax']) || isset($_GET['wc-api']) || isset($_POST['woocommerce_pay']) || isset($_POST['woocommerce-process-checkout-nonce'])) {
+			return true;
+		}
+		// phpcs:enable
+
+		$uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+
+		return '' !== $uri && (false !== strpos($uri, '/wc/store/') || false !== stripos($uri, 'rest_route=%2fwc%2fstore') || false !== stripos($uri, 'rest_route=/wc/store'));
+	}
+
+	/** Order changes made by a shop manager inside wp-admin. */
+	private function is_admin_order_edit()
+	{
+		return is_admin() && ! $this->is_shopper_request() && is_user_logged_in() && current_user_can('edit_shop_orders');
+	}
+
+	public function record_order_update()
+	{
+		if ($this->is_admin_order_edit()) {
+			$this->record_site_update_now();
+		}
+	}
+
 	public function record_site_update($post_id, $post, $update)
 	{
+		if ($this->is_shopper_request()) {
+			return;
+		}
+
+		// Legacy (posts-based) order storage saves orders through save_post.
+		if ($post instanceof WP_Post && in_array($post->post_type, ['shop_order', 'shop_order_refund', 'shop_order_placehold'], true) && ! $this->is_admin_order_edit()) {
+			return;
+		}
+
 		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
 			return;
 		}
@@ -138,6 +184,10 @@ class Reloadify_Frontend_Sync
 			return;
 		}
 
+		if ($this->is_shopper_request()) {
+			return;
+		}
+
 		Reloadify_Settings::bump_site_updated_at();
 	}
 
@@ -147,7 +197,7 @@ class Reloadify_Frontend_Sync
 		$is_write_method = in_array($request_method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
 		$is_admin_context = is_admin() || (defined('REST_REQUEST') && REST_REQUEST);
 
-		if (! $is_admin_context || ! $is_write_method) {
+		if (! $is_admin_context || ! $is_write_method || $this->is_shopper_request()) {
 			return;
 		}
 

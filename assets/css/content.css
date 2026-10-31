@@ -1,0 +1,104 @@
+/* Reloadify - Read more + Load more (front end) */
+
+/* ---------- Read more ---------- */
+.reloadify-rm { margin: 1em 0; }
+.reloadify-rm__content[hidden] { display: none; }
+.reloadify-rm__content > :first-child { margin-top: 0; }
+.reloadify-rm__button {
+	display: inline-flex;
+	align-items: center;
+	gap: .45em;
+	margin-top: .75em;
+	padding: .6em 1.2em;
+	border: 2px solid var(--reloadify-rm-bg, #4f46e5);
+	border-radius: 999px;
+	background: var(--reloadify-rm-bg, #4f46e5);
+	color: var(--reloadify-rm-fg, #fff);
+	font: inherit;
+	font-weight: 600;
+	line-height: 1.2;
+	cursor: pointer;
+	transition: filter .15s ease, transform .15s ease;
+}
+.reloadify-rm__button:hover { filter: brightness(1.08); }
+.reloadify-rm__button:active { transform: translateY(1px); }
+.reloadify-rm__button:focus-visible { outline: 3px solid var(--reloadify-rm-bg, #4f46e5); outline-offset: 3px; }
+.reloadify-rm--outline .reloadify-rm__button { background: transparent; color: var(--reloadify-rm-bg, #4f46e5); }
+.reloadify-rm--link .reloadify-rm__button { padding: 0; border: 0; border-radius: 0; background: none; color: var(--reloadify-rm-bg, #4f46e5); text-decoration: underline; }
+.reloadify-rm__chevron {
+	width: .55em;
+	height: .55em;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: rotate(45deg) translateY(-15%);
+	transition: transform .25s ease;
+}
+.reloadify-rm.is-open .reloadify-rm__chevron { transform: rotate(-135deg) translate(-10%, -10%); }
+
+/* ---------- Load more ---------- */
+.reloadify-lm { --reloadify-lm-cols: 3; margin: 1.5em 0; }
+.reloadify-lm--cols-1 { --reloadify-lm-cols: 1; }
+.reloadify-lm--cols-2 { --reloadify-lm-cols: 2; }
+.reloadify-lm--cols-3 { --reloadify-lm-cols: 3; }
+.reloadify-lm--cols-4 { --reloadify-lm-cols: 4; }
+.reloadify-lm--cols-5 { --reloadify-lm-cols: 5; }
+.reloadify-lm--cols-6 { --reloadify-lm-cols: 6; }
+.reloadify-lm__grid {
+	display: grid;
+	grid-template-columns: repeat(var(--reloadify-lm-cols), minmax(0, 1fr));
+	gap: 24px;
+}
+.reloadify-lm__item {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid rgba(0, 0, 0, .09);
+	border-radius: 12px;
+	background: #fff;
+}
+.reloadify-lm__item.is-new { animation: reloadify-lm-in .35s ease both; }
+.reloadify-lm__thumb { display: block; aspect-ratio: 16 / 10; overflow: hidden; background: #f1f1f4; }
+.reloadify-lm__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.reloadify-lm__body { display: flex; flex: 1; flex-direction: column; gap: .4em; padding: 1em 1.1em 1.2em; }
+.reloadify-lm__date { color: #6b7280; font-size: .8em; }
+.reloadify-lm__title { margin: 0; font-size: 1.1em; line-height: 1.3; }
+.reloadify-lm__title a { color: inherit; text-decoration: none; }
+.reloadify-lm__title a:hover { text-decoration: underline; }
+.reloadify-lm__price { font-weight: 600; }
+.reloadify-lm__excerpt { margin: 0; color: #4b5563; font-size: .92em; }
+.reloadify-lm__footer { margin-top: 1.5em; text-align: center; }
+.reloadify-lm__button {
+	padding: .7em 1.6em;
+	border: 0;
+	border-radius: 999px;
+	background: var(--reloadify-lm-bg, #4f46e5);
+	color: var(--reloadify-lm-fg, #fff);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	transition: filter .15s ease, opacity .15s ease;
+}
+.reloadify-lm__button:hover:not(:disabled) { filter: brightness(1.08); }
+.reloadify-lm__button:focus-visible { outline: 3px solid var(--reloadify-lm-bg, #4f46e5); outline-offset: 3px; }
+.reloadify-lm__button:disabled { opacity: .65; cursor: progress; }
+.reloadify-lm__button[hidden] { display: none; }
+.reloadify-lm__status { min-height: 1.4em; margin: .8em 0 0; color: #6b7280; font-size: .9em; }
+
+@keyframes reloadify-lm-in {
+	from { opacity: 0; transform: translateY(12px); }
+	to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 900px) { .reloadify-lm { --reloadify-lm-cols: 2; } .reloadify-lm--cols-1 { --reloadify-lm-cols: 1; } }
+@media (max-width: 560px) { .reloadify-lm, .reloadify-lm--cols-2 { --reloadify-lm-cols: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+	.reloadify-lm__item.is-new { animation: none; }
+	.reloadify-rm__button, .reloadify-rm__chevron, .reloadify-lm__button { transition: none; }
+}
+
+/* Printing always shows the whole text. */
+@media print {
+	.reloadify-rm__content[hidden] { display: block !important; }
+	.reloadify-rm__button, .reloadify-lm__footer { display: none; }
+}

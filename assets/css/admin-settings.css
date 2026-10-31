@@ -2823,3 +2823,151 @@
 @media (prefers-reduced-motion: reduce) {
     .reloadify-spinner, .reloadify-progress.is-indeterminate span { animation: none; }
 }
+
+/* ---------------- Read More + Load More cards (v1.4.0) ---------------- */
+.reloadify-text-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.reloadify-text-field input[type="text"],
+.reloadify-text-field input[type="number"] {
+    width: 100%;
+    max-width: 420px;
+    border: 1px solid #d7dae0;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-weight: 400;
+}
+
+.reloadify-text-field--short input[type="number"] {
+    max-width: 120px;
+}
+
+.reloadify-color-field {
+    margin-top: 4px;
+}
+
+.reloadify-demo-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 84px;
+    margin-bottom: 14px;
+    border: 1px dashed #d7dae0;
+    border-radius: 12px;
+    background: #fafbfc;
+}
+
+.reloadify-demo-button {
+    display: inline-block;
+    padding: 9px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.reloadify-snippet {
+    margin-top: 14px;
+}
+
+.reloadify-snippet-title {
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.reloadify-snippet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reloadify-snippet-code {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+/* ---------------- Enable/disable all, media lock (v1.4.0) ---------------- */
+.reloadify-speed-options .reloadify-card-eyebrow {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.reloadify-media-panel.is-locked,
+.reloadify-quality.is-locked {
+    opacity: 0.55;
+    pointer-events: none;
+    filter: grayscale(0.35);
+}
+
+.reloadify-media-lock-note {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.reloadify-pass .reloadify-switch input:disabled + .reloadify-switch-slider {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ---------------- Runtime setting status: applying / blocked (v1.4.0) ---------------- */
+.reloadify-setting-status.is-pending { color: #374151; background: #f3f4f6; border-color: #e5e7eb; font-weight: 600; }
+.reloadify-setting-status.is-pending .reloadify-setting-status-icon { background: #9ca3af; }
+.reloadify-setting-status.is-blocked { color: #7f1d1d; background: #fef2f2; border-color: #fecaca; font-weight: 600; }
+.reloadify-setting-status.is-blocked .reloadify-setting-status-icon { background: #ef4444; }
+
+.reloadify-media-body > .reloadify-pass {
+    margin-bottom: 12px;
+}
+
+/* ---------------- Extensions tab: same look as Server Performance (v1.4.0) ---------------- */
+.reloadify-ext-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+.reloadify-ext-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.reloadify-ext-col > .reloadify-section {
+    margin-bottom: 0;
+}
+
+.reloadify-ext-grid .reloadify-st-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.reloadify-ext-grid .reloadify-fact-list {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 1280px) {
+    .reloadify-ext-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+    .reloadify-ext-grid { grid-template-columns: 1fr; }
+}

@@ -322,6 +322,10 @@ class Reloadify_Rest {
 			Reloadify_Media::set_quality( (int) $body['quality'] );
 		}
 
+		if ( array_key_exists( 'optimize_originals', $body ) ) {
+			Reloadify_Media::set_optimize_originals( ! empty( $body['optimize_originals'] ) );
+		}
+
 		return rest_ensure_response( Reloadify_Media::payload() );
 	}
 

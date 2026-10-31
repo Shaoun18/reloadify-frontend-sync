@@ -4,7 +4,7 @@ Tags: live reload, auto refresh, page builder, elementor, divi
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -34,7 +34,7 @@ Reloadify keeps open previews synchronized while providing practical server perf
 *   A modern settings dashboard with per-browser cards and live status.
 *   **Speed Boost** — on by default: strips the emoji script, trims unused `<head>` tags, throttles the Heartbeat API, caps stored post revisions, disables self-pingbacks, and eases wp-admin memory/time limits for heavy builders — all reversible with one toggle.
 *   **Media Optimization** — new image uploads can get WebP/AVIF versions automatically when supported by the server. Video compression runs in the background when ffmpeg is available; offscreen images and embedded video are lazy-loaded.
-*   **Extensions tab** — optional SVG upload support (off by default; scanned for scripts/embedded HTML before accepting) and an optional Scroll To Top floating button (off by default; configurable position and color).
+*   **Extensions tab** — optional SVG upload support (off by default; scanned for scripts/embedded HTML before accepting) an optional Scroll To Top floating button (off by default; configurable position and color), a **Read More / Read Less** shortcode and an **AJAX Load More** shortcode for posts and WooCommerce products (both off by default).
 *   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
 *   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
 
@@ -90,6 +90,9 @@ No. Developer Mode is intended for development and staging. It is off by default
 = Will this slow my site down? =
 The frontend check uses a small static file, so PHP and WordPress are not involved in each poll. Developer Mode can still add load on busy live sites because every visitor browser polls continuously; use it only for active testing.
 
+= How do I add a Read More button or a Load More button? =
+Turn them on in Reloadify > Extensions, then paste a shortcode anywhere (Gutenberg Shortcode block, Elementor, Divi or a template). Use `[reloadify_read_more]Hidden text[/reloadify_read_more]` for expandable text, and `[reloadify_load_more]` (or `[reloadify_load_more post_type="product" per_page="8" columns="4"]`) for a post/product grid whose next batch loads without a page refresh.
+
 = Does Media Optimization touch my original uploaded files? =
 No. Original image files are never modified. WebP or AVIF versions are generated only for supported server image libraries. Video compression runs only when ffmpeg is available; otherwise video files remain unchanged. Media Optimization can be disabled at any time.
 
@@ -106,6 +109,21 @@ Feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.4.0 =
+* Added **Read More / Read Less**: `[reloadify_read_more]` hides text behind an accessible button and opens it without a page refresh (text stays in the HTML, prints expanded, respects reduced motion, opens on #anchor links).
+* Added **Load More (AJAX)**: `[reloadify_load_more]` prints the first batch of posts, pages, products or any public post type and loads the next batch through the REST API on a button press or when scrolling. Filter by category, tag, taxonomy, author or search; WooCommerce products show their price. Requests are signed, so only the query written in the shortcode can ever be loaded.
+* Fixed: uploaded JPEG/PNG files are no longer converted to WebP by WordPress itself. Only generated sizes are converted, so the main file can never come out larger than the original. Images already affected are restored to their original file when "Optimize existing media now" runs (a one-time check).
+* Speed Boost: every rule, including **Prevent stale browser cache**, is now on by default.
+* The Extensions tab now uses the same layout as Server Performance (summary card plus columns of cards).
+* Added **Optimize original images** toggle to Media Optimization (off by default): re-compresses the main JPEG/PNG file in place, in its own format, only when the result is at least 3% smaller. Existing media is queued for it, and new uploads are handled after their sizes are generated.
+* Both tools have their own cards in the Extensions tab (texts, colours, animation, columns, trigger) with copy-ready shortcodes, are off by default, and load their CSS/JS only on pages that use them.
+
+= 1.3.1 =
+* Added **Prevent stale browser cache** toggle to Speed Boost (off by default): local CSS/JS are versioned by file modification time, replaced images get a fresh URL in rendered <img> tags (raw attachment URLs are never altered, so WooCommerce and image/SEO plugins are unaffected), pages are revalidated, and old back/forward-cache pages reload after 5 minutes (skipped on AMP, cart, checkout and account pages).
+* Works inside page-builder editors (Divi, Elementor, etc.), so edits show without a hard reload.
+* When enabled, it takes priority over **Remove query strings**.
+* Fixed **WooCommerce checkout**: placing an order no longer triggers a live reload, so shoppers (and logged-in admins testing the shop) reach the order-received page instead of an empty cart. Only orders edited by a shop manager in wp-admin refresh the front end now.
 
 = 1.3.0 =
 * Added new **Speed Boost** features: query string management, lazy loading, script deferring, browser caching, gzip compression, and automatic cleanup.

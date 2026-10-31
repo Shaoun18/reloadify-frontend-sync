@@ -29,7 +29,52 @@ class Reloadify_Extras {
 				'hover'             => 'lift',    // Hover effect: none | lift | pulse | wiggle.
 				'progress_ring' => true,   // ring around the button that fills as the page is scrolled
 			],
+			// [reloadify_read_more] -- expand hidden text without a page refresh.
+			'read_more' => [
+				'enabled'       => false,
+				'open_text'     => 'Read more',
+				'close_text'    => 'Read less',
+				'style'         => 'solid',  // solid | outline | link
+				'animation'     => 'slide',  // none | fade | slide
+				'bg_color'      => '#4f46e5',
+				'text_color'    => '#ffffff',
+				'smooth_scroll' => true,     // scroll back to the button when text is collapsed
+			],
+			// [reloadify_load_more] -- load the next batch of posts without a page refresh.
+			'load_more' => [
+				'enabled'       => false,
+				'button_text'   => 'Load more',
+				'loading_text'  => 'Loading…',
+				'end_text'      => 'You\'ve reached the end',
+				'per_page'      => 6,
+				'columns'       => 3,
+				'trigger'       => 'button', // button | scroll
+				'bg_color'      => '#4f46e5',
+				'text_color'    => '#ffffff',
+				'show_image'    => true,
+				'show_date'     => true,
+				'show_excerpt'  => true,
+				'excerpt_words' => 20,
+			],
 		];
+	}
+
+	const READ_MORE_STYLES = [ 'solid', 'outline', 'link' ];
+	const READ_MORE_ANIMS  = [ 'none', 'fade', 'slide' ];
+	const LOAD_TRIGGERS    = [ 'button', 'scroll' ];
+
+	private static function clean_text( $value, $fallback, $max = 60 ) {
+		$value = is_string( $value ) ? trim( sanitize_text_field( $value ) ) : '';
+
+		return '' === $value ? $fallback : mb_substr( $value, 0, $max );
+	}
+
+	private static function clean_hex( $value, $fallback ) {
+		return ( is_string( $value ) && preg_match( '/^#[0-9a-fA-F]{6}$/', $value ) ) ? $value : $fallback;
+	}
+
+	private static function clean_bool( $group, $key, $fallback ) {
+		return array_key_exists( $key, $group ) ? ! empty( $group[ $key ] ) : $fallback;
 	}
 
 	const ANIMATIONS = [ 'fade', 'slide', 'zoom', 'bounce' ];
@@ -93,7 +138,37 @@ class Reloadify_Extras {
 		$svg = ( isset( $saved['svg_support'] ) && is_array( $saved['svg_support'] ) ) ? $saved['svg_support'] : [];
 		$top = ( isset( $saved['scroll_top'] ) && is_array( $saved['scroll_top'] ) ) ? $saved['scroll_top'] : [];
 
+		$rm_in = ( isset( $saved['read_more'] ) && is_array( $saved['read_more'] ) ) ? $saved['read_more'] : [];
+		$lm_in = ( isset( $saved['load_more'] ) && is_array( $saved['load_more'] ) ) ? $saved['load_more'] : [];
+		$rm    = $defaults['read_more'];
+		$lm    = $defaults['load_more'];
+
 		$merged = [
+			'read_more' => [
+				'enabled'       => self::clean_bool( $rm_in, 'enabled', $rm['enabled'] ),
+				'open_text'     => self::clean_text( isset( $rm_in['open_text'] ) ? $rm_in['open_text'] : '', $rm['open_text'] ),
+				'close_text'    => self::clean_text( isset( $rm_in['close_text'] ) ? $rm_in['close_text'] : '', $rm['close_text'] ),
+				'style'         => ( isset( $rm_in['style'] ) && in_array( $rm_in['style'], self::READ_MORE_STYLES, true ) ) ? $rm_in['style'] : $rm['style'],
+				'animation'     => ( isset( $rm_in['animation'] ) && in_array( $rm_in['animation'], self::READ_MORE_ANIMS, true ) ) ? $rm_in['animation'] : $rm['animation'],
+				'bg_color'      => self::clean_hex( isset( $rm_in['bg_color'] ) ? $rm_in['bg_color'] : '', $rm['bg_color'] ),
+				'text_color'    => self::clean_hex( isset( $rm_in['text_color'] ) ? $rm_in['text_color'] : '', $rm['text_color'] ),
+				'smooth_scroll' => self::clean_bool( $rm_in, 'smooth_scroll', $rm['smooth_scroll'] ),
+			],
+			'load_more' => [
+				'enabled'       => self::clean_bool( $lm_in, 'enabled', $lm['enabled'] ),
+				'button_text'   => self::clean_text( isset( $lm_in['button_text'] ) ? $lm_in['button_text'] : '', $lm['button_text'] ),
+				'loading_text'  => self::clean_text( isset( $lm_in['loading_text'] ) ? $lm_in['loading_text'] : '', $lm['loading_text'] ),
+				'end_text'      => self::clean_text( isset( $lm_in['end_text'] ) ? $lm_in['end_text'] : '', $lm['end_text'], 90 ),
+				'per_page'      => isset( $lm_in['per_page'] ) ? min( 24, max( 1, (int) $lm_in['per_page'] ) ) : $lm['per_page'],
+				'columns'       => isset( $lm_in['columns'] ) ? min( 6, max( 1, (int) $lm_in['columns'] ) ) : $lm['columns'],
+				'trigger'       => ( isset( $lm_in['trigger'] ) && in_array( $lm_in['trigger'], self::LOAD_TRIGGERS, true ) ) ? $lm_in['trigger'] : $lm['trigger'],
+				'bg_color'      => self::clean_hex( isset( $lm_in['bg_color'] ) ? $lm_in['bg_color'] : '', $lm['bg_color'] ),
+				'text_color'    => self::clean_hex( isset( $lm_in['text_color'] ) ? $lm_in['text_color'] : '', $lm['text_color'] ),
+				'show_image'    => self::clean_bool( $lm_in, 'show_image', $lm['show_image'] ),
+				'show_date'     => self::clean_bool( $lm_in, 'show_date', $lm['show_date'] ),
+				'show_excerpt'  => self::clean_bool( $lm_in, 'show_excerpt', $lm['show_excerpt'] ),
+				'excerpt_words' => isset( $lm_in['excerpt_words'] ) ? min( 80, max( 5, (int) $lm_in['excerpt_words'] ) ) : $lm['excerpt_words'],
+			],
 			'svg_support' => [
 				'enabled' => array_key_exists( 'enabled', $svg ) ? ! empty( $svg['enabled'] ) : $defaults['svg_support']['enabled'],
 			],

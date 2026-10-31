@@ -666,17 +666,29 @@
         if (isRuntime && enabled) {
             var matches = String(props.live) === String(props.value);
             var liveValue = props.live || __('(default)', 'reloadify-frontend-sync');
+            var unsupported = props.live === false;
+            // Three honest states: confirmed, still being sent to the server, or the server said no.
+            var state = matches ? 'match' : (props.pending ? 'pending' : 'blocked');
+            var message;
+
+            if (state === 'match') {
+                message = el('span', null, __('Updated \u2014 the server is now using', 'reloadify-frontend-sync'), ' ', el('strong', null, liveValue));
+            } else if (state === 'pending') {
+                message = el('span', null, __('Applying to the server\u2026', 'reloadify-frontend-sync'));
+            } else if (unsupported) {
+                message = el('span', null, __('Not available on this server \u2014 PHP does not provide this setting here.', 'reloadify-frontend-sync'));
+            } else {
+                message = el('span', null,
+                    __('Your host does not allow this value to be changed from WordPress. The server is still using', 'reloadify-frontend-sync'), ' ',
+                    el('strong', null, liveValue),
+                    '. ', __('Ask your host to raise it, or set it in php.ini or .user.ini.', 'reloadify-frontend-sync'));
+            }
+
             matchStatus = el(
                 'div',
-                { className: 'reloadify-setting-status ' + (matches ? 'is-match' : 'is-mismatch'), role: 'status' },
-                el('span', { className: 'reloadify-setting-status-icon', 'aria-hidden': 'true' }, el(Ico, { name: matches ? 'check' : 'clock', size: 14 })),
-                el(
-                    'span',
-                    { className: 'reloadify-setting-status-text' },
-                    matches
-                        ? el('span', null, __('Updated \u2014 the server is now using', 'reloadify-frontend-sync'), ' ', el('strong', null, liveValue))
-                        : el('span', null, __('Saved \u2014 applies on the next page load. The server is currently using', 'reloadify-frontend-sync'), ' ', el('strong', null, liveValue))
-                )
+                { className: 'reloadify-setting-status is-' + state, role: 'status' },
+                el('span', { className: 'reloadify-setting-status-icon', 'aria-hidden': 'true' }, el(Ico, { name: state === 'match' ? 'check' : (state === 'pending' ? 'clock' : 'warn'), size: 14 })),
+                el('span', { className: 'reloadify-setting-status-text' }, message)
             );
         }
 
@@ -834,7 +846,7 @@
 
     /* ---------------- Speed Boost Card ---------------- */
 
-    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace', 'remove_query_strings', 'lazy_load_images', 'defer_js', 'delay_js', 'browser_cache', 'dashicons', 'db_cleanup'];
+    var SPEED_OPTION_ORDER = ['minify_js', 'minify_css', 'minify_html', 'remove_html_comments', 'collapse_whitespace', 'remove_query_strings', 'lazy_load_images', 'defer_js', 'delay_js', 'browser_cache', 'dashicons', 'db_cleanup', 'prevent_browser_cache'];
 
     /* One small inline SVG per pass (24x24, stroke icons) so the list stays dependency-free. */
     var PASS_ICONS = {
@@ -849,7 +861,8 @@
         delay_js: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
         browser_cache: 'M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5',
         dashicons: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7L12 3z',
-        db_cleanup: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6'
+        db_cleanup: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6',
+        prevent_browser_cache: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3zM9 12l2 2 4-4'
     };
 
     function passTitle(key) {
@@ -865,7 +878,8 @@
             delay_js: __('Delay tracking & chat scripts', 'reloadify-frontend-sync'),
             browser_cache: __('Browser caching & compression', 'reloadify-frontend-sync'),
             dashicons: __('Skip Dashicons for visitors', 'reloadify-frontend-sync'),
-            db_cleanup: __('Weekly transient cleanup', 'reloadify-frontend-sync')
+            db_cleanup: __('Weekly transient cleanup', 'reloadify-frontend-sync'),
+            prevent_browser_cache: __('Prevent stale browser cache', 'reloadify-frontend-sync')
         };
         return titles[key] || key;
     }
@@ -883,7 +897,8 @@
             delay_js: __('Hold back analytics, ads and chat widgets until the first interaction.', 'reloadify-frontend-sync'),
             browser_cache: __('Reuse repeat-visit assets: gzip plus long-lived caching for images, fonts and video (Apache .htaccess).', 'reloadify-frontend-sync'),
             dashicons: __('Skip the Dashicons font for logged-out visitors unless a stylesheet depends on it.', 'reloadify-frontend-sync'),
-            db_cleanup: __('Delete expired transients once a week to keep database queries fast.', 'reloadify-frontend-sync')
+            db_cleanup: __('Delete expired transients once a week to keep database queries fast.', 'reloadify-frontend-sync'),
+            prevent_browser_cache: __("Always serve the latest files: local CSS/JS get a version from the file's modified time, replaced images get a fresh URL and pages are revalidated. Caching still works until something changes.", 'reloadify-frontend-sync')
         };
         return text[key] || '';
     }
@@ -942,6 +957,19 @@
         }
 
         var activeCount = SPEED_OPTION_ORDER.filter(function (key) { return !!options[key]; }).length;
+        var ruleKeys = SPEED_OPTION_ORDER.filter(function (key) { return Object.prototype.hasOwnProperty.call(labels, key); });
+        var allRulesOn = ruleKeys.length > 0 && ruleKeys.every(function (key) { return !!options[key]; });
+        var allRulesOff = ruleKeys.every(function (key) { return !options[key]; });
+
+        function setAllRules(on) {
+            var next = Object.assign({}, options);
+            ruleKeys.forEach(function (key) { next[key] = on; });
+            save({ options: next }, function () {
+                props.onToast(on ? 'success' : 'info', on
+                    ? __('All Speed Boost rules enabled', 'reloadify-frontend-sync')
+                    : __('All Speed Boost rules disabled', 'reloadify-frontend-sync'));
+            });
+        }
 
         var optionList = speed.enabled && el(
             'div',
@@ -950,7 +978,13 @@
                 'div',
                 { className: 'reloadify-card-eyebrow' },
                 el('span', null, __('Optimization rules', 'reloadify-frontend-sync')),
-                el('span', { className: 'reloadify-pass-count', 'aria-live': 'polite' }, activeCount + ' ' + __('enabled', 'reloadify-frontend-sync'))
+                el(
+                    'div',
+                    { className: 'reloadify-heading-actions' },
+                    el('span', { className: 'reloadify-pass-count', 'aria-live': 'polite' }, activeCount + ' ' + __('enabled', 'reloadify-frontend-sync')),
+                    el('button', { type: 'button', className: 'reloadify-ghost-btn', onClick: function () { setAllRules(true); }, disabled: saving || allRulesOn }, __('Enable all', 'reloadify-frontend-sync')),
+                    el('button', { type: 'button', className: 'reloadify-ghost-btn', onClick: function () { setAllRules(false); }, disabled: saving || allRulesOff }, __('Disable all', 'reloadify-frontend-sync'))
+                )
             ),
             el(
                 'div',
@@ -1252,6 +1286,21 @@
             }, 700);
         }
 
+        // Main (original) file: off keeps uploads untouched, on re-compresses them in place.
+        function toggleOriginals() {
+            var next = !media.optimize_originals;
+
+            if (next && !window.confirm(__('Optimize original images?\n\nThe main uploaded file of each JPEG and PNG will be replaced by a smaller re-compressed copy (same format, and only when it is smaller). Camera metadata may be removed and this cannot be undone. Make a backup first if you are unsure.', 'reloadify-frontend-sync'))) {
+                return;
+            }
+
+            save({ optimize_originals: next }, function (response) {
+                props.onToast(response.optimize_originals ? 'success' : 'info', response.optimize_originals
+                    ? __('Original images will be optimized', 'reloadify-frontend-sync')
+                    : __('Original images stay untouched', 'reloadify-frontend-sync'));
+            });
+        }
+
         // Real before/after for whatever format and quality are selected right now.
         useEffect(function () {
             if (!media.enabled) { return undefined; }
@@ -1279,6 +1328,8 @@
         var pendingVideos = (media.pending && media.pending.videos) || 0;
         var pct = bf.total > 0 ? Math.min(100, Math.round((bf.processed / bf.total) * 100)) : 0;
         var allDone = !running && pendingImages === 0 && pendingVideos === 0;
+        // Format and quality are locked while the batch runs, so one run never mixes two settings.
+        var locked = running;
 
         function optimizeNow() {
             props.onBackfillStart();
@@ -1291,7 +1342,7 @@
                     /* translators: %d: percent complete */
                     __('Optimizing\u2026 %d%%', 'reloadify-frontend-sync'), pct)
                 : __('Optimizing\u2026', 'reloadify-frontend-sync');
-        } else if (bf.status === 'done' || allDone) {
+        } else if ((bf.status === 'done' && pendingImages === 0) || allDone) {
             buttonLabel = __('All media optimized', 'reloadify-frontend-sync');
         } else {
             buttonLabel = __('Optimize existing media now', 'reloadify-frontend-sync');
@@ -1319,7 +1370,7 @@
             { className: 'reloadify-media-body' },
             el(
                 'div',
-                { className: 'reloadify-media-panel' },
+                { className: 'reloadify-media-panel' + (locked ? ' is-locked' : ''), 'aria-disabled': locked },
                 el('div', { className: 'reloadify-media-format-label' }, __('Image format', 'reloadify-frontend-sync')),
                 el(
                     'div',
@@ -1334,7 +1385,7 @@
                                 role: 'radio',
                                 'aria-checked': active,
                                 className: 'reloadify-segment' + (active ? ' is-active' : '') + (opt.disabled ? ' is-disabled' : ''),
-                                disabled: opt.disabled || saving,
+                                disabled: opt.disabled || saving || locked,
                                 title: opt.disabled ? __('Not supported by this server\u2019s image library', 'reloadify-frontend-sync') : '',
                                 onClick: function () { setFormat(opt.value); }
                             },
@@ -1348,7 +1399,7 @@
             ),
             el(
                 'div',
-                { className: 'reloadify-quality' },
+                { className: 'reloadify-quality' + (locked ? ' is-locked' : ''), 'aria-disabled': locked },
                 el(
                     'div',
                     { className: 'reloadify-quality-head' },
@@ -1358,7 +1409,7 @@
                 el('input', {
                     id: 'reloadify-quality-range',
                     className: 'reloadify-range',
-                    type: 'range', min: 40, max: 95, step: 5, value: quality,
+                    type: 'range', min: 40, max: 95, step: 5, value: quality, disabled: locked,
                     style: { '--reloadify-fill': (((quality - 40) / 55) * 100) + '%' },
                     onChange: function (e) { onQuality(e.target.value); }
                 }),
@@ -1369,6 +1420,17 @@
                 el('p', { className: 'reloadify-media-format-note' },
                     __('A ceiling, never a boost: if an encoder\u2019s own default is already lower, it is kept.', 'reloadify-frontend-sync'))
             ),
+            el(SwitchRow, {
+                icon: 'image',
+                checked: !!media.optimize_originals,
+                disabled: saving || locked,
+                title: __('Optimize original images', 'reloadify-frontend-sync'),
+                text: media.optimize_originals
+                    ? __('On: the main image file is re-compressed in place (same format), only when that makes it smaller.', 'reloadify-frontend-sync')
+                    : __('Off: original uploads stay untouched; only the generated sizes are optimized.', 'reloadify-frontend-sync'),
+                onChange: toggleOriginals
+            }),
+            locked ? el('p', { className: 'reloadify-media-lock-note', role: 'status' }, __('Format and quality are locked while your media is being optimized. They unlock as soon as it finishes.', 'reloadify-frontend-sync')) : null,
             el(
                 'div',
                 { className: 'reloadify-stat-grid' },
@@ -1384,7 +1446,9 @@
                         : __('Appears after images are optimized', 'reloadify-frontend-sync')))
             ),
             el(BeforeAfterPreview, { preview: preview, loading: previewLoading }),
-            el('p', { className: 'reloadify-tip' }, __('Tip: original files are always kept, so nothing is lost when settings change.', 'reloadify-frontend-sync')),
+            el('p', { className: 'reloadify-tip' }, media.optimize_originals
+                ? __('Original files are replaced by their optimized version when it is smaller. Generated sizes are made first, from the untouched original.', 'reloadify-frontend-sync')
+                : __('Tip: original files are always kept, so nothing is lost when settings change.', 'reloadify-frontend-sync')),
             el(
                 'div',
                 { className: 'reloadify-media-backfill-row' },
@@ -1392,12 +1456,12 @@
                     'button',
                     {
                         type: 'button',
-                        className: 'reloadify-optimize-btn' + (running ? ' is-running' : '') + ((bf.status === 'done' || allDone) ? ' is-done' : ''),
+                        className: 'reloadify-optimize-btn' + (running ? ' is-running' : '') + (((bf.status === 'done' && pendingImages === 0) || allDone) ? ' is-done' : ''),
                         onClick: optimizeNow,
                         disabled: running || allDone,
                         'aria-busy': running
                     },
-                    running ? el('span', { className: 'reloadify-spinner reloadify-spinner--light' }) : el(Ico, { name: (bf.status === 'done' || allDone) ? 'check' : 'bolt', size: 15 }),
+                    running ? el('span', { className: 'reloadify-spinner reloadify-spinner--light' }) : el(Ico, { name: ((bf.status === 'done' && pendingImages === 0) || allDone) ? 'check' : 'bolt', size: 15 }),
                     buttonLabel
                 ),
                 waiting
@@ -1557,6 +1621,7 @@
                                 runtimeEnabled: data.settings.runtime_enabled[key],
                                 value: data.settings.desired[key],
                                 live: data.live[key],
+                                pending: !!props.perfPending,
                                 onChange: setDesired,
                                 onToggleRuntime: toggleRuntime
                             });
@@ -1705,7 +1770,12 @@
             none: __('None', 'reloadify-frontend-sync'),
             lift: __('Lift', 'reloadify-frontend-sync'),
             pulse: __('Pulse', 'reloadify-frontend-sync'),
-            wiggle: __('Nudge', 'reloadify-frontend-sync')
+            wiggle: __('Nudge', 'reloadify-frontend-sync'),
+            solid: __('Solid', 'reloadify-frontend-sync'),
+            outline: __('Outline', 'reloadify-frontend-sync'),
+            link: __('Text link', 'reloadify-frontend-sync'),
+            button: __('Button press', 'reloadify-frontend-sync'),
+            scroll: __('Auto on scroll', 'reloadify-frontend-sync')
         }[key] || key;
     }
 
@@ -1885,7 +1955,7 @@
 
         function toggle() {
             var next = !on;
-            patch({ enabled: next });
+            patch({ enabled: next, progress_ring: next });
             props.onToast(next ? 'success' : 'info', next ? __('Scroll To Top Button enabled', 'reloadify-frontend-sync') : __('Scroll To Top Button disabled', 'reloadify-frontend-sync'));
         }
 
@@ -1961,13 +2031,13 @@
         var distance = Math.max(0, parseInt(cfg.show_after, 10) || 0);
         var animation = ANIMATION_CHOICES.indexOf(cfg.animation) !== -1 ? cfg.animation : 'slide';
         var hover = HOVER_CHOICES.indexOf(cfg.hover) !== -1 ? cfg.hover : 'lift';
-        var ringOn = cfg.progress_ring !== false;
+        var ringOn = on && cfg.progress_ring !== false;
         var icon = cfg.icon || 'default';
         var color = /^#[0-9a-fA-F]{6}$/.test(colorDraft) ? colorDraft : cfg.bg_color;
 
         return el(
             'div',
-            { className: 'reloadify-section reloadify-card reloadify-card--wide' },
+            { className: 'reloadify-section reloadify-card' },
             el(CardHead, {
                 title: __('Scroll To Top Button', 'reloadify-frontend-sync'),
                 subtitle: __('A small floating button that returns visitors to the top', 'reloadify-frontend-sync'),
@@ -2082,9 +2152,266 @@
                             el('strong', { className: 'reloadify-pass-title' }, __('Scroll progress ring', 'reloadify-frontend-sync')),
                             el('span', { className: 'reloadify-pass-desc' }, __('A ring around the button fills as the visitor scrolls down the page.', 'reloadify-frontend-sync'))
                         ),
-                        el(Switch, { checked: ringOn, onChange: toggleRing })
+                        el(Switch, { checked: ringOn, onChange: toggleRing, disabled: !on })
                     ),
                     el('p', { className: 'reloadify-tip' }, __('Animations respect the visitor\u2019s \u201creduce motion\u201d setting automatically.', 'reloadify-frontend-sync'))
+                )
+            )
+        );
+    }
+
+
+    /* ---------------- Read More + Load More cards (v1.4.0) ---------------- */
+
+    var RM_STYLES = ['solid', 'outline', 'link'];
+    var RM_ANIMS = ['none', 'fade', 'slide'];
+    var LM_TRIGGERS = ['button', 'scroll'];
+    var LM_COLUMNS = ['1', '2', '3', '4', '5', '6'];
+    var HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+    function TextField(props) {
+        var st = useState(props.value);
+        var draft = st[0], setDraft = st[1];
+
+        return el(
+            'label',
+            { className: 'reloadify-text-field' },
+            el('span', null, props.label),
+            el('input', {
+                type: 'text', value: draft, maxLength: props.max || 60,
+                onChange: function (e) { setDraft(e.target.value); props.onChange(e.target.value); },
+                onBlur: function () { setDraft(props.value); }
+            })
+        );
+    }
+
+    function NumberField(props) {
+        return el(
+            'label',
+            { className: 'reloadify-text-field reloadify-text-field--short' },
+            el('span', null, props.label),
+            el('input', {
+                type: 'number', min: props.min, max: props.max, step: 1, value: props.value,
+                onChange: function (e) {
+                    var v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) { props.onChange(Math.min(props.max, Math.max(props.min, v))); }
+                }
+            })
+        );
+    }
+
+    function ColorField(props) {
+        var st = useState(props.value);
+        var draft = st[0], setDraft = st[1];
+        var color = HEX_RE.test(draft) ? draft : props.value;
+
+        function commit(value) {
+            setDraft(value);
+            if (HEX_RE.test(value)) { props.onChange(value); }
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-color-field' },
+            el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, props.label)),
+            el(
+                'div',
+                { className: 'reloadify-color-row' },
+                el(
+                    'div',
+                    { className: 'reloadify-swatches', role: 'group', 'aria-label': props.label },
+                    SCROLL_COLORS.map(function (swatch) {
+                        var active = swatch.toLowerCase() === String(props.value).toLowerCase();
+                        return el('button', {
+                            key: swatch, type: 'button', className: 'reloadify-swatch' + (active ? ' is-active' : ''),
+                            style: { background: swatch }, title: swatch.toUpperCase(), 'aria-label': swatch.toUpperCase(), 'aria-pressed': active,
+                            onClick: function () { commit(swatch); }
+                        }, active && el(Ico, { name: 'check', size: 13 }));
+                    })
+                ),
+                el('input', { type: 'color', className: 'reloadify-color-input', value: color, 'aria-label': props.label, onChange: function (e) { commit(e.target.value); } }),
+                el('input', {
+                    type: 'text', className: 'reloadify-hex-input', value: draft, maxLength: 7, spellCheck: false, 'aria-label': props.label + ' hex',
+                    onChange: function (e) { commit(e.target.value); },
+                    onBlur: function () { if (!HEX_RE.test(draft)) { setDraft(props.value); } }
+                })
+            )
+        );
+    }
+
+    function SnippetBox(props) {
+        var st = useState(false);
+        var copied = st[0], setCopied = st[1];
+
+        function copy() {
+            function done() {
+                setCopied(true);
+                setTimeout(function () { setCopied(false); }, 1500);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(props.code).then(done);
+            }
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-snippet' },
+            el('div', { className: 'reloadify-snippet-title' }, props.title),
+            el(
+                'div',
+                { className: 'reloadify-snippet-row' },
+                el('code', { className: 'reloadify-snippet-code' }, props.code),
+                el('button', { type: 'button', className: 'button', onClick: copy }, copied ? __('Copied', 'reloadify-frontend-sync') : __('Copy', 'reloadify-frontend-sync'))
+            )
+        );
+    }
+
+    function SwitchRow(props) {
+        return el(
+            'div',
+            { className: 'reloadify-pass reloadify-pass--wide' + (props.checked ? ' is-on' : ' is-off') },
+            el(IconChip, { name: props.icon, tone: props.checked ? 'green' : 'gray' }),
+            el('div', { className: 'reloadify-pass-text' }, el('strong', { className: 'reloadify-pass-title' }, props.title), props.text ? el('span', { className: 'reloadify-pass-desc' }, props.text) : null),
+            el(Switch, { checked: props.checked, onChange: props.onChange, disabled: !!props.disabled })
+        );
+    }
+
+    function ReadMoreCard(props) {
+        var cfg = props.extras.read_more;
+        var on = !!cfg.enabled;
+
+
+        var settled = useSettled(function (message) { props.onToast('success', message); }, 700);
+
+        function patch(change, message, tone) {
+            props.update({ read_more: Object.assign({}, cfg, change) });
+            if (message) { props.onToast(tone || 'success', message); }
+        }
+
+        /* Typing, colour dragging and number fields: one toast once the user pauses. */
+        function patchSettled(change, message) {
+            props.update({ read_more: Object.assign({}, cfg, change) });
+            settled(message);
+        }
+
+        function toggle() {
+            var next = !on;
+            patch({ enabled: next, smooth_scroll: next });
+            props.onToast(next ? 'success' : 'info', next ? __('Read More enabled', 'reloadify-frontend-sync') : __('Read More disabled', 'reloadify-frontend-sync'));
+        }
+
+        var demoStyle = { background: cfg.bg_color, color: cfg.text_color, border: '2px solid ' + cfg.bg_color };
+        if (cfg.style === 'outline') { demoStyle = { background: 'transparent', color: cfg.bg_color, border: '2px solid ' + cfg.bg_color }; }
+        if (cfg.style === 'link') { demoStyle = { background: 'none', color: cfg.bg_color, border: 0, padding: 0, textDecoration: 'underline' }; }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-card' },
+            el(CardHead, {
+                title: __('Read More / Read Less', 'reloadify-frontend-sync'),
+                subtitle: __('Hide long text behind a button and open it without reloading the page', 'reloadify-frontend-sync'),
+                checked: on,
+                onChange: toggle
+            }),
+            el(
+                'div',
+                { className: 'reloadify-st-layout' + (on ? '' : ' is-inactive') },
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(TextField, { label: __('Open button text', 'reloadify-frontend-sync'), value: cfg.open_text, onChange: function (v) { patchSettled({ open_text: v }, __('Open button text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Close button text', 'reloadify-frontend-sync'), value: cfg.close_text, onChange: function (v) { patchSettled({ close_text: v }, __('Close button text updated', 'reloadify-frontend-sync')); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Button style', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Button style', 'reloadify-frontend-sync'), choices: RM_STYLES, value: cfg.style, onPick: function (v) { patch({ style: v }, __('Button style:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Open / close animation', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Animation', 'reloadify-frontend-sync'), choices: RM_ANIMS, value: cfg.animation, onPick: function (v) { patch({ animation: v }, __('Open / close animation:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el(ColorField, { label: __('Button colour', 'reloadify-frontend-sync'), value: cfg.bg_color, onChange: function (v) { patchSettled({ bg_color: v }, __('Button colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } }),
+                    el(ColorField, { label: __('Text colour', 'reloadify-frontend-sync'), value: cfg.text_color, onChange: function (v) { patchSettled({ text_color: v }, __('Text colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } })
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el('div', { className: 'reloadify-card-eyebrow' }, el('span', null, __('Preview', 'reloadify-frontend-sync'))),
+                    el('div', { className: 'reloadify-demo-box' }, el('span', { className: 'reloadify-demo-button', style: demoStyle }, cfg.open_text + ' \u25BE')),
+                    el(SwitchRow, {
+                        icon: 'arrowUp', checked: on && !!cfg.smooth_scroll, disabled: !on,
+                        title: __('Scroll back when closing', 'reloadify-frontend-sync'),
+                        text: __('After closing a long text, bring the button back into view.', 'reloadify-frontend-sync'),
+                        onChange: function () { var next = !cfg.smooth_scroll; patch({ smooth_scroll: next }, next ? __('Scroll back when closing enabled', 'reloadify-frontend-sync') : __('Scroll back when closing disabled', 'reloadify-frontend-sync'), next ? 'success' : 'info'); }
+                    }),
+                    el(SnippetBox, { title: __('Use it anywhere (Gutenberg Shortcode block, Elementor, Divi, templates)', 'reloadify-frontend-sync'), code: '[reloadify_read_more]Your hidden text[/reloadify_read_more]' }),
+                    el(SnippetBox, { title: __('Custom labels and style for one spot', 'reloadify-frontend-sync'), code: '[reloadify_read_more open="Show details" close="Hide details" style="outline"]\u2026[/reloadify_read_more]' }),
+                    el('p', { className: 'reloadify-tip' }, __('The hidden text stays in the page HTML, so search engines can read it. Everything opens automatically when the page is printed.', 'reloadify-frontend-sync'))
+                )
+            )
+        );
+    }
+
+    function LoadMoreCard(props) {
+        var cfg = props.extras.load_more;
+        var on = !!cfg.enabled;
+
+
+        var settled = useSettled(function (message) { props.onToast('success', message); }, 700);
+
+        function patch(change, message, tone) {
+            props.update({ load_more: Object.assign({}, cfg, change) });
+            if (message) { props.onToast(tone || 'success', message); }
+        }
+
+        /* Typing, colour dragging and number fields: one toast once the user pauses. */
+        function patchSettled(change, message) {
+            props.update({ load_more: Object.assign({}, cfg, change) });
+            settled(message);
+        }
+
+        function toggle() {
+            var next = !on;
+            patch({ enabled: next, show_image: next, show_date: next, show_excerpt: next });
+            props.onToast(next ? 'success' : 'info', next ? __('Load More enabled', 'reloadify-frontend-sync') : __('Load More disabled', 'reloadify-frontend-sync'));
+        }
+
+        return el(
+            'div',
+            { className: 'reloadify-section reloadify-card' },
+            el(CardHead, {
+                title: __('Load More (AJAX)', 'reloadify-frontend-sync'),
+                subtitle: __('Show a first batch of posts or products and load the next ones without a page refresh', 'reloadify-frontend-sync'),
+                checked: on,
+                onChange: toggle
+            }),
+            el(
+                'div',
+                { className: 'reloadify-st-layout' + (on ? '' : ' is-inactive') },
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(TextField, { label: __('Button text', 'reloadify-frontend-sync'), value: cfg.button_text, onChange: function (v) { patchSettled({ button_text: v }, __('Button text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Text while loading', 'reloadify-frontend-sync'), value: cfg.loading_text, onChange: function (v) { patchSettled({ loading_text: v }, __('Loading text updated', 'reloadify-frontend-sync')); } }),
+                    el(TextField, { label: __('Message when everything is loaded', 'reloadify-frontend-sync'), value: cfg.end_text, max: 90, onChange: function (v) { patchSettled({ end_text: v }, __('End message updated', 'reloadify-frontend-sync')); } }),
+                    el(
+                        'div',
+                        { className: 'reloadify-st-offset-grid' },
+                        el(NumberField, { label: __('Items per load', 'reloadify-frontend-sync'), min: 1, max: 24, value: cfg.per_page, onChange: function (v) { patchSettled({ per_page: v }, __('Items per load:', 'reloadify-frontend-sync') + ' ' + v); } }),
+                        el(NumberField, { label: __('Excerpt words', 'reloadify-frontend-sync'), min: 5, max: 80, value: cfg.excerpt_words, onChange: function (v) { patchSettled({ excerpt_words: v }, __('Excerpt words:', 'reloadify-frontend-sync') + ' ' + v); } })
+                    ),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Columns (desktop)', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Columns', 'reloadify-frontend-sync'), choices: LM_COLUMNS, value: String(cfg.columns), onPick: function (v) { patch({ columns: parseInt(v, 10) }, __('Columns:', 'reloadify-frontend-sync') + ' ' + v); } }),
+                    el('div', { className: 'reloadify-card-eyebrow reloadify-eyebrow-gap' }, el('span', null, __('Load next items by', 'reloadify-frontend-sync'))),
+                    el(PickSegments, { label: __('Trigger', 'reloadify-frontend-sync'), choices: LM_TRIGGERS, value: cfg.trigger, onPick: function (v) { patch({ trigger: v }, __('Load next items by:', 'reloadify-frontend-sync') + ' ' + animationLabel(v)); } }),
+                    el(ColorField, { label: __('Button colour', 'reloadify-frontend-sync'), value: cfg.bg_color, onChange: function (v) { patchSettled({ bg_color: v }, __('Button colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } }),
+                    el(ColorField, { label: __('Button text colour', 'reloadify-frontend-sync'), value: cfg.text_color, onChange: function (v) { patchSettled({ text_color: v }, __('Text colour set to', 'reloadify-frontend-sync') + ' ' + v.toUpperCase()); } })
+                ),
+                el(
+                    'div',
+                    { className: 'reloadify-st-col' },
+                    el(SwitchRow, { icon: 'image', checked: on && !!cfg.show_image, disabled: !on, title: __('Featured image', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_image; patch({ show_image: next }, __('Featured image', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SwitchRow, { icon: 'sparkle', checked: on && !!cfg.show_date, disabled: !on, title: __('Publish date', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_date; patch({ show_date: next }, __('Publish date', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SwitchRow, { icon: 'check', checked: on && !!cfg.show_excerpt, disabled: !on, title: __('Excerpt', 'reloadify-frontend-sync'), onChange: function () { var next = !cfg.show_excerpt; patch({ show_excerpt: next }, __('Excerpt', 'reloadify-frontend-sync') + ' ' + (next ? __('shown', 'reloadify-frontend-sync') : __('hidden', 'reloadify-frontend-sync')), next ? 'success' : 'info'); } }),
+                    el(SnippetBox, { title: __('Latest posts', 'reloadify-frontend-sync'), code: '[reloadify_load_more]' }),
+                    el(SnippetBox, { title: __('WooCommerce products (shows price)', 'reloadify-frontend-sync'), code: '[reloadify_load_more post_type="product" per_page="8" columns="4"]' }),
+                    el(SnippetBox, { title: __('One category, oldest first', 'reloadify-frontend-sync'), code: '[reloadify_load_more category="news" order="ASC" per_page="6"]' }),
+                    el('p', { className: 'reloadify-tip' }, __('Only published, public posts are ever returned, and every request is signed so visitors cannot change the query. Theme developers can replace the card markup with the reloadify_load_more_item_html filter.', 'reloadify-frontend-sync'))
                 )
             )
         );
@@ -2097,11 +2424,38 @@
             props.onChange(Object.assign({}, extras, change));
         }
 
+        var tools = [extras.svg_support, extras.scroll_top, extras.read_more, extras.load_more];
+        var enabledCount = tools.filter(function (tool) { return !!(tool && tool.enabled); }).length;
+        var cardProps = { extras: extras, update: update, onToast: props.onToast };
+
+        // Same layout as the Server Performance tab: a summary card, then columns of cards.
         return el(
             'div',
-            { className: 'reloadify-tab-body reloadify-card-grid' },
-            el(SvgSupportCard, { extras: extras, update: update, onToast: props.onToast }),
-            el(ScrollTopCard, { extras: extras, update: update, onToast: props.onToast })
+            { className: 'reloadify-tab-body' },
+            el(
+                'div',
+                { className: 'reloadify-perf-hero' },
+                el(IconChip, { name: 'sparkle', tone: 'indigo', size: 22 }),
+                el(
+                    'div',
+                    { className: 'reloadify-perf-hero-text' },
+                    el('h2', null, __('Extensions', 'reloadify-frontend-sync'), el(InfoIcon, { text: __('Optional front-end tools. Each one is off until you switch it on, and nothing is loaded on pages that do not use it.', 'reloadify-frontend-sync') })),
+                    el('p', null, __('Small add-ons for your media and pages \u2014 switch on only what you need.', 'reloadify-frontend-sync')),
+                    el(
+                        'div',
+                        { className: 'reloadify-perf-hero-stats' },
+                        el('span', { className: 'reloadify-stat-chip' + (enabledCount > 0 ? ' is-live' : '') }, enabledCount + ' / ' + tools.length + ' ' + __('enabled', 'reloadify-frontend-sync')),
+                        el('span', { className: 'reloadify-stat-chip' }, (tools.length - enabledCount) + ' ' + __('off', 'reloadify-frontend-sync'))
+                    )
+                )
+            ),
+            el(
+                'div',
+                { className: 'reloadify-ext-grid' },
+                el('div', { className: 'reloadify-ext-col' }, el(SvgSupportCard, cardProps), el(ReadMoreCard, cardProps)),
+                el('div', { className: 'reloadify-ext-col' }, el(ScrollTopCard, cardProps)),
+                el('div', { className: 'reloadify-ext-col' }, el(LoadMoreCard, cardProps))
+            )
         );
     }
 
@@ -2130,7 +2484,9 @@
 
         var extrasState = useState(initial.extras || {
             svg_support: { enabled: true },
-            scroll_top: { enabled: true, position: 'right', vertical_position: 'bottom', horizontal_offset: 24, vertical_offset: 28, bg_color: '#4f46e5', show_after: 300 }
+            scroll_top: { enabled: true, position: 'right', vertical_position: 'bottom', horizontal_offset: 24, vertical_offset: 28, bg_color: '#4f46e5', show_after: 300 },
+            read_more: { enabled: false, open_text: 'Read more', close_text: 'Read less', style: 'solid', animation: 'slide', bg_color: '#4f46e5', text_color: '#ffffff', smooth_scroll: true },
+            load_more: { enabled: false, button_text: 'Load more', loading_text: 'Loading\u2026', end_text: 'You\u2019ve reached the end', per_page: 6, columns: 3, trigger: 'button', bg_color: '#4f46e5', text_color: '#ffffff', show_image: true, show_date: true, show_excerpt: true, excerpt_words: 20 }
         });
         var extras = extrasState[0], setExtras = extrasState[1];
 
@@ -2250,6 +2606,7 @@
             wp.apiFetch({ path: '/reloadify/v1/performance/sync', method: 'POST' })
                 .then(function (data) {
                     setPerf(data);
+                    setPerfPending(false);
                     setSyncing(false);
                     showToast('success', __('Synced with the server\u2019s current values.', 'reloadify-frontend-sync'));
                 })
@@ -2306,20 +2663,25 @@
 
         /* ---------------- Autosave: Server Performance tab (editable directives) ---------------- */
         var perfSkipNext = useRef(true);
+        var perfPendingState = useState(false);
+        var perfPending = perfPendingState[0], setPerfPending = perfPendingState[1];
 
         useEffect(function () {
             if (perfSkipNext.current) { perfSkipNext.current = false; return; }
             if (!perf || !perf.settings) { return; }
 
             setAutosave('saving');
+            setPerfPending(true);
             var handle = setTimeout(function () {
                 wp.apiFetch({ path: '/reloadify/v1/performance', method: 'POST', data: perf.settings })
                     .then(function (data) {
                         perfSkipNext.current = true;
                         setPerf(data);
+                        setPerfPending(false);
                         setAutosave('saved');
                     })
                     .catch(function () {
+                        setPerfPending(false);
                         setAutosave('error');
                     });
             }, AUTOSAVE_DEBOUNCE_MS);
@@ -2370,15 +2732,40 @@
                     ? el(ReloadTab, { settings: settings, onChange: setSettings, onExpire: refreshSettings, onToast: showToast })
                     : tab === 'extras'
                         ? el(ExtrasTab, { extras: extras, onChange: setExtras, onToast: showToast })
-                        : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup, backfill: backfill, onBackfillStart: startBackfill })
+                        : el(PerformanceTab, { data: perf, onChange: setPerf, onToast: showToast, onSync: syncPerformance, syncing: syncing, perfPending: perfPending, speed: speed, onSpeedChange: setSpeed, media: media, onMediaChange: setMedia, cleanup: cleanup, onCleanupChange: setCleanup, backfill: backfill, onBackfillStart: startBackfill })
             )
         );
+    }
+
+    /*
+     * WordPress pins a tall admin menu from the page height it measured on load.
+     * This dashboard renders after load and changes height on every tab, so the
+     * menu can be left offset (an empty gap above "Dashboard"). Asking WordPress
+     * to re-measure whenever the page height changes keeps it in place.
+     */
+    function keepAdminMenuPinned(root) {
+        var timer = null;
+
+        function repin() {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                if (window.jQuery) { window.jQuery(document).trigger('wp-pin-menu'); }
+            }, 120);
+        }
+
+        if (window.ResizeObserver) {
+            new window.ResizeObserver(repin).observe(root);
+        }
+
+        window.addEventListener('load', repin);
+        repin();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         var root = document.getElementById('reloadify-settings-root');
         if (root) {
             render(el(App), root);
+            keepAdminMenuPinned(root);
         }
     });
 
