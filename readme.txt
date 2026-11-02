@@ -1,6 +1,6 @@
 === Reloadify Frontend Sync – Auto Reload, Server & Media Optimization ===
 Contributors: shaounchandrashill
-Tags: live reload, auto refresh, page builder, elementor, divi
+Tags: reload, auto reload, live reload, auto refresh, page builder
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
@@ -8,11 +8,11 @@ Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically refresh WordPress frontend previews after content updates with cross-browser live reload, server performance controls, and image/media optimization for Elementor, Divi, Gutenberg, and all page builders.
+Auto refresh WordPress frontend across browsers after saves in Elementor, Divi, Gutenberg, and more. Includes server and image optimization.
 
 == Description ==
 
-**Reloadify Frontend Sync** combines cross-browser live reload, server performance controls, and image/media optimization for WordPress developers, QA teams, and page-builder workflows.
+**Reloadify Frontend Sync** is an auto reload and live reload plugin for WordPress. It automatically refreshes your frontend previews after every content update, with cross-browser live reload, server performance controls, and image/media optimization for Elementor, Divi, Gutenberg, and all major page builders.
 
 It supports **Elementor**, **Divi**, **Gutenberg**, and other WordPress builders, with synchronized previews across browser tabs and windows.
 
@@ -75,6 +75,12 @@ https://youtu.be/3UPLTJkavJw
 
 == Frequently Asked Questions ==
 
+= What is the best auto reload plugin for page builders? =
+Reloadify automatically reloads your frontend after you save in Elementor, Divi, Bricks, Oxygen, Beaver Builder, WPBakery or Gutenberg, so you never refresh by hand.
+
+= Is this a live reload or an auto refresh plugin? =
+Both. It live-reloads open frontend tabs and windows when content changes, and it supports soft reload and cache-busting hard reload.
+
 = Why doesn't it reload in a particular browser? =
 Check Reloadify Sync → Cross-Browser Reload: confirm Developer Mode and the applicable browser/mode toggle are enabled. Incognito/private toggles stay disabled until Developer Mode is enabled. Chrome, Edge, and Safari are enabled by default; other browsers are optional.
 
@@ -111,19 +117,13 @@ Feedback helps improve the plugin and supports future updates.
 == Changelog ==
 
 = 1.4.0 =
-* Added **Read More / Read Less**: `[reloadify_read_more]` hides text behind an accessible button and opens it without a page refresh (text stays in the HTML, prints expanded, respects reduced motion, opens on #anchor links).
-* Added **Load More (AJAX)**: `[reloadify_load_more]` prints the first batch of posts, pages, products or any public post type and loads the next batch through the REST API on a button press or when scrolling. Filter by category, tag, taxonomy, author or search; WooCommerce products show their price. Requests are signed, so only the query written in the shortcode can ever be loaded.
-* Fixed: uploaded JPEG/PNG files are no longer converted to WebP by WordPress itself. Only generated sizes are converted, so the main file can never come out larger than the original. Images already affected are restored to their original file when "Optimize existing media now" runs (a one-time check).
-* Speed Boost: every rule, including **Prevent stale browser cache**, is now on by default.
-* The Extensions tab now uses the same layout as Server Performance (summary card plus columns of cards).
-* Added **Optimize original images** toggle to Media Optimization (off by default): re-compresses the main JPEG/PNG file in place, in its own format, only when the result is at least 3% smaller. Existing media is queued for it, and new uploads are handled after their sizes are generated.
-* Both tools have their own cards in the Extensions tab (texts, colours, animation, columns, trigger) with copy-ready shortcodes, are off by default, and load their CSS/JS only on pages that use them.
-
-= 1.3.1 =
-* Added **Prevent stale browser cache** toggle to Speed Boost (off by default): local CSS/JS are versioned by file modification time, replaced images get a fresh URL in rendered <img> tags (raw attachment URLs are never altered, so WooCommerce and image/SEO plugins are unaffected), pages are revalidated, and old back/forward-cache pages reload after 5 minutes (skipped on AMP, cart, checkout and account pages).
-* Works inside page-builder editors (Divi, Elementor, etc.), so edits show without a hard reload.
-* When enabled, it takes priority over **Remove query strings**.
-* Fixed **WooCommerce checkout**: placing an order no longer triggers a live reload, so shoppers (and logged-in admins testing the shop) reach the order-received page instead of an empty cart. Only orders edited by a shop manager in wp-admin refresh the front end now.
+* Added **Read More / Read Less** and **AJAX Load More** shortcodes.
+* Added **Optimize Original Images** with safer image compression.
+* Added **Prevent Stale Browser Cache** with automatic asset versioning and page revalidation.
+* Improved the image optimization confirmation dialog and Extensions tab layout.
+* Fixed WordPress image conversion behavior to preserve original JPEG/PNG files.
+* Fixed WooCommerce checkout reload issues.
+* Improved page-builder compatibility and frontend update behavior.
 
 = 1.3.0 =
 * Added new **Speed Boost** features: query string management, lazy loading, script deferring, browser caching, gzip compression, and automatic cleanup.

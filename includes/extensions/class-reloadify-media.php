@@ -706,30 +706,6 @@ class Reloadify_Media {
 	}
 
 	/**
-	 * SQL condition for "this image still needs work": not yet converted, or --
-	 * when Optimize original images is on -- its main file not yet handled.
-	 */
-	private static function image_pending_sql() {
-		global $wpdb;
-
-		$keys = [ self::BACKFILL_META_KEY, self::MAIN_CHECK_META_KEY ];
-
-		if ( self::optimize_originals() ) {
-			$keys[] = self::ORIGINAL_META_KEY;
-		}
-
-		$parts = [];
-
-		foreach ( $keys as $i => $key ) {
-			$alias   = 'm' . $i;
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the alias is a fixed "m0..m2"; the key goes through prepare().
-			$parts[] = $wpdb->prepare( "NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} {$alias} WHERE {$alias}.post_id = p.ID AND {$alias}.meta_key = %s )", $key );
-		}
-
-		return '( ' . implode( ' OR ', $parts ) . ' )';
-	}
-
-	/**
 	 * Earlier versions let WordPress convert the uploaded JPEG/PNG itself to WebP
 	 * (the "full" file), which for an already-compressed photo can come out
 	 * LARGER than the original. When that happened and the original is still on
@@ -799,7 +775,7 @@ class Reloadify_Media {
 	 * file can never grow. Returns the bytes saved (0 = left untouched).
 	 */
 	private static function recompress_in_place( $file, $mime ) {
-		if ( ! is_file( $file ) || ! is_writable( $file ) || ( 'image/png' === $mime && self::is_animated_png( $file ) ) ) {
+		if ( ! is_file( $file ) || ! wp_is_writable( $file ) || ( 'image/png' === $mime && self::is_animated_png( $file ) ) ) {
 			return 0;
 		}
 
@@ -934,8 +910,16 @@ class Reloadify_Media {
 				$wpdb->prepare(
 					"SELECT p.ID FROM {$wpdb->posts} p
 					WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
-					AND " . self::image_pending_sql() . "
+					AND (
+						NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m0 WHERE m0.post_id = p.ID AND m0.meta_key = %s )
+						OR NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m1 WHERE m1.post_id = p.ID AND m1.meta_key = %s )
+						OR ( %d = 1 AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m2 WHERE m2.post_id = p.ID AND m2.meta_key = %s ) )
+					)
 					ORDER BY p.ID ASC LIMIT %d",
+					self::BACKFILL_META_KEY,
+					self::MAIN_CHECK_META_KEY,
+					self::optimize_originals() ? 1 : 0,
+					self::ORIGINAL_META_KEY,
 					$limit
 				)
 			);
@@ -1101,11 +1085,20 @@ class Reloadify_Media {
 			);
 		}
 
-		// The only variable part is image_pending_sql(), which is already prepared; a second prepare() would have no placeholder to fill.
 		return (int) $wpdb->get_var(
-			"SELECT COUNT(*) FROM {$wpdb->posts} p
-			WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
-			AND " . self::image_pending_sql() // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->posts} p
+				WHERE p.post_type = 'attachment' AND p.post_status = 'inherit' AND p.post_mime_type IN ( 'image/jpeg', 'image/png' )
+				AND (
+					NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m0 WHERE m0.post_id = p.ID AND m0.meta_key = %s )
+					OR NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m1 WHERE m1.post_id = p.ID AND m1.meta_key = %s )
+					OR ( %d = 1 AND NOT EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m2 WHERE m2.post_id = p.ID AND m2.meta_key = %s ) )
+				)",
+				self::BACKFILL_META_KEY,
+				self::MAIN_CHECK_META_KEY,
+				self::optimize_originals() ? 1 : 0,
+				self::ORIGINAL_META_KEY
+			)
 		);
 		// phpcs:enable
 	}
