@@ -594,6 +594,64 @@
         }).join('\n');
     }
 
+    /* Modern confirmation dialog (replaces the browser's native window.confirm).
+       Escape / backdrop click / Cancel all dismiss; focus moves into the dialog
+       and returns to the trigger when it closes. */
+    function ConfirmModal(props) {
+        var confirmRef = useRef(null);
+
+        useEffect(function () {
+            var previous = document.activeElement;
+            if (confirmRef.current) { confirmRef.current.focus(); }
+
+            function onKey(e) {
+                if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    props.onCancel();
+                }
+            }
+            document.addEventListener('keydown', onKey, true);
+
+            return function () {
+                document.removeEventListener('keydown', onKey, true);
+                if (previous && previous.focus) { previous.focus(); }
+            };
+        }, []);
+
+        return el(
+            'div',
+            { className: 'reloadify-modal-overlay reloadify-confirm-overlay', onClick: props.onCancel },
+            el(
+                'div',
+                {
+                    className: 'reloadify-confirm',
+                    role: 'alertdialog',
+                    'aria-modal': 'true',
+                    'aria-labelledby': 'reloadify-confirm-title',
+                    'aria-describedby': 'reloadify-confirm-desc',
+                    onClick: function (e) { e.stopPropagation(); }
+                },
+                el('span', { className: 'reloadify-confirm-icon', 'aria-hidden': 'true' }, el(Ico, { name: props.icon || 'warn', size: 26 })),
+                el('h2', { id: 'reloadify-confirm-title', className: 'reloadify-confirm-title' }, props.title),
+                el('p', { id: 'reloadify-confirm-desc', className: 'reloadify-confirm-text' }, props.message),
+                props.points && props.points.length ? el(
+                    'ul',
+                    { className: 'reloadify-confirm-points' },
+                    props.points.map(function (point) {
+                        return el('li', { key: point }, el(Ico, { name: 'check', size: 14 }), el('span', null, point));
+                    })
+                ) : null,
+                props.note ? el('div', { className: 'reloadify-confirm-note', role: 'note' }, props.note) : null,
+                el(
+                    'div',
+                    { className: 'reloadify-confirm-actions' },
+                    el('button', { type: 'button', className: 'reloadify-btn', onClick: props.onCancel }, props.cancelLabel || __('Cancel', 'reloadify-frontend-sync')),
+                    el('button', { type: 'button', className: 'reloadify-btn reloadify-btn--primary', ref: confirmRef, onClick: props.onConfirm }, props.confirmLabel || __('Confirm', 'reloadify-frontend-sync'))
+                )
+            )
+        );
+    }
+
     function SnippetModal(props) {
         var ini = buildIniSnippet(props.desired);
         var htaccess = buildHtaccessSnippet(props.desired);
@@ -1229,6 +1287,9 @@
         var stateSaving = useState(false);
         var saving = stateSaving[0], setSaving = stateSaving[1];
 
+        var stateConfirm = useState(false);
+        var confirmingOriginals = stateConfirm[0], setConfirmOriginals = stateConfirm[1];
+
         var stateQuality = useState(media.quality || 80);
         var quality = stateQuality[0], setQuality = stateQuality[1];
 
@@ -1287,18 +1348,29 @@
         }
 
         // Main (original) file: off keeps uploads untouched, on re-compresses them in place.
-        function toggleOriginals() {
-            var next = !media.optimize_originals;
-
-            if (next && !window.confirm(__('Optimize original images?\n\nThe main uploaded file of each JPEG and PNG will be replaced by a smaller re-compressed copy (same format, and only when it is smaller). Camera metadata may be removed and this cannot be undone. Make a backup first if you are unsure.', 'reloadify-frontend-sync'))) {
-                return;
-            }
-
+        // Turning it on asks first, in an in-page dialog; turning it off needs no confirmation.
+        function saveOriginals(next) {
             save({ optimize_originals: next }, function (response) {
                 props.onToast(response.optimize_originals ? 'success' : 'info', response.optimize_originals
                     ? __('Original images will be optimized', 'reloadify-frontend-sync')
                     : __('Original images stay untouched', 'reloadify-frontend-sync'));
             });
+        }
+
+        function toggleOriginals() {
+            var next = !media.optimize_originals;
+
+            if (next) {
+                setConfirmOriginals(true);
+                return;
+            }
+
+            saveOriginals(false);
+        }
+
+        function confirmOriginals() {
+            setConfirmOriginals(false);
+            saveOriginals(true);
         }
 
         // Real before/after for whatever format and quality are selected right now.
@@ -1478,7 +1550,24 @@
                 onChange: toggle,
                 disabled: saving
             }),
-            body
+            body,
+            confirmingOriginals && wp.element.createPortal(
+                el(ConfirmModal, {
+                    icon: 'image',
+                    title: __('Optimize original images?', 'reloadify-frontend-sync'),
+                    message: __('The main uploaded file of each JPEG and PNG will be replaced by a smaller re-compressed copy.', 'reloadify-frontend-sync'),
+                    points: [
+                        __('Same format, and only replaced when the result is smaller.', 'reloadify-frontend-sync'),
+                        __('Camera metadata (EXIF) may be removed.', 'reloadify-frontend-sync')
+                    ],
+                    note: __('This cannot be undone. Make a backup first if you are unsure.', 'reloadify-frontend-sync'),
+                    confirmLabel: __('Yes, optimize originals', 'reloadify-frontend-sync'),
+                    cancelLabel: __('Cancel', 'reloadify-frontend-sync'),
+                    onConfirm: confirmOriginals,
+                    onCancel: function () { setConfirmOriginals(false); }
+                }),
+                document.body
+            )
         );
     }
 

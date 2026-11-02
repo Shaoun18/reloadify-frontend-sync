@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
- * Description:       Automatically refresh frontend previews after content updates with cross-browser live reload, server performance controls, and image/media optimization.
+ * Description:       Auto refresh WordPress frontend across browsers after saves in Elementor, Divi, Gutenberg, and more. Includes server and image optimization.
  * Version:           1.4.0
  * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
