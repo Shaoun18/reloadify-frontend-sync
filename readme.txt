@@ -2,13 +2,13 @@
 Contributors: shaounchandrashill
 Tags: reload, auto reload, live reload, auto refresh, page builder
 Requires at least: 6.4
-Tested up to: 7.1
+Tested up to: 7.2
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Auto refresh WordPress frontend across browsers after saves in Elementor, Divi, Gutenberg, and more. Includes server and image optimization.
+Auto reload & cross-browser live reload for WordPress. Refresh frontend after every save in Elementor, Divi, Gutenberg. Server & image optimization.
 
 == Description ==
 
@@ -33,7 +33,7 @@ Reloadify keeps open previews synchronized while providing practical server perf
 *   **Last change detected** status and a one-click **Check now** action.
 *   A modern settings dashboard with per-browser cards and live status.
 *   **Speed Boost** — on by default: strips the emoji script, trims unused `<head>` tags, throttles the Heartbeat API, caps stored post revisions, disables self-pingbacks, and eases wp-admin memory/time limits for heavy builders — all reversible with one toggle.
-*   **Media Optimization** — new image uploads can get WebP/AVIF versions automatically when supported by the server. Video compression runs in the background when ffmpeg is available; offscreen images and embedded video are lazy-loaded.
+*   **Media Optimization** — new image uploads get WebP/AVIF versions of every generated size automatically when supported by the server, and existing images are converted in the background. Video compression runs in the background when ffmpeg is available; offscreen images and embedded video are lazy-loaded.
 *   **Extensions tab** — optional SVG upload support (off by default; scanned for scripts/embedded HTML before accepting) an optional Scroll To Top floating button (off by default; configurable position and color), a **Read More / Read Less** shortcode and an **AJAX Load More** shortcode for posts and WooCommerce products (both off by default).
 *   An honest Server Performance panel: applies memory_limit / max_execution_time automatically, and generates ready-to-paste php.ini / .htaccess snippets for the settings a plugin genuinely cannot change at runtime (opcache, upload/post size limits, realpath cache).
 *   Intelligent exclusion: never triggers a reload loop inside the builder canvas itself.
@@ -100,7 +100,7 @@ The frontend check uses a small static file, so PHP and WordPress are not involv
 Turn them on in Reloadify > Extensions, then paste a shortcode anywhere (Gutenberg Shortcode block, Elementor, Divi or a template). Use `[reloadify_read_more]Hidden text[/reloadify_read_more]` for expandable text, and `[reloadify_load_more]` (or `[reloadify_load_more post_type="product" per_page="8" columns="4"]`) for a post/product grid whose next batch loads without a page refresh.
 
 = Does Media Optimization touch my original uploaded files? =
-No. Original image files are never modified. WebP or AVIF versions are generated only for supported server image libraries. Video compression runs only when ffmpeg is available; otherwise video files remain unchanged. Media Optimization can be disabled at any time.
+By default, no. Your original uploaded files stay untouched and WebP or AVIF versions of the generated sizes are created instead. Only if you switch on **Optimize original images** (after a confirmation) is the main JPEG/PNG file replaced by a smaller re-compressed copy, and only when it is smaller. WebP or AVIF versions are generated only for supported server image libraries. Video compression runs only when ffmpeg is available; otherwise video files remain unchanged. Media Optimization can be disabled at any time.
 
 == Feedback ==
 
@@ -115,6 +115,13 @@ Feedback helps improve the plugin and supports future updates.
 3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
 
 == Changelog ==
+
+= 1.4.1 =
+* Fixed: WebP/AVIF conversion of generated image sizes had stopped working in 1.4.0, so savings stayed at 0%. Conversion works again.
+* Fixed: images wrongly marked as optimized by 1.4.0 are queued again automatically, and optimization statistics refresh after the upgrade.
+* Fixed: changing the image format (Auto / WebP / AVIF) now re-converts existing images.
+* Improved: confirmation dialog for **Optimize original images** is now a modern in-page modal.
+* Tested with WordPress 7.2.
 
 = 1.4.0 =
 * Added **Read More / Read Less** and **AJAX Load More** shortcodes.

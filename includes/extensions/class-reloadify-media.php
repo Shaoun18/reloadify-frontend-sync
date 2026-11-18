@@ -17,6 +17,8 @@ class Reloadify_Media {
 	const ORIGINALS_OPTION_KEY = 'reloadify_media_optimize_originals';
 	const ORIGINAL_META_KEY = '_reloadify_media_original_optimized';
 	const MAIN_CHECK_META_KEY = '_reloadify_media_main_checked';
+	const FIX_OPTION_KEY    = 'reloadify_media_fix_rev';
+	const FIX_REVISION      = '1.4.1';
 	const VIDEO_BACKFILL_META_KEY = '_reloadify_media_video_optimized';
 	const STATS_META_KEY     = '_reloadify_media_stats';
 	const QUALITY_OPTION_KEY = 'reloadify_media_quality';
@@ -57,6 +59,7 @@ class Reloadify_Media {
 		update_option( self::OPTION_KEY, $enabled );
 
 		if ( self::is_enabled() ) {
+			self::maybe_run_fix();
 			self::schedule_backfill();
 		} else {
 			self::clear_scheduled_events();
@@ -76,8 +79,21 @@ class Reloadify_Media {
 	}
 
 	public static function set_format_preference( $format ) {
-		$format = in_array( $format, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $format : 'auto';
+		$format   = in_array( $format, [ 'auto', 'webp', 'avif', 'original' ], true ) ? $format : 'auto';
+		$previous = self::format_preference();
+
 		update_option( self::FORMAT_OPTION_KEY, $format );
+
+		// A different target format means existing images are no longer "done":
+		// queue them again (images already in the new format are skipped).
+		if ( $previous !== $format ) {
+			self::requeue_images();
+
+			if ( self::is_enabled() ) {
+				self::schedule_backfill();
+			}
+		}
+
 		return $format;
 	}
 
@@ -596,12 +612,55 @@ class Reloadify_Media {
 		return $result;
 	}
 
+	/**
+	 * Puts every image back on the conversion queue and forgets stale savings
+	 * measurements. Only plugin markers are touched -- never the files.
+	 */
+	private static function requeue_images() {
+		global $wpdb;
+
+		delete_post_meta_by_key( self::BACKFILL_META_KEY );
+
+		// Savings measured for images only; video records share the same key.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value LIKE %s",
+				self::STATS_META_KEY,
+				'%' . $wpdb->esc_like( '"type";s:5:"image"' ) . '%'
+			)
+		);
+		// phpcs:enable
+
+		self::$need_samples = null;
+		delete_transient( self::TOTALS_TRANSIENT );
+	}
+
+	/**
+	 * One-time repair for 1.4.0, which marked images as optimized without
+	 * converting anything. Runs once per site, then never again.
+	 */
+	public static function maybe_run_fix() {
+		if ( self::FIX_REVISION === get_option( self::FIX_OPTION_KEY ) ) {
+			return;
+		}
+
+		if ( self::is_enabled() ) {
+			self::requeue_images();
+			self::schedule_backfill();
+		}
+
+		update_option( self::FIX_OPTION_KEY, self::FIX_REVISION, false );
+	}
+
 	public static function init() {
 		add_filter( 'cron_schedules', [ __CLASS__, 'add_five_minute_schedule' ] );
 
 		if ( ! self::is_enabled() ) {
 			return;
 		}
+
+		self::maybe_run_fix();
 
 		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 		add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
@@ -665,18 +724,29 @@ class Reloadify_Media {
 
 	/**
 	 * Remaps JPEG/PNG to WebP/AVIF for the generated sizes only (thumbnail,
-	 * medium, large ...), whose file names end in -WIDTHxHEIGHT.
+	 * medium, large ...).
 	 *
-	 * WordPress asks this same filter about the full-size file too (the upload
-	 * itself, "-scaled" and "-rotated" copies). Converting that one replaced the
-	 * uploaded JPEG with a WebP that could even be larger, so those calls are
-	 * answered with the formats unchanged: the main file keeps its own format.
-	 * (Shrinking it is the separate "Optimize original images" option.)
+	 * WordPress core saves those sizes WITHOUT a file name (make_subsize() and
+	 * multi_resize() call _save() with none), so the filter receives an empty
+	 * $filename for them. 1.4.0 wrongly required a "-WIDTHxHEIGHT" name, which
+	 * never matched, so nothing was converted and savings stayed at 0%.
+	 *
+	 * Calls that carry a real file name are the full-size file (the upload
+	 * itself, "-scaled" and "-rotated" copies) or the editor lookup for the
+	 * source file. Those are answered with the formats unchanged, so the main
+	 * file keeps its own format. (Shrinking it is the separate "Optimize
+	 * original images" option.) A name that already ends in -WIDTHxHEIGHT is
+	 * still treated as a generated size.
 	 */
 	public static function set_output_format( $formats, $filename = '' ) {
-		if ( ! is_string( $filename ) || ! preg_match( '/-\d+x\d+\.[A-Za-z0-9]+$/', $filename ) ) {
+		$is_subsize = ( ! is_string( $filename ) || '' === $filename )
+			|| (bool) preg_match( '/-\d+x\d+\.[A-Za-z0-9]+$/', $filename );
+
+		if ( ! $is_subsize ) {
 			return $formats;
 		}
+
+		$formats = is_array( $formats ) ? $formats : [];
 
 		$preferred = self::preferred_image_format();
 
