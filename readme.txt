@@ -110,19 +110,19 @@ Feedback helps improve the plugin and supports future updates.
 
 == Screenshots ==
 
-1. Cross-Browser Reload tab — Developer Mode toggle, live browser/reload-mode status, soft vs hard reload choice, and per-browser normal/incognito controls for Chrome, Brave, Edge, Firefox, Safari, Opera, UC Browser, Vivaldi, Yandex Browser, and Samsung Internet.
-2. Server Performance tab — live PHP/OPcache values the plugin applies at runtime, plus the settings that require host-level changes, each clearly marked LIVE and AUTO-ATTEMPT.
-3. Extensions tab — optional SVG upload support (off by default) and the Scroll To Top floating button controls (position, color, and scroll-distance threshold).
+1. **Cross-Browser Reload tab** — Developer Mode toggle, live browser and reload-mode status, soft vs. hard reload options, and per-browser normal/incognito controls for Chrome, Brave, Edge, Firefox, Safari, Opera, UC Browser, Vivaldi, Yandex Browser, and Samsung Internet.
+2. **Server Performance tab** — Live PHP and OPcache values applied at runtime, alongside server settings requiring host-level changes, clearly marked **LIVE** and **AUTO-ATTEMPT**.
+3. **Server Performance tab (Full View)** — Complete configuration overview featuring **Speed Boost** options (JS/CSS/HTML minification, image lazy loading, script deferring, and browser caching), **Media Optimization** controls (image format, compression quality, and before-and-after size preview), **Delete Data on Uninstall** settings, runtime **LIVE** and **AUTO-ATTEMPT** indicators, and local-development `php.ini` configuration sections.
+4. **Extensions tab** — Optional SVG upload support (disabled by default) and Scroll To Top floating button controls, including position, color, and scroll-distance threshold.
 
 == Changelog ==
 
 = 1.4.1 =
-* Fixed: WebP/AVIF conversion had stopped working in 1.4.0, so savings stayed at 0%. Uploads are converted again: the generated sizes AND the full-size file (for example `photo-scaled.png` becomes `photo-scaled.webp`) now show the converted format in the Media Library. The untouched original is always kept, and if a converted file would be larger than the original, the original is used instead.
-* Fixed: **Delete Data on Uninstall** now collapses when switched off and shows its options when switched on, like Speed Boost and Media Optimization.
-* Fixed: images wrongly marked as optimized by 1.4.0 are queued again automatically, and optimization statistics refresh after the upgrade.
-* Fixed: changing the image format (Auto / WebP / AVIF) now re-converts existing images.
-* Improved: confirmation dialog for **Optimize original images** is now a modern in-page modal.
-* Tested with WordPress 7.2.
+* Fixed **WebP/AVIF** conversion for generated image sizes and full-size images while preserving original files.
+* Fixed **image optimization** statistics and re-queuing of previously affected images.
+* Fixed existing images not being re-converted after changing the image format.
+* Improved the **Optimize Original Images** confirmation dialog with a modern modal.
+* Improved **Delete Data on Uninstall** settings behavior.
 
 = 1.4.0 =
 * Added **Read More / Read Less** and **AJAX Load More** shortcodes.
