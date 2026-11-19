@@ -47,6 +47,7 @@ function reloadify_uninstall_cleanup_current_site() {
 		delete_option( 'reloadify_media_format_preference' );
 		delete_option( 'reloadify_media_quality' );
 		delete_option( 'reloadify_media_optimize_originals' );
+		delete_option( 'reloadify_media_fix_rev' );
 		delete_option( 'reloadify_extras_settings' );
 		delete_option( 'reloadify_cleanup_scope' );
 		delete_option( 'reloadify_delete_data_on_uninstall' );

@@ -3,7 +3,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Reloadify Frontend Sync 1.4.0\n"
+"Project-Id-Version: Reloadify Frontend Sync 1.4.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/reloadify-"
 "frontend-sync\n"
 "POT-Creation-Date: 2026-10-23 11:03-0500\n"

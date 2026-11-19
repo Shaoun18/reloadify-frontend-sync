@@ -3,8 +3,8 @@
 /**
  * Plugin Name:       Reloadify Frontend Sync
  * Plugin URI:        https://wordpress.org/plugins/reloadify-frontend-sync/
- * Description:       Auto refresh WordPress frontend across browsers after saves in Elementor, Divi, Gutenberg, and more. Includes server and image optimization.
- * Version:           1.4.0
+ * Description:       Auto reload & cross-browser live reload for WordPress. Refresh frontend after every save in Elementor, Divi, Gutenberg. Server & image optimization.
+ * Version:           1.4.1
  * Author:            shaounchandrashill
  * Author URI:        https://shaoun18.github.io/
  * Text Domain:       reloadify-frontend-sync
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('RELOADIFY_VERSION', '1.4.0');
+define('RELOADIFY_VERSION', '1.4.1');
 define('RELOADIFY_PLUGIN_FILE', __FILE__);
 define('RELOADIFY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RELOADIFY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -113,6 +113,11 @@ class Reloadify_Frontend_Sync
 
 		if (null !== filter_input(INPUT_GET, 'activate-multi')) {
 			return; // Bulk activation redirects on its own; don't hijack it.
+		}
+
+		// The admin class is only loaded inside wp-admin; skip the redirect anywhere else.
+		if (! class_exists('Reloadify_Admin')) {
+			return;
 		}
 
 		wp_safe_redirect(admin_url('admin.php?page=' . Reloadify_Admin::PAGE_SLUG));

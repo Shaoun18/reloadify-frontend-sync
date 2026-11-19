@@ -1195,7 +1195,8 @@
                 onChange: toggleMaster,
                 disabled: saving
             }),
-            body
+            // Off: the card collapses (like Speed Boost and Media Optimization); on: the options appear.
+            cleanup.enabled ? body : null
         );
     }
 
@@ -1498,8 +1499,8 @@
                 disabled: saving || locked,
                 title: __('Optimize original images', 'reloadify-frontend-sync'),
                 text: media.optimize_originals
-                    ? __('On: the main image file is re-compressed in place (same format), only when that makes it smaller.', 'reloadify-frontend-sync')
-                    : __('Off: original uploads stay untouched; only the generated sizes are optimized.', 'reloadify-frontend-sync'),
+                    ? __('On: a main image file that stays JPEG/PNG is also re-compressed in place (same format), only when that makes it smaller.', 'reloadify-frontend-sync')
+                    : __('Off: uploads are converted to your chosen format only when that makes them smaller. The untouched original is always kept.', 'reloadify-frontend-sync'),
                 onChange: toggleOriginals
             }),
             locked ? el('p', { className: 'reloadify-media-lock-note', role: 'status' }, __('Format and quality are locked while your media is being optimized. They unlock as soon as it finishes.', 'reloadify-frontend-sync')) : null,
