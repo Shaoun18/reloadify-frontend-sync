@@ -115,6 +115,11 @@ class Reloadify_Frontend_Sync
 			return; // Bulk activation redirects on its own; don't hijack it.
 		}
 
+		// The admin class is only loaded inside wp-admin; skip the redirect anywhere else.
+		if (! class_exists('Reloadify_Admin')) {
+			return;
+		}
+
 		wp_safe_redirect(admin_url('admin.php?page=' . Reloadify_Admin::PAGE_SLUG));
 		exit;
 	}

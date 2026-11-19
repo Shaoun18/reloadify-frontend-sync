@@ -393,7 +393,7 @@ class Reloadify_Media {
 			[
 				'post_type'      => 'attachment',
 				'post_status'    => 'inherit',
-				'post_mime_type' => [ 'image/jpeg', 'image/png' ],
+				'post_mime_type' => [ 'image/jpeg', 'image/png', 'image/webp', 'image/avif' ],
 				'posts_per_page' => 8,
 				'fields'         => 'ids',
 				'orderby'        => 'ID',
@@ -404,11 +404,13 @@ class Reloadify_Media {
 
 		$file = '';
 		$id   = 0;
+		$mime = '';
 		foreach ( $ids as $candidate ) {
-			$path = get_attached_file( $candidate );
-			if ( $path && file_exists( $path ) && filesize( $path ) > 4096 ) {
-				$file = $path;
-				$id   = (int) $candidate;
+			// The pristine JPEG/PNG, even when WordPress already converted the main file.
+			$source = self::source_image( $candidate );
+			if ( $source && filesize( $source[0] ) > 4096 ) {
+				list( $file, $mime ) = $source;
+				$id                  = (int) $candidate;
 				break;
 			}
 		}
@@ -417,7 +419,6 @@ class Reloadify_Media {
 			return [ 'available' => false, 'reason' => 'no_image' ];
 		}
 
-		$mime   = get_post_mime_type( $id );
 		$cache  = self::TOTALS_TRANSIENT . '_p' . md5( $id . '|' . filemtime( $file ) . '|' . (string) $target . '|' . $quality );
 		$cached = get_transient( $cache );
 		if ( is_array( $cached ) ) {
@@ -664,6 +665,7 @@ class Reloadify_Media {
 
 		add_filter( 'image_editor_output_format', [ __CLASS__, 'set_output_format' ], 10, 2 );
 		add_filter( 'wp_editor_set_quality', [ __CLASS__, 'cap_quality' ], 10, 2 );
+		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'guard_oversized_on_upload' ], 15, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'record_image_stats' ], 20, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'mark_converted_on_upload' ], 30, 2 );
 		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'optimize_original_on_upload' ], 35, 2 );
@@ -723,31 +725,21 @@ class Reloadify_Media {
 	/* ---------------- Images ---------------- */
 
 	/**
-	 * Remaps JPEG/PNG to WebP/AVIF for the generated sizes only (thumbnail,
-	 * medium, large ...).
+	 * Remaps JPEG/PNG to the chosen WebP/AVIF format for everything WordPress
+	 * saves: the generated sizes (thumbnail, medium, large ...) AND the full-size
+	 * file (the upload itself or its "-scaled" copy), so the Media Library shows
+	 * the converted format.
 	 *
-	 * WordPress core saves those sizes WITHOUT a file name (make_subsize() and
-	 * multi_resize() call _save() with none), so the filter receives an empty
-	 * $filename for them. 1.4.0 wrongly required a "-WIDTHxHEIGHT" name, which
-	 * never matched, so nothing was converted and savings stayed at 0%.
+	 * The untouched original always stays on disk (WordPress keeps it as
+	 * "original_image"). If the converted full-size file ever turns out larger
+	 * than the original, restore_oversized_conversion() points the attachment
+	 * back at the original, so a file can never grow.
 	 *
-	 * Calls that carry a real file name are the full-size file (the upload
-	 * itself, "-scaled" and "-rotated" copies) or the editor lookup for the
-	 * source file. Those are answered with the formats unchanged, so the main
-	 * file keeps its own format. (Shrinking it is the separate "Optimize
-	 * original images" option.) A name that already ends in -WIDTHxHEIGHT is
-	 * still treated as a generated size.
+	 * 1.4.0 filtered on a "-WIDTHxHEIGHT" file name, but WordPress passes no
+	 * file name when it saves generated sizes, so nothing was converted at all.
 	 */
 	public static function set_output_format( $formats, $filename = '' ) {
-		$is_subsize = ( ! is_string( $filename ) || '' === $filename )
-			|| (bool) preg_match( '/-\d+x\d+\.[A-Za-z0-9]+$/', $filename );
-
-		if ( ! $is_subsize ) {
-			return $formats;
-		}
-
-		$formats = is_array( $formats ) ? $formats : [];
-
+		$formats   = is_array( $formats ) ? $formats : [];
 		$preferred = self::preferred_image_format();
 
 		if ( ! $preferred ) {
@@ -776,16 +768,51 @@ class Reloadify_Media {
 	}
 
 	/**
-	 * Earlier versions let WordPress convert the uploaded JPEG/PNG itself to WebP
-	 * (the "full" file), which for an already-compressed photo can come out
-	 * LARGER than the original. When that happened and the original is still on
-	 * disk, point the attachment back at the original. The WebP is left on disk
-	 * so any post that already embeds its URL keeps working.
-	 *
-	 * @return bool True when the attachment was restored.
+	 * The real JPEG/PNG behind an attachment: its current file when that is still
+	 * a JPEG/PNG, otherwise the original WordPress kept when it converted the main
+	 * file. Returns [ path, mime ] or an empty array.
 	 */
-	private static function restore_oversized_conversion( $attachment_id ) {
+	private static function source_image( $attachment_id ) {
+		$current = get_attached_file( $attachment_id );
+
+		if ( ! $current || ! is_file( $current ) ) {
+			return [];
+		}
+
+		$real = wp_check_filetype( $current );
+
+		if ( ! empty( $real['type'] ) && in_array( $real['type'], [ 'image/jpeg', 'image/png' ], true ) ) {
+			return [ $current, $real['type'] ];
+		}
+
 		$meta = wp_get_attachment_metadata( $attachment_id );
+
+		if ( is_array( $meta ) && ! empty( $meta['original_image'] ) ) {
+			$original = trailingslashit( dirname( $current ) ) . wp_basename( $meta['original_image'] );
+			$real     = wp_check_filetype( $original );
+
+			if ( is_file( $original ) && ! empty( $real['type'] ) && in_array( $real['type'], [ 'image/jpeg', 'image/png' ], true ) ) {
+				return [ $original, $real['type'] ];
+			}
+		}
+
+		return [];
+	}
+
+	/**
+	 * When WordPress converted the full-size file to WebP/AVIF and the result is
+	 * NOT smaller than the original, point the attachment back at the original.
+	 * The converted file is left on disk so a post that already embeds its URL
+	 * keeps working.
+	 *
+	 * @param int        $attachment_id Attachment ID.
+	 * @param array|null $meta          Attachment metadata (pass the in-flight array on upload).
+	 * @return array|false The updated metadata when the attachment was restored, false otherwise.
+	 */
+	private static function restore_oversized_conversion( $attachment_id, $meta = null ) {
+		if ( ! is_array( $meta ) ) {
+			$meta = wp_get_attachment_metadata( $attachment_id );
+		}
 
 		if ( ! is_array( $meta ) || empty( $meta['original_image'] ) || empty( $meta['file'] ) ) {
 			return false;
@@ -799,9 +826,13 @@ class Reloadify_Media {
 
 		$original = trailingslashit( dirname( $current ) ) . wp_basename( $meta['original_image'] );
 
-		// Only a plain format swap (same name, other extension). "-scaled" and "-rotated" copies were edited, not just converted.
+		// A plain format swap ("a.png" -> "a.webp") or a scaled one ("a.png" -> "a-scaled.webp").
+		// Rotated copies were edited, not just converted.
+		$orig_name = pathinfo( $original, PATHINFO_FILENAME );
+		$cur_name  = pathinfo( $current, PATHINFO_FILENAME );
+
 		if ( strtolower( pathinfo( $current, PATHINFO_EXTENSION ) ) === strtolower( pathinfo( $original, PATHINFO_EXTENSION ) )
-			|| pathinfo( $current, PATHINFO_FILENAME ) !== pathinfo( $original, PATHINFO_FILENAME )
+			|| ( $cur_name !== $orig_name && $cur_name !== $orig_name . '-scaled' )
 			|| ! is_file( $current ) || ! is_file( $original ) ) {
 			return false;
 		}
@@ -826,10 +857,50 @@ class Reloadify_Media {
 		$meta['filesize'] = (int) filesize( $original );
 		unset( $meta['original_image'] );
 
-		wp_update_attachment_metadata( $attachment_id, $meta );
 		wp_update_post( [ 'ID' => $attachment_id, 'post_mime_type' => $real['type'] ] );
 
-		return true;
+		return $meta;
+	}
+
+	/**
+	 * Makes the attachment's mime type match its real file once the full-size file
+	 * is WebP/AVIF, so the Media Library, its type filter and the file details show
+	 * the converted format instead of the old JPEG/PNG label.
+	 */
+	private static function sync_converted_mime( $attachment_id ) {
+		$current = get_attached_file( $attachment_id );
+
+		if ( ! $current ) {
+			return;
+		}
+
+		$real = wp_check_filetype( $current );
+
+		if ( ! empty( $real['type'] ) && in_array( $real['type'], [ 'image/webp', 'image/avif' ], true )
+			&& get_post_mime_type( $attachment_id ) !== $real['type'] ) {
+			wp_update_post( [ 'ID' => $attachment_id, 'post_mime_type' => $real['type'] ] );
+		}
+	}
+
+	/** wp_generate_attachment_metadata hook: undo a full-size conversion that came out larger. */
+	public static function guard_oversized_on_upload( $metadata, $attachment_id ) {
+		if ( ! is_array( $metadata ) ) {
+			return $metadata;
+		}
+
+		$restored = self::restore_oversized_conversion( $attachment_id, $metadata );
+
+		if ( is_array( $restored ) ) {
+			return $restored;
+		}
+
+		// The full-size file really is WebP/AVIF now, but WordPress leaves the attachment
+		// labelled as the old JPEG/PNG. Keep the label truthful.
+		if ( ! empty( $metadata['original_image'] ) ) {
+			self::sync_converted_mime( $attachment_id );
+		}
+
+		return $metadata;
 	}
 
 	/** Animated PNGs would lose their frames when re-encoded, so they are left alone. */
@@ -1005,6 +1076,23 @@ class Reloadify_Media {
 	 * every thumbnail again was the bulk of the time "Optimize existing media"
 	 * spent.
 	 */
+	/** True while the attachment's current file is still a plain JPEG/PNG. */
+	private static function main_needs_conversion( $attachment_id ) {
+		$file = get_attached_file( $attachment_id );
+
+		if ( ! $file || ! is_file( $file ) ) {
+			return false;
+		}
+
+		$real = wp_check_filetype( $file );
+
+		if ( empty( $real['type'] ) || ! in_array( $real['type'], [ 'image/jpeg', 'image/png' ], true ) ) {
+			return false;
+		}
+
+		return ! ( 'image/png' === $real['type'] && self::is_animated_png( $file ) );
+	}
+
 	private static function sizes_already_converted( $attachment_id, $target ) {
 		$meta = wp_get_attachment_metadata( $attachment_id );
 
@@ -1051,20 +1139,21 @@ class Reloadify_Media {
 				break;
 			}
 
-			// One-time check per image: undo a main-file WebP conversion that made the file bigger.
-			if ( ! metadata_exists( 'post', $attachment_id, self::MAIN_CHECK_META_KEY ) ) {
-				self::restore_oversized_conversion( $attachment_id );
-				update_post_meta( $attachment_id, self::MAIN_CHECK_META_KEY, 1 );
-			}
-
 			$file = get_attached_file( $attachment_id );
 
-			if ( $target && $file && file_exists( $file ) && ! self::sizes_already_converted( $attachment_id, $target ) ) {
+			// Regenerate when the sizes are not in the target format yet, or when the
+			// full-size file is still a JPEG/PNG that can be converted. An oversized
+			// conversion is undone by guard_oversized_on_upload() during the regeneration.
+			if ( $target && $file && file_exists( $file )
+				&& ( ! self::sizes_already_converted( $attachment_id, $target ) || self::main_needs_conversion( $attachment_id ) ) ) {
 				$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
 				if ( $metadata ) {
 					wp_update_attachment_metadata( $attachment_id, $metadata );
 				}
 			}
+
+			// Images WordPress converted earlier can still carry the old JPEG/PNG label.
+			self::sync_converted_mime( $attachment_id );
 
 			// Main file last, so the generated sizes above came from the untouched original.
 			if ( self::optimize_originals() && ! metadata_exists( 'post', $attachment_id, self::ORIGINAL_META_KEY ) ) {
@@ -1079,6 +1168,7 @@ class Reloadify_Media {
 				}
 			}
 
+			update_post_meta( $attachment_id, self::MAIN_CHECK_META_KEY, 1 );
 			update_post_meta( $attachment_id, self::BACKFILL_META_KEY, 1 );
 			$done++;
 		}
@@ -1113,11 +1203,11 @@ class Reloadify_Media {
 	public static function mark_converted_on_upload( $metadata, $attachment_id ) {
 		$target = self::preferred_image_format();
 
-		// A fresh upload never has its main file converted any more, so there is nothing to undo later.
 		update_post_meta( $attachment_id, self::MAIN_CHECK_META_KEY, 1 );
 
-		if ( $target && in_array( get_post_mime_type( $attachment_id ), [ 'image/jpeg', 'image/png' ], true )
-			&& is_array( $metadata ) && ! empty( $metadata['sizes'] ) ) {
+		$source = self::source_image( $attachment_id );
+
+		if ( $target && $source && is_array( $metadata ) && ! empty( $metadata['sizes'] ) ) {
 			$mime = ( 'avif' === $target ) ? 'image/avif' : 'image/webp';
 			$all  = true;
 
@@ -1268,17 +1358,17 @@ class Reloadify_Media {
 			return $metadata;
 		}
 
-		$mime = get_post_mime_type( $attachment_id );
-		if ( ! in_array( $mime, [ 'image/jpeg', 'image/png' ], true ) ) {
+		// The pristine JPEG/PNG (the upload itself, or the original WordPress kept
+		// when it converted the full-size file to WebP/AVIF).
+		$source = self::source_image( $attachment_id );
+		if ( ! $source ) {
 			return $metadata;
 		}
 
-		$original_file = get_attached_file( $attachment_id );
-		if ( ! $original_file || ! file_exists( $original_file ) ) {
-			return $metadata;
-		}
+		list( $original_file, $mime ) = $source;
+		$current_file                 = get_attached_file( $attachment_id );
 
-		$base_dir = trailingslashit( dirname( $original_file ) );
+		$base_dir = trailingslashit( dirname( $current_file ) );
 		$sizes    = $metadata['sizes'];
 		$sample   = isset( $sizes['medium'] ) ? $sizes['medium'] : reset( $sizes );
 
@@ -1709,6 +1799,11 @@ class Reloadify_Media {
 			} else {
 				echo '<span class="reloadify-media-badge">' . esc_html__( 'Pending – optimizes in the background shortly', 'reloadify-frontend-sync' ) . '</span>';
 			}
+			return;
+		}
+
+		if ( 0 === strpos( (string) $mime, 'image/webp' ) || 0 === strpos( (string) $mime, 'image/avif' ) ) {
+			echo '<span class="reloadify-media-badge reloadify-media-badge--ok">' . esc_html( 0 === strpos( (string) $mime, 'image/avif' ) ? __( 'Converted to AVIF', 'reloadify-frontend-sync' ) : __( 'Converted to WebP', 'reloadify-frontend-sync' ) ) . '</span>';
 			return;
 		}
 

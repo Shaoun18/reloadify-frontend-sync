@@ -100,7 +100,7 @@ The frontend check uses a small static file, so PHP and WordPress are not involv
 Turn them on in Reloadify > Extensions, then paste a shortcode anywhere (Gutenberg Shortcode block, Elementor, Divi or a template). Use `[reloadify_read_more]Hidden text[/reloadify_read_more]` for expandable text, and `[reloadify_load_more]` (or `[reloadify_load_more post_type="product" per_page="8" columns="4"]`) for a post/product grid whose next batch loads without a page refresh.
 
 = Does Media Optimization touch my original uploaded files? =
-By default, no. Your original uploaded files stay untouched and WebP or AVIF versions of the generated sizes are created instead. Only if you switch on **Optimize original images** (after a confirmation) is the main JPEG/PNG file replaced by a smaller re-compressed copy, and only when it is smaller. WebP or AVIF versions are generated only for supported server image libraries. Video compression runs only when ffmpeg is available; otherwise video files remain unchanged. Media Optimization can be disabled at any time.
+Your original upload is always kept on disk. The file WordPress shows in the Media Library is converted to WebP or AVIF only when that makes it smaller. If you also switch on **Optimize original images** (after a confirmation), a main file that stays JPEG/PNG is replaced by a smaller re-compressed copy, and only when it is smaller. WebP or AVIF versions are generated only for supported server image libraries. Video compression runs only when ffmpeg is available; otherwise video files remain unchanged. Media Optimization can be disabled at any time.
 
 == Feedback ==
 
@@ -117,7 +117,8 @@ Feedback helps improve the plugin and supports future updates.
 == Changelog ==
 
 = 1.4.1 =
-* Fixed: WebP/AVIF conversion of generated image sizes had stopped working in 1.4.0, so savings stayed at 0%. Conversion works again.
+* Fixed: WebP/AVIF conversion had stopped working in 1.4.0, so savings stayed at 0%. Uploads are converted again: the generated sizes AND the full-size file (for example `photo-scaled.png` becomes `photo-scaled.webp`) now show the converted format in the Media Library. The untouched original is always kept, and if a converted file would be larger than the original, the original is used instead.
+* Fixed: **Delete Data on Uninstall** now collapses when switched off and shows its options when switched on, like Speed Boost and Media Optimization.
 * Fixed: images wrongly marked as optimized by 1.4.0 are queued again automatically, and optimization statistics refresh after the upgrade.
 * Fixed: changing the image format (Auto / WebP / AVIF) now re-converts existing images.
 * Improved: confirmation dialog for **Optimize original images** is now a modern in-page modal.
